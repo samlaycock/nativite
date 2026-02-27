@@ -222,6 +222,31 @@ describe("chrome.toolbar", () => {
     expect(sendCalls[0]![2]).toMatchObject({ toolbar: { items } });
   });
 
+  it("setItems() accepts native menu/submenu payloads on button items", () => {
+    const items: Parameters<typeof chrome.toolbar.setItems>[0] = [
+      {
+        type: "button",
+        id: "more",
+        systemImage: "ellipsis.circle",
+        menu: {
+          items: [
+            { id: "refresh", title: "Refresh" },
+            {
+              id: "sort",
+              title: "Sort",
+              submenu: [
+                { id: "sort.date", title: "Date" },
+                { id: "sort.name", title: "Name" },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+    chrome.toolbar.setItems(items);
+    expect(sendCalls[0]![2]).toMatchObject({ toolbar: { items } });
+  });
+
   it("configure() sends appearance keys", () => {
     chrome.toolbar.configure({ barTintColor: "#F0F0F0" });
     expect(sendCalls[0]![2]).toMatchObject({ toolbar: { barTintColor: "#F0F0F0" } });
@@ -384,14 +409,15 @@ describe("chrome.sheet", () => {
   it("postMessage() routes to nativiteSheet when called inside sheet context", () => {
     const sheetPostSpy = mock((_message: unknown) => {});
     const globalObject = globalThis as typeof globalThis & {
-      window?: Window & { nativiteSheet?: { postMessage: (message: unknown) => void } };
+      window?: Window & typeof globalThis;
     };
     const previousWindow = globalObject.window;
-    const nextWindow = (previousWindow ?? ({} as Window)) as Window & {
-      nativiteSheet?: { postMessage: (message: unknown) => void };
-    };
+    const nextWindow = (previousWindow ?? ({} as Window & typeof globalThis)) as Window &
+      typeof globalThis;
+    const previousSheet = nextWindow.nativiteSheet;
     nextWindow.nativiteSheet = {
       postMessage: sheetPostSpy,
+      onMessage: () => () => {},
     };
     globalObject.window = nextWindow;
 
@@ -400,12 +426,8 @@ describe("chrome.sheet", () => {
 
     expect(sheetPostSpy).toHaveBeenCalledWith(message);
     expect(sendSpy).not.toHaveBeenCalled();
-
-    if (previousWindow === undefined) {
-      delete globalObject.window;
-    } else {
-      globalObject.window = previousWindow;
-    }
+    nextWindow.nativiteSheet = previousSheet;
+    globalObject.window = previousWindow;
   });
 
   it("onDetentChange fires handler and unsubscribe stops it", () => {

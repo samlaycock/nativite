@@ -73,6 +73,28 @@ describe("nativiteChromeTemplate", () => {
       expect(body).toContain("toolbarItem(");
       expect(body).not.toContain("compactMap { barButtonItem($0");
     });
+
+    it("builds native UIMenu from toolbar button state when menu data is present", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func barButtonItem");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  @objc private func barButtonTapped", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("#available(iOS 14.0, *)");
+      expect(body).toContain('state["menu"] as? [String: Any]');
+      expect(body).toContain("barButtonMenu(");
+      expect(body).toContain("primaryAction: nil");
+      expect(body).toContain("menu: menu");
+    });
+
+    it("supports recursive menu/submenu rendering for toolbar button menus", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("private func barButtonMenu(");
+      expect(output).toContain("private func barButtonMenuElement(");
+      expect(output).toContain('itemState["submenu"] as? [[String: Any]]');
+      expect(output).toContain("UIAction(");
+      expect(output).toContain("UIMenu(title: menuTitle");
+    });
   });
 
   describe("navigation bar and toolbar default visibility", () => {

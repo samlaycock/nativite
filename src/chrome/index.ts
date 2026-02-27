@@ -173,9 +173,9 @@ export const chrome = {
     hide: (): void => sendNavBar({ hidden: true }),
     /** Set the title text. */
     setTitle: (title: string): void => sendNavBar({ title }),
-    /** Set the items on the leading (left) side. Supports buttons, fixedSpace, and flexibleSpace. */
+    /** Set the items on the leading (left) side. Supports buttons, spaces, and iOS button menus. */
     setToolbarLeft: (items: ToolbarItem[]): void => sendNavBar({ toolbarLeft: items }),
-    /** Set the items on the trailing (right) side. Supports buttons, fixedSpace, and flexibleSpace. */
+    /** Set the items on the trailing (right) side. Supports buttons, spaces, and iOS button menus. */
     setToolbarRight: (items: ToolbarItem[]): void => sendNavBar({ toolbarRight: items }),
     /** Configure appearance properties (tint, background colour, translucency, back button label). */
     configure: (
@@ -218,7 +218,7 @@ export const chrome = {
     show: (): void => sendToolbar({ hidden: false }),
     /** Hide the toolbar. */
     hide: (): void => sendToolbar({ hidden: true }),
-    /** Set the toolbar items. Supports buttons, fixedSpace, and flexibleSpace. */
+    /** Set the toolbar items. Supports buttons, spaces, and iOS button menus. */
     setItems: (items: ToolbarItem[]): void => sendToolbar({ items }),
     /** Configure appearance properties (background colour, translucency). */
     configure: (opts: Partial<Pick<ToolbarState, "barTintColor" | "translucent">>): void =>

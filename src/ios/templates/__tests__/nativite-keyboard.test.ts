@@ -13,8 +13,25 @@ describe("nativiteKeyboardTemplate", () => {
     expect(output).not.toContain(
       "CGSize(width: UIView.noIntrinsicMetric, height: toolbar.frame.height)",
     );
-    expect(output).toContain("private let accessoryHeight: CGFloat = 44");
+    expect(output).toContain("private let toolbarHeight: CGFloat = 44");
+    expect(output).toContain(
+      "private var accessoryHeight: CGFloat { toolbarHeight + keyboardTopGap }",
+    );
     expect(output).toContain("CGSize(width: UIView.noIntrinsicMetric, height: accessoryHeight)");
+  });
+
+  it("adds a small visual gap between the accessory bar and keyboard", () => {
+    const output = nativiteKeyboardTemplate(baseConfig);
+
+    expect(output).toContain("private let toolbarHeight: CGFloat = 44");
+    expect(output).toContain("private let keyboardTopGap: CGFloat = 6");
+    expect(output).toContain(
+      "private var accessoryHeight: CGFloat { toolbarHeight + keyboardTopGap }",
+    );
+    expect(output).toContain(
+      "toolbar.heightAnchor.constraint(equalToConstant: toolbarHeight).isActive = true",
+    );
+    expect(output).toContain("toolbar.topAnchor.constraint(equalTo: topAnchor).isActive = true");
   });
 
   it("supports toggling root scroll lock per webview host", () => {

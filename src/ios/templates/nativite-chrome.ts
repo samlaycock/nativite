@@ -181,19 +181,90 @@ ${applyInitialStateMethod}
     default: style = .plain
     }
 
+    let menu: UIMenu?
+    if #available(iOS 14.0, *) {
+      if let menuState = state["menu"] as? [String: Any] {
+        menu = barButtonMenu(menuState, position: position)
+      } else if let menuItems = state["menu"] as? [[String: Any]] {
+        menu = barButtonMenu(["items": menuItems], position: position)
+      } else {
+        menu = nil
+      }
+    } else {
+      menu = nil
+    }
+
     let item: UIBarButtonItem
     if let symbolName = state["systemImage"] as? String,
        let image = UIImage(systemName: symbolName) {
-      item = UIBarButtonItem(image: image, style: style, target: self, action: #selector(barButtonTapped(_:)))
+      if #available(iOS 14.0, *), let menu {
+        item = UIBarButtonItem(title: nil, image: image, primaryAction: nil, menu: menu)
+      } else {
+        item = UIBarButtonItem(image: image, style: style, target: self, action: #selector(barButtonTapped(_:)))
+      }
     } else if let title = state["title"] as? String {
-      item = UIBarButtonItem(title: title, style: style, target: self, action: #selector(barButtonTapped(_:)))
+      if #available(iOS 14.0, *), let menu {
+        item = UIBarButtonItem(title: title, image: nil, primaryAction: nil, menu: menu)
+      } else {
+        item = UIBarButtonItem(title: title, style: style, target: self, action: #selector(barButtonTapped(_:)))
+      }
     } else {
       return nil
     }
 
+    item.style = style
     item.accessibilityIdentifier = "\\(position):\\(id)"
     item.isEnabled = !((state["disabled"] as? Bool) ?? false)
     return item
+  }
+
+  @available(iOS 14.0, *)
+  private func barButtonMenu(_ state: [String: Any], position: String) -> UIMenu? {
+    let menuTitle = state["title"] as? String ?? ""
+    guard let itemStates = state["items"] as? [[String: Any]] else { return nil }
+    let children = itemStates.compactMap { barButtonMenuElement($0, position: position) }
+    guard !children.isEmpty else { return nil }
+    return UIMenu(title: menuTitle, children: children)
+  }
+
+  @available(iOS 14.0, *)
+  private func barButtonMenuElement(_ itemState: [String: Any], position: String) -> UIMenuElement? {
+    if itemState["separator"] as? Bool == true {
+      return UIMenuElement.separator()
+    }
+
+    if let submenuStates = itemState["submenu"] as? [[String: Any]] {
+      let menuTitle = itemState["title"] as? String ?? ""
+      let menuImage = (itemState["systemImage"] as? String).flatMap { UIImage(systemName: $0) }
+      let children = submenuStates.compactMap { barButtonMenuElement($0, position: position) }
+      guard !children.isEmpty else { return nil }
+      return UIMenu(title: menuTitle, image: menuImage, identifier: nil, options: [], children: children)
+    }
+
+    guard let id = itemState["id"] as? String,
+          let title = itemState["title"] as? String else { return nil }
+
+    let image = (itemState["systemImage"] as? String).flatMap { UIImage(systemName: $0) }
+    var attributes = UIMenuElement.Attributes()
+    if (itemState["disabled"] as? Bool) ?? false {
+      attributes.insert(.disabled)
+    }
+    if (itemState["style"] as? String) == "destructive" {
+      attributes.insert(.destructive)
+    }
+    let actionState: UIMenuElement.State = ((itemState["checked"] as? Bool) ?? false) ? .on : .off
+    let eventName = position == "toolbar" ? "toolbar.buttonTapped" : "navigationBar.buttonTapped"
+
+    return UIAction(
+      title: title,
+      image: image,
+      identifier: nil,
+      discoverabilityTitle: nil,
+      attributes: attributes,
+      state: actionState
+    ) { [weak self] _ in
+      self?.sendEvent(name: eventName, data: ["id": id])
+    }
   }
 
   @objc private func barButtonTapped(_ sender: UIBarButtonItem) {

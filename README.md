@@ -304,15 +304,40 @@ chrome.statusBar.setStyle("light");
 chrome.homeIndicator.hide();
 ```
 
+Toolbar and navigation-bar buttons can also expose native iOS menus and nested submenus:
+
+```ts
+chrome.toolbar.setItems([
+  {
+    type: "button",
+    id: "more",
+    systemImage: "ellipsis.circle",
+    menu: {
+      items: [
+        { id: "refresh", title: "Refresh" },
+        {
+          id: "sort",
+          title: "Sort",
+          submenu: [
+            { id: "sort.date", title: "By Date" },
+            { id: "sort.name", title: "By Name" },
+          ],
+        },
+      ],
+    },
+  },
+]);
+```
+
 Each namespace exposes dedicated setters and subscriptions. Event handlers are additive and return unsubscribe functions.
 
 #### Per-element namespaces
 
 | Namespace              | Key methods                                                                                   | Description                                     |
 | ---------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `chrome.navigationBar` | `show`, `hide`, `setTitle`, `setToolbar*`, `configure`                                        | Navigation bar title, buttons, tint             |
+| `chrome.navigationBar` | `show`, `hide`, `setTitle`, `setToolbar*`, `configure`                                        | Navigation bar title, buttons, menus, tint      |
 | `chrome.tabBar`        | `show`, `hide`, `setTabs`, `setActiveTab`, `configure`                                        | Tab bar items, selection, badges                |
-| `chrome.toolbar`       | `show`, `hide`, `setItems`, `configure`                                                       | Bottom toolbar items                            |
+| `chrome.toolbar`       | `show`, `hide`, `setItems`, `configure`                                                       | Bottom toolbar items and iOS menus              |
 | `chrome.searchBar`     | `setText`, `setPlaceholder`, `configure`                                                      | Search bar text and actions                     |
 | `chrome.sheet`         | `present`, `dismiss`, `setDetents`, `setSelectedDetent`, `setURL`, `postMessage`, `configure` | Modal sheet detents, URL content, and messaging |
 | `chrome.keyboard`      | `setAccessory`, `configure`                                                                   | Input accessory bar, dismiss mode               |

@@ -25,9 +25,9 @@ export type NavigationBarState = {
   barTintColor?: string;
   translucent?: boolean;
   hidden?: boolean;
-  /** Items on the leading (left) side of the navigation bar. Supports buttons, fixedSpace, and flexibleSpace. */
+  /** Items on the leading (left) side of the navigation bar. Supports buttons, spaces, and iOS button menus. */
   toolbarLeft?: ToolbarItem[];
-  /** Items on the trailing (right) side of the navigation bar. Supports buttons, fixedSpace, and flexibleSpace. */
+  /** Items on the trailing (right) side of the navigation bar. Supports buttons, spaces, and iOS button menus. */
   toolbarRight?: ToolbarItem[];
 };
 
@@ -57,8 +57,30 @@ export type TabBarState = {
   hidden?: boolean;
 };
 
+export interface ToolbarMenuItem {
+  /** Unique ID used to identify this menu item in events. */
+  id: string;
+  title: string;
+  /** SF Symbol name for the menu icon. */
+  systemImage?: string;
+  disabled?: boolean;
+  checked?: boolean;
+  submenu?: ToolbarMenuItem[];
+}
+
+export interface ToolbarButtonMenu {
+  title?: string;
+  items: ToolbarMenuItem[];
+}
+
+export interface ToolbarButtonItem extends BarButtonItem {
+  type: "button";
+  /** Native iOS menu shown from this bar button item. */
+  menu?: ToolbarButtonMenu;
+}
+
 export type ToolbarItem =
-  | ({ type: "button" } & BarButtonItem)
+  | ToolbarButtonItem
   | { type: "flexibleSpace" }
   | { type: "fixedSpace"; width: number };
 

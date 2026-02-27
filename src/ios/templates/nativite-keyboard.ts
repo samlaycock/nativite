@@ -132,7 +132,9 @@ class NativiteKeyboard: NSObject {
 private class NativiteAccessoryView: UIInputView {
 
   weak var keyboard: NativiteKeyboard?
-  private let accessoryHeight: CGFloat = 44
+  private let toolbarHeight: CGFloat = 44
+  private let keyboardTopGap: CGFloat = 6
+  private var accessoryHeight: CGFloat { toolbarHeight + keyboardTopGap }
   private var toolbar: UIToolbar!
 
   var barTintColor: UIColor? {
@@ -144,9 +146,15 @@ private class NativiteAccessoryView: UIInputView {
     super.init(frame: CGRect(x: 0, y: 0, width: 0, height: accessoryHeight),
                inputViewStyle: .keyboard)
 
-    toolbar = UIToolbar(frame: bounds)
-    toolbar.autoresizingMask = [.flexibleWidth]
+    backgroundColor = .clear
+
+    toolbar = UIToolbar(frame: .zero)
+    toolbar.translatesAutoresizingMaskIntoConstraints = false
     addSubview(toolbar)
+    toolbar.leadingAnchor.constraint(equalTo: leadingAnchor).isActive = true
+    toolbar.trailingAnchor.constraint(equalTo: trailingAnchor).isActive = true
+    toolbar.topAnchor.constraint(equalTo: topAnchor).isActive = true
+    toolbar.heightAnchor.constraint(equalToConstant: toolbarHeight).isActive = true
   }
 
   @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
