@@ -23,7 +23,7 @@ nativite.config.ts  ──→  nativite generate  ──→  built-in Xcode gene
 1. You write a web app with Vite. Nativite registers per-platform native Vite environments (`ios`, `ipad`, `macos`, plus plugin-defined environments) while `client` remains the web environment.
 2. `nativite generate` (or the Vite plugin) generates a complete Xcode project for built-in Apple targets, or calls `generate` hooks for third-party platform plugins.
 3. The generated app loads a bundled `dist/` directory inside `WKWebView` (from `dist-<platform>/`). In dev mode it loads from the Vite dev server instead.
-4. Your JavaScript talks to Swift over a typed async RPC bridge. Native chrome (nav bars, tab bars, keyboards, etc.) is controlled declaratively with per-element methods like `chrome.navigationBar()`, `chrome.tabBar()`, etc.
+4. Your JavaScript talks to Swift over a typed async RPC bridge. Native chrome (nav bars, tab bars, keyboards, etc.) is controlled declaratively with singleton namespaces like `chrome.navigationBar.setTitle()`, `chrome.tabBar.setTabs()`, etc.
 
 ---
 
@@ -107,6 +107,7 @@ export default defineConfig({
       minimumVersion: "17.0", // IPHONEOS_DEPLOYMENT_TARGET
       target: "simulator", // optional: 'simulator' | 'device'
       simulator: "iPhone 16 Pro", // optional simulator name
+      errorOverlay: false, // optional: Vite runtime error overlay in native dev WebViews
       overrides: {
         app: { bundleId: "com.example.myapp.ios" }, // per-platform root overrides
         signing: { ios: { mode: "automatic", teamId: "ABCDE12345" } },
@@ -174,6 +175,7 @@ export default defineConfig({
 | `ios().minimumVersion`   | `string`                      | —        | iOS deployment target                                                                                          |
 | `ios().target`           | `"simulator" \| "device"`     | —        | Optional iOS dev launch target                                                                                 |
 | `ios().simulator`        | `string`                      | —        | Optional iOS Simulator name                                                                                    |
+| `ios().errorOverlay`     | `boolean`                     | —        | Optional native dev runtime error overlay toggle (default: `false`)                                            |
 | `macos().minimumVersion` | `string`                      | —        | macOS deployment target                                                                                        |
 | `signing.ios.mode`       | `"automatic" \| "manual"`     | —        | Xcode code signing mode                                                                                        |
 | `signing.ios.teamId`     | `string`                      | —        | Apple Developer Team ID                                                                                        |
@@ -273,58 +275,56 @@ const { available, version } = await ota.check();
 
 ### `nativite/chrome` — native UI chrome
 
-Control native UIKit chrome declaratively from JavaScript using fluent per-element methods. Only the keys you provide are changed — absent keys are left unchanged.
+Control native UIKit chrome declaratively from JavaScript using singleton namespaces with named setters, `configure(...)`, and `on*` subscriptions. Only the keys you provide are changed — absent keys are left unchanged.
 
 ```ts
 import { chrome } from "nativite/chrome";
 
-// Set the navigation bar with an inline tap handler
-chrome.navigationBar({
-  title: "Settings",
-  largeTitleMode: "never",
-  rightButtons: [{ id: "save", title: "Save", style: "done" }],
-  onButtonTap: ({ id }) => {
-    if (id === "save") saveChanges();
-  },
+// Configure the navigation bar
+chrome.navigationBar.setTitle("Settings");
+chrome.navigationBar.configure({ largeTitleMode: "never" });
+chrome.navigationBar.setToolbarRight([
+  { type: "button", id: "save", title: "Save", style: "done" },
+]);
+const unsubNav = chrome.navigationBar.onButtonTap(({ id }) => {
+  if (id === "save") saveChanges();
 });
 
-// Set the tab bar with inline selection handler
-chrome.tabBar({
-  items: [
-    { id: "home", title: "Home", systemImage: "house.fill" },
-    { id: "search", title: "Search", systemImage: "magnifyingglass" },
-    { id: "profile", title: "Profile", systemImage: "person.fill" },
-  ],
-  selectedTabId: "home",
-  onSelect: ({ id }) => navigateTo(id),
-});
+// Configure the tab bar
+chrome.tabBar.setTabs([
+  { id: "home", title: "Home", systemImage: "house.fill" },
+  { id: "search", title: "Search", systemImage: "magnifyingglass" },
+  { id: "profile", title: "Profile", systemImage: "person.fill" },
+]);
+chrome.tabBar.setActiveTab("home");
+const unsubTab = chrome.tabBar.onSelect(({ id }) => navigateTo(id));
 
-// Simple elements without callbacks
-chrome.statusBar({ style: "light" });
-chrome.homeIndicator({ hidden: true });
+// Simple elements
+chrome.statusBar.setStyle("light");
+chrome.homeIndicator.hide();
 ```
 
-Each per-element method accepts the element's state properties plus optional inline callbacks. Callbacks use **replace semantics** — each call replaces the previous callback for that event. Pass `null` to remove a callback.
+Each namespace exposes dedicated setters and subscriptions. Event handlers are additive and return unsubscribe functions.
 
-#### Per-element methods
+#### Per-element namespaces
 
-| Method                   | Callbacks                              | Description                         |
-| ------------------------ | -------------------------------------- | ----------------------------------- |
-| `chrome.navigationBar()` | `onButtonTap`, `onBackTap`             | Navigation bar title, buttons, tint |
-| `chrome.tabBar()`        | `onSelect`                             | Tab bar items, selection, badges    |
-| `chrome.toolbar()`       | `onButtonTap`                          | Bottom toolbar items                |
-| `chrome.searchBar()`     | `onTextChange`, `onSubmit`, `onCancel` | Search bar text and actions         |
-| `chrome.sheet()`         | `onDetentChange`, `onDismiss`          | Modal sheet detents and dismissal   |
-| `chrome.keyboard()`      | `onAccessoryItemTap`                   | Input accessory bar, dismiss mode   |
-| `chrome.sidebar()`       | `onItemSelect`                         | iPad/macOS sidebar                  |
-| `chrome.menuBar()`       | `onItemSelect`                         | macOS menu bar                      |
-| `chrome.statusBar()`     | —                                      | Status bar style, visibility        |
-| `chrome.homeIndicator()` | —                                      | Home indicator visibility           |
-| `chrome.window()`        | —                                      | macOS window title bar              |
+| Namespace              | Key methods                                            | Description                         |
+| ---------------------- | ------------------------------------------------------ | ----------------------------------- |
+| `chrome.navigationBar` | `show`, `hide`, `setTitle`, `setToolbar*`, `configure` | Navigation bar title, buttons, tint |
+| `chrome.tabBar`        | `show`, `hide`, `setTabs`, `setActiveTab`, `configure` | Tab bar items, selection, badges    |
+| `chrome.toolbar`       | `show`, `hide`, `setItems`, `configure`                | Bottom toolbar items                |
+| `chrome.searchBar`     | `setText`, `setPlaceholder`, `configure`               | Search bar text and actions         |
+| `chrome.sheet`         | `present`, `dismiss`, `setDetents`, `configure`        | Modal sheet detents and dismissal   |
+| `chrome.keyboard`      | `setAccessory`, `configure`                            | Input accessory bar, dismiss mode   |
+| `chrome.sidebar`       | `show`, `hide`, `setItems`, `setActiveItem`            | iPad/macOS sidebar                  |
+| `chrome.menuBar`       | `setMenus`                                             | macOS menu bar                      |
+| `chrome.statusBar`     | `show`, `hide`, `setStyle`                             | Status bar style, visibility        |
+| `chrome.homeIndicator` | `show`, `hide`                                         | Home indicator visibility           |
+| `chrome.window`        | `setTitle`, `setSubtitle`, `configure`                 | macOS window title bar              |
 
 #### Batch updates
 
-Use `chrome.set()` to update multiple elements at once. This does not support inline callbacks:
+Use `chrome.set()` to update multiple elements at once. This does not register event listeners:
 
 ```ts
 chrome.set({
@@ -347,7 +347,7 @@ const unsub = chrome.on("tabBar.tabSelected", ({ id }) => {
 unsub(); // stop listening
 ```
 
-Inline callbacks and `chrome.on()` listeners both fire for the same event — they don't interfere with each other.
+Per-element `on*` listeners and `chrome.on()` listeners both fire for the same event — they don't interfere with each other.
 
 #### Chrome events reference
 
@@ -372,23 +372,22 @@ Inline callbacks and `chrome.on()` listeners both fire for the same event — th
 A native toolbar rendered above the software keyboard, useful for custom "Done" buttons or form navigation:
 
 ```ts
-chrome.keyboard({
-  inputAccessory: {
-    items: [
-      { type: "button", id: "prev", systemImage: "chevron.up" },
-      { type: "button", id: "next", systemImage: "chevron.down" },
-      { type: "flexibleSpace" },
-      { type: "button", id: "done", title: "Done", style: "prominent" },
-    ],
-  },
-  dismissMode: "interactive",
-  onAccessoryItemTap: ({ id }) => {
-    if (id === "done") (document.activeElement as HTMLElement)?.blur();
-  },
+chrome.keyboard.setAccessory({
+  items: [
+    { type: "button", id: "prev", systemImage: "chevron.up" },
+    { type: "button", id: "next", systemImage: "chevron.down" },
+    { type: "flexibleSpace" },
+    { type: "button", id: "done", title: "Done", style: "prominent" },
+  ],
+});
+chrome.keyboard.configure({ dismissMode: "interactive" });
+const unsubKeyboard = chrome.keyboard.onAccessoryItemTap(({ id }) => {
+  if (id === "done") (document.activeElement as HTMLElement)?.blur();
 });
 
 // Remove the accessory bar
-chrome.keyboard({ inputAccessory: null });
+chrome.keyboard.setAccessory(null);
+unsubKeyboard();
 ```
 
 ---
@@ -633,9 +632,9 @@ export default defineConfig({
 The macOS target:
 
 - Creates an `NSWindow` with `WKWebView` (same bridge, same RPC protocol)
-- Supports `chrome.window()` for title bar customisation (title, subtitle, separator style, full-size content)
-- Supports `chrome.menuBar()` for building native `NSMenu` hierarchies with key equivalents
-- Supports `chrome.sidebar()` for sidebar item selection events
+- Supports `chrome.window.*` for title bar customisation (title, subtitle, separator style, full-size content)
+- Supports `chrome.menuBar.*` for building native `NSMenu` hierarchies with key equivalents
+- Supports `chrome.sidebar.*` for sidebar item selection events
 - iOS-only chrome elements (`navigationBar`, `tabBar`, `toolbar`, `statusBar`, `homeIndicator`, `sheet`, `keyboard`) are silently ignored on macOS
 - Sets `--nk-is-desktop: 1`, `--nk-is-phone: 0`, `--nk-is-tablet: 0`
 - No software keyboard variables (always zero on macOS)

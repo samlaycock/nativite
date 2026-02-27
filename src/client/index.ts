@@ -20,7 +20,7 @@ interface BridgeTransport {
 // ─── iOS Transport (WKScriptMessageHandlerWithReply) ─────────────────────────
 // Uses window.webkit.messageHandlers.nativite.postMessage() for fire-and-forget
 // and window.webkit.messageHandlers.nativite.postMessageWithReply() for async
-// RPC. Swift calls replyHandler() directly — no evaluateJavaScript roundtrip.
+// RPC. Swift calls replyHandler() directly — no legacy fallback path.
 
 type WebKitHandler = {
   postMessage(msg: unknown): void;
@@ -55,23 +55,17 @@ class IOSTransport implements BridgeTransport {
     // postMessageWithReply is available in WKWebView when the Swift side
     // registers via addScriptMessageHandler(_:contentWorld:name:) with
     // WKScriptMessageHandlerWithReply conformance.
-    if (typeof handler.postMessageWithReply === "function") {
-      return handler.postMessageWithReply(msg).then((reply) => {
-        // Swift replyHandler sends { result } on success, { error } on failure
-        const r = reply as { result?: unknown; error?: string };
-        if (r.error !== undefined) throw new Error(r.error);
-        return r.result;
-      });
+    if (typeof handler.postMessageWithReply !== "function") {
+      return Promise.reject(
+        new Error("Nativite iOS handler does not support postMessageWithReply"),
+      );
     }
 
-    // Fallback: old-style postMessage — responses arrive via window.nativiteReceive
-    return new Promise((resolve, reject) => {
-      if (!msg.id) {
-        reject(new Error("Cannot use fallback transport without a call id"));
-        return;
-      }
-      fallbackPending.set(msg.id, { resolve, reject });
-      handler.postMessage(msg);
+    return handler.postMessageWithReply(msg).then((reply) => {
+      // Swift replyHandler sends { result } on success, { error } on failure
+      const r = reply as { result?: unknown; error?: string };
+      if (r.error !== undefined) throw new Error(r.error);
+      return r.result;
     });
   }
 }
@@ -107,13 +101,6 @@ function generateId(): string {
   return `nk_${(++callIdCounter).toString()}_${Date.now().toString()}`;
 }
 
-// ─── Pending calls (fallback transport path only) ─────────────────────────────
-
-const fallbackPending = new Map<
-  string,
-  { resolve: (value: unknown) => void; reject: (error: Error) => void }
->();
-
 // ─── Event listeners ──────────────────────────────────────────────────────────
 
 const eventListeners = new Map<string, Set<(data: unknown) => void>>();
@@ -134,29 +121,13 @@ export function _registerReceiveHandler(handler: (msg: NativeToJsMessage) => voi
 }
 
 // ─── Message receiver — called by Swift via evaluateJavaScript ────────────────
-// window.nativiteReceive(message) handles:
-//   - Fallback-path RPC responses (when postMessageWithReply is unavailable)
-//   - Native-push events (always routed here regardless of transport)
+// window.nativiteReceive(message) handles native-push events.
 
 function receive(message: NativeToJsMessage): void {
-  if (message.type === "response") {
-    const pending = fallbackPending.get(message.id);
-    if (pending) {
-      fallbackPending.delete(message.id);
-      pending.resolve(message.result);
-    }
-  } else if (message.type === "error") {
-    const pending = fallbackPending.get(message.id);
-    if (pending) {
-      fallbackPending.delete(message.id);
-      pending.reject(new Error(message.error));
-    }
-  } else if (message.type === "event") {
-    const listeners = eventListeners.get(message.event);
-    if (listeners) {
-      for (const listener of listeners) {
-        listener(message.data);
-      }
+  const listeners = eventListeners.get(message.event);
+  if (listeners) {
+    for (const listener of listeners) {
+      listener(message.data);
     }
   }
 

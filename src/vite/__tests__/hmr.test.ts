@@ -4,19 +4,35 @@ import { describe, expect, it } from "bun:test";
 
 import { nativite } from "../index.ts";
 
+type SentHotPayload =
+  | { type: "full-reload"; path?: string; triggeredBy?: string }
+  | {
+      type: "update";
+      updates: Array<{
+        type: "js-update" | "css-update";
+        path: string;
+        acceptedPath: string;
+        timestamp: number;
+        firstInvalidatedBy?: string;
+      }>;
+    };
+
 function getHotUpdateHook() {
   const plugin = nativite().find((p) => p.name === "nativite");
   if (!plugin?.hotUpdate || typeof plugin.hotUpdate !== "function") {
     throw new Error("nativite core plugin hotUpdate hook is missing");
   }
   return (options: HotUpdateOptions) => {
-    (plugin.hotUpdate as (this: unknown, opts: HotUpdateOptions) => unknown).call({}, options);
+    return (plugin.hotUpdate as (this: unknown, opts: HotUpdateOptions) => unknown).call(
+      {},
+      options,
+    );
   };
 }
 
 function makeOptions(
   file: string,
-  sentPayloads: Array<{ type: string; path?: string; triggeredBy?: string }>,
+  sentPayloads: SentHotPayload[],
   overrides: Partial<HotUpdateOptions> = {},
 ): HotUpdateOptions {
   return {
@@ -30,7 +46,7 @@ function makeOptions(
         client: {
           hot: {
             send(payload: { type: string; path?: string; triggeredBy?: string }) {
-              sentPayloads.push(payload);
+              sentPayloads.push(payload as SentHotPayload);
             },
           },
         },
@@ -41,26 +57,48 @@ function makeOptions(
 }
 
 describe("nativite core hotUpdate", () => {
-  it("forces a client full-reload for native variant updates", () => {
+  it("bridges native variant updates into client HMR update payloads", () => {
     const hotUpdate = getHotUpdateHook();
-    const sent: Array<{ type: string; path?: string; triggeredBy?: string }> = [];
-    const options = makeOptions("/app/src/Button.native.tsx", sent);
+    const sent: SentHotPayload[] = [];
+    const options = makeOptions("/app/src/Button.native.tsx", sent, {
+      modules: [
+        {
+          url: "/src/Button.tsx",
+          type: "js",
+        } as HotUpdateOptions["modules"][number],
+      ],
+    });
 
-    hotUpdate(options);
+    const result = hotUpdate(options);
 
+    expect(result).toEqual([]);
     expect(sent).toEqual([
       {
-        type: "full-reload",
-        path: "*",
-        triggeredBy: "/app/src/Button.native.tsx",
+        type: "update",
+        updates: [
+          {
+            type: "js-update",
+            path: "/src/Button.tsx",
+            acceptedPath: "/src/Button.tsx",
+            timestamp: 123,
+            firstInvalidatedBy: "/app/src/Button.native.tsx",
+          },
+        ],
       },
     ]);
   });
 
-  it("dedupes full-reload broadcasts for the same change across environments", () => {
+  it("dedupes bridged native update payloads for the same change token", () => {
     const hotUpdate = getHotUpdateHook();
-    const sent: Array<{ type: string; path?: string; triggeredBy?: string }> = [];
-    const options = makeOptions("/app/src/Button.native.tsx", sent);
+    const sent: SentHotPayload[] = [];
+    const options = makeOptions("/app/src/Button.native.tsx", sent, {
+      modules: [
+        {
+          url: "/src/Button.tsx",
+          type: "js",
+        } as HotUpdateOptions["modules"][number],
+      ],
+    });
 
     hotUpdate(options);
     hotUpdate(options);
@@ -69,27 +107,49 @@ describe("nativite core hotUpdate", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("forces a reload for newly created native variants", () => {
+  it("includes canonical platformless paths for platform-extension module urls", () => {
     const hotUpdate = getHotUpdateHook();
-    const sent: Array<{ type: string; path?: string; triggeredBy?: string }> = [];
+    const sent: SentHotPayload[] = [];
     const options = makeOptions("/app/src/Button.native.tsx", sent, {
-      type: "create",
-      modules: [],
+      modules: [
+        {
+          url: "/src/Button.native.tsx",
+          type: "js",
+        } as HotUpdateOptions["modules"][number],
+      ],
     });
 
     hotUpdate(options);
 
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.type).toBe("full-reload");
+    if (sent[0]?.type !== "update") {
+      throw new Error("expected update payload");
+    }
+
+    expect(sent[0].updates).toContainEqual({
+      type: "js-update",
+      path: "/src/Button.native.tsx",
+      acceptedPath: "/src/Button.native.tsx",
+      timestamp: 123,
+      firstInvalidatedBy: "/app/src/Button.native.tsx",
+    });
+    expect(sent[0].updates).toContainEqual({
+      type: "js-update",
+      path: "/src/Button.tsx",
+      acceptedPath: "/src/Button.tsx",
+      timestamp: 123,
+      firstInvalidatedBy: "/app/src/Button.native.tsx",
+    });
   });
 
-  it("ignores non-native-variant files", () => {
+  it("keeps normal HMR handling for non-native-variant files", () => {
     const hotUpdate = getHotUpdateHook();
-    const sent: Array<{ type: string; path?: string; triggeredBy?: string }> = [];
+    const sent: SentHotPayload[] = [];
     const options = makeOptions("/app/src/Button.tsx", sent);
 
-    hotUpdate(options);
+    const result = hotUpdate(options);
 
+    expect(result).toEqual([]);
     expect(sent).toHaveLength(0);
   });
 });

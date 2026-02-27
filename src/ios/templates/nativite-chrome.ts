@@ -55,6 +55,9 @@ class NativiteChrome: NSObject {
   weak var vars: NativiteVars?
   // NativiteKeyboard handles the input accessory bar and keyboard dismiss mode.
   weak var keyboard: NativiteKeyboard?
+  // Self-managed tab bar — not backed by a UITabBarController. Installed lazily
+  // into vc.view on the first applyTabBar(_:) call.
+  private lazy var tabBar = UITabBar()
 
   // ── Entry point ────────────────────────────────────────────────────────────
 
@@ -101,12 +104,11 @@ class NativiteChrome: NSObject {
   private func pushVarUpdates() {
     guard let vc = viewController else { return }
     let navController  = vc.navigationController
-    let tabController  = vc.tabBarController
 
     let navH  = navController.map  { $0.navigationBar.frame.height } ?? 0
     let navV  = navController.map  { !$0.isNavigationBarHidden       } ?? false
-    let tabH  = tabController.map  { $0.tabBar.frame.height          } ?? 0
-    let tabV  = tabController.map  { !$0.tabBar.isHidden              } ?? false
+    let tabH  = tabBar.superview != nil ? tabBar.frame.height : 0
+    let tabV  = tabBar.superview != nil && !tabBar.isHidden
     let toolH = navController.map  { $0.toolbar.frame.height          } ?? 0
     let toolV = navController.map  { !$0.isToolbarHidden              } ?? false
 
@@ -150,14 +152,12 @@ ${applyInitialStateMethod}
     if let translucent = state["translucent"] as? Bool {
       navBar.isTranslucent = translucent
     }
-    if let hidden = state["hidden"] as? Bool {
-      navController.setNavigationBarHidden(hidden, animated: true)
+    navController.setNavigationBarHidden((state["hidden"] as? Bool) ?? false, animated: true)
+    if let leftItems = state["toolbarLeft"] as? [[String: Any]] {
+      navItem.leftBarButtonItems = leftItems.compactMap { toolbarItem($0, position: "left") }
     }
-    if let leftItems = state["leftButtons"] as? [[String: Any]] {
-      navItem.leftBarButtonItems = leftItems.compactMap { barButtonItem($0, position: "left") }
-    }
-    if let rightItems = state["rightButtons"] as? [[String: Any]] {
-      navItem.rightBarButtonItems = rightItems.compactMap { barButtonItem($0, position: "right") }
+    if let rightItems = state["toolbarRight"] as? [[String: Any]] {
+      navItem.rightBarButtonItems = rightItems.compactMap { toolbarItem($0, position: "right") }
     }
   }
 
@@ -197,19 +197,33 @@ ${applyInitialStateMethod}
     guard let identifier = sender.accessibilityIdentifier else { return }
     let parts = identifier.split(separator: ":").map(String.init)
     guard parts.count == 2 else { return }
-    sendEvent(name: "navigationBar.buttonTapped", data: ["id": parts[1]])
+    let id = parts[1]
+    if parts[0] == "toolbar" {
+      sendEvent(name: "toolbar.buttonTapped", data: ["id": id])
+    } else {
+      sendEvent(name: "navigationBar.buttonTapped", data: ["id": id])
+    }
   }
 
   // ── Tab Bar ────────────────────────────────────────────────────────────────
 
   private func applyTabBar(_ state: [String: Any]) {
-    guard let vc = viewController,
-          let tabController = vc.tabBarController else { return }
+    guard let vc = viewController else { return }
 
-    let tabBar = tabController.tabBar
+    // Lazily install the owned tab bar into vc.view on first use.
+    if tabBar.superview == nil {
+      tabBar.delegate = self
+      tabBar.translatesAutoresizingMaskIntoConstraints = false
+      vc.view.addSubview(tabBar)
+      NSLayoutConstraint.activate([
+        tabBar.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
+        tabBar.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor),
+        tabBar.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor),
+      ])
+    }
 
     if let items = state["items"] as? [[String: Any]] {
-      let tabItems = items.enumerated().compactMap { (index, itemState) -> UITabBarItem? in
+      tabBar.items = items.enumerated().compactMap { (index, itemState) -> UITabBarItem? in
         guard let title = itemState["title"] as? String else { return nil }
         let image = (itemState["systemImage"] as? String).flatMap { UIImage(systemName: $0) }
         let item = UITabBarItem(title: title, image: image, tag: index)
@@ -224,20 +238,11 @@ ${applyInitialStateMethod}
         }
         return item
       }
-      // Distribute the tab items across the existing view controllers
-      tabController.viewControllers?.enumerated().forEach { (index, viewController) in
-        if index < tabItems.count {
-          viewController.tabBarItem = tabItems[index]
-        }
-      }
     }
 
-    if let selectedId = state["selectedTabId"] as? String {
-      let index = tabController.viewControllers?
-        .firstIndex(where: { $0.tabBarItem.accessibilityIdentifier == selectedId })
-      if let index {
-        tabController.selectedIndex = index
-      }
+    if let selectedId = state["selectedTabId"] as? String,
+       let item = tabBar.items?.first(where: { $0.accessibilityIdentifier == selectedId }) {
+      tabBar.selectedItem = item
     }
     if let hex = state["tintColor"] as? String {
       tabBar.tintColor = UIColor(hex: hex)
@@ -256,7 +261,7 @@ ${applyInitialStateMethod}
       tabBar.isTranslucent = translucent
     }
     if let hidden = state["hidden"] as? Bool {
-      tabController.tabBar.isHidden = hidden
+      tabBar.isHidden = hidden
     }
   }
 
@@ -266,9 +271,7 @@ ${applyInitialStateMethod}
     guard let vc = viewController,
           let navController = vc.navigationController else { return }
 
-    if let hidden = state["hidden"] as? Bool {
-      navController.setToolbarHidden(hidden, animated: true)
-    }
+    navController.setToolbarHidden((state["hidden"] as? Bool) ?? false, animated: true)
     if let hex = state["barTintColor"] as? String {
       navController.toolbar.barTintColor = UIColor(hex: hex)
     }
@@ -280,7 +283,7 @@ ${applyInitialStateMethod}
     }
   }
 
-  private func toolbarItem(_ state: [String: Any]) -> UIBarButtonItem? {
+  private func toolbarItem(_ state: [String: Any], position: String = "toolbar") -> UIBarButtonItem? {
     switch state["type"] as? String {
     case "flexibleSpace":
       return UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
@@ -289,13 +292,8 @@ ${applyInitialStateMethod}
       item.width = state["width"] as? CGFloat ?? 8
       return item
     default:
-      return barButtonItem(state, position: "toolbar")
+      return barButtonItem(state, position: position)
     }
-  }
-
-  @objc private func toolbarButtonTapped(_ sender: UIBarButtonItem) {
-    guard let id = sender.accessibilityIdentifier else { return }
-    sendEvent(name: "toolbar.buttonTapped", data: ["id": id])
   }
 
   // ── Status Bar ─────────────────────────────────────────────────────────────
@@ -412,6 +410,15 @@ ${applyInitialStateMethod}
     }
   }
 ${sendEventMethod}
+}
+
+// ─── UITabBarDelegate ─────────────────────────────────────────────────────────
+
+extension NativiteChrome: UITabBarDelegate {
+  func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+    guard let id = item.accessibilityIdentifier else { return }
+    sendEvent(name: "tabBar.tabSelected", data: ["id": id])
+  }
 }
 
 // ─── Supporting: NativiteSheetViewController ─────────────────────────────────

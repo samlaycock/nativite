@@ -14,11 +14,11 @@ function makeBaseConfig(): NativiteConfig {
       bundleId: "com.example.plugintest",
       version: "1.0.0",
       buildNumber: 1,
-      platforms: {
-        ios: { minimumVersion: "17.0" },
-        macos: { minimumVersion: "14.0" },
-      },
     },
+    platforms: [
+      { platform: "ios", minimumVersion: "17.0" },
+      { platform: "macos", minimumVersion: "14.0" },
+    ],
     plugins: [],
   };
 }

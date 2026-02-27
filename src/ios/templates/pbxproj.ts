@@ -123,13 +123,19 @@ export function pbxprojTemplate(
   const appName = config.app.name;
   const iosConfig = resolveConfigForPlatform(config, "ios");
   const macosConfig = resolveConfigForPlatform(config, "macos");
+  const iosPlatformEntry = (config.platforms ?? []).find(
+    (platform) => platform.platform === "ios",
+  ) as { minimumVersion?: string } | undefined;
+  const macosPlatformEntry = (config.platforms ?? []).find(
+    (platform) => platform.platform === "macos",
+  ) as { minimumVersion?: string } | undefined;
   const iosAppId = iosConfig.app.bundleId;
   const macosAppId = macosConfig.app.bundleId;
   const hasOta = Boolean(config.updates);
   const hasSplash = Boolean(config.splash);
-  const hasMacos = Boolean(config.app.platforms.macos);
-  const iosDeploymentTarget = config.app.platforms.ios?.minimumVersion ?? "17.0";
-  const macosDeploymentTarget = config.app.platforms.macos?.minimumVersion ?? "14.0";
+  const hasMacos = macosPlatformEntry !== undefined;
+  const iosDeploymentTarget = iosPlatformEntry?.minimumVersion ?? "17.0";
+  const macosDeploymentTarget = macosPlatformEntry?.minimumVersion ?? "14.0";
   const iosMarketingVersion = iosConfig.app.version;
   const macosMarketingVersion = macosConfig.app.version;
   const iosBuildNumber = iosConfig.app.buildNumber;
@@ -393,9 +399,9 @@ export function pbxprojTemplate(
   // ── Copy Web Bundle shell script ──────────────────────────────────────────
 
   const copyIosDistScript =
-    '# Copy the iOS web bundle into the app bundle\\nDIST_SRC=\\"$SRCROOT/../../../dist-ios\\"\\nDIST_DEST=\\"$CODESIGNING_FOLDER_PATH/dist\\"\\nif [ ! -d \\"$DIST_SRC\\" ]; then\\n  if [ \\"$CONFIGURATION\\" = \\"Release\\" ]; then\\n    echo \\"error: Missing web bundle at $DIST_SRC. Run: npx nativite build --platform ios\\"\\n    exit 1\\n  fi\\n  echo \\"warning: Missing $DIST_SRC (skipping copy in $CONFIGURATION build)\\"\\n  exit 0\\nfi\\nrm -rf \\"$DIST_DEST\\"\\ncp -R \\"$DIST_SRC\\" \\"$DIST_DEST\\"\\n';
+    '# Copy the iOS web bundle into the app bundle\\nDIST_SRC=\\"$SRCROOT/../../../dist-ios\\"\\nDIST_DEST=\\"$CODESIGNING_FOLDER_PATH/dist\\"\\nif [ ! -d \\"$DIST_SRC\\" ]; then\\n  if [ \\"$CONFIGURATION\\" = \\"Release\\" ]; then\\n    echo \\"error: Missing web bundle at $DIST_SRC. Run: npx nativite build --platform ios\\"\\n    exit 1\\n  fi\\n  echo \\"warning: Missing $DIST_SRC (skipping copy in $CONFIGURATION build)\\"\\n  exit 0\\nfi\\nrm -rf \\"$DIST_DEST\\"\\ncp -R \\"$DIST_SRC\\" \\"$DIST_DEST\\"\\nDEV_JSON_SRC=\\"$SRCROOT/../dev.json\\"\\nDEV_JSON_DEST=\\"$CODESIGNING_FOLDER_PATH/dev.json\\"\\nif [ -f \\"$DEV_JSON_SRC\\" ]; then\\n  cp \\"$DEV_JSON_SRC\\" \\"$DEV_JSON_DEST\\"\\nfi\\n';
   const copyMacosDistScript =
-    '# Copy the macOS web bundle into the app bundle\\nDIST_SRC=\\"$SRCROOT/../../../dist-macos\\"\\nDIST_DEST=\\"$CODESIGNING_FOLDER_PATH/dist\\"\\nif [ ! -d \\"$DIST_SRC\\" ]; then\\n  if [ \\"$CONFIGURATION\\" = \\"Release\\" ]; then\\n    echo \\"error: Missing web bundle at $DIST_SRC. Run: npx nativite build --platform macos\\"\\n    exit 1\\n  fi\\n  echo \\"warning: Missing $DIST_SRC (skipping copy in $CONFIGURATION build)\\"\\n  exit 0\\nfi\\nrm -rf \\"$DIST_DEST\\"\\ncp -R \\"$DIST_SRC\\" \\"$DIST_DEST\\"\\n';
+    '# Copy the macOS web bundle into the app bundle\\nDIST_SRC=\\"$SRCROOT/../../../dist-macos\\"\\nDIST_DEST=\\"$CODESIGNING_FOLDER_PATH/dist\\"\\nif [ ! -d \\"$DIST_SRC\\" ]; then\\n  if [ \\"$CONFIGURATION\\" = \\"Release\\" ]; then\\n    echo \\"error: Missing web bundle at $DIST_SRC. Run: npx nativite build --platform macos\\"\\n    exit 1\\n  fi\\n  echo \\"warning: Missing $DIST_SRC (skipping copy in $CONFIGURATION build)\\"\\n  exit 0\\nfi\\nrm -rf \\"$DIST_DEST\\"\\ncp -R \\"$DIST_SRC\\" \\"$DIST_DEST\\"\\nDEV_JSON_SRC=\\"$SRCROOT/../dev.json\\"\\nDEV_JSON_DEST=\\"$CODESIGNING_FOLDER_PATH/dev.json\\"\\nif [ -f \\"$DEV_JSON_SRC\\" ]; then\\n  cp \\"$DEV_JSON_SRC\\" \\"$DEV_JSON_DEST\\"\\nfi\\n';
 
   const iosPluginResourceBuildFiles = iosPluginResources.map((file, index) => {
     const fileRef = ensurePluginFileRef(file, "resource");

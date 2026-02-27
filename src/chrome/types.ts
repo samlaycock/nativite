@@ -25,8 +25,10 @@ export type NavigationBarState = {
   barTintColor?: string;
   translucent?: boolean;
   hidden?: boolean;
-  leftButtons?: BarButtonItem[];
-  rightButtons?: BarButtonItem[];
+  /** Items on the leading (left) side of the navigation bar. Supports buttons, fixedSpace, and flexibleSpace. */
+  toolbarLeft?: ToolbarItem[];
+  /** Items on the trailing (right) side of the navigation bar. Supports buttons, fixedSpace, and flexibleSpace. */
+  toolbarRight?: ToolbarItem[];
 };
 
 export type TabItem = {
@@ -170,58 +172,8 @@ export type MenuBarState = {
   }>;
 };
 
-// ─── Chrome Options Types (State + inline callbacks) ─────────────────────────
-// These extend the *State types with optional callback properties for the
-// fluent per-element API. Callbacks are JS-only — they're stripped before
-// sending state over the bridge and registered as event listeners internally.
-
-export type NavigationBarOptions = NavigationBarState & {
-  /** Called when a navigation bar button is tapped. */
-  onButtonTap?: ((data: ChromeEventMap["navigationBar.buttonTapped"]) => void) | null;
-  /** Called when the back button is tapped. */
-  onBackTap?: ((data: ChromeEventMap["navigationBar.backTapped"]) => void) | null;
-};
-
-export type TabBarOptions = TabBarState & {
-  /** Called when the user selects a tab. */
-  onSelect?: ((data: ChromeEventMap["tabBar.tabSelected"]) => void) | null;
-};
-
-export type ToolbarOptions = ToolbarState & {
-  /** Called when a toolbar button is tapped. */
-  onButtonTap?: ((data: ChromeEventMap["toolbar.buttonTapped"]) => void) | null;
-};
-
-export type SearchBarOptions = SearchBarState & {
-  /** Called when the search bar text changes. */
-  onTextChange?: ((data: ChromeEventMap["searchBar.textChanged"]) => void) | null;
-  /** Called when the search button (return key) is tapped. */
-  onSubmit?: ((data: ChromeEventMap["searchBar.submitted"]) => void) | null;
-  /** Called when the search cancel button is tapped. */
-  onCancel?: ((data: ChromeEventMap["searchBar.cancelled"]) => void) | null;
-};
-
-export type SheetOptions = SheetState & {
-  /** Called when the sheet's detent changes (user dragged it). */
-  onDetentChange?: ((data: ChromeEventMap["sheet.detentChanged"]) => void) | null;
-  /** Called when the sheet is dismissed. */
-  onDismiss?: ((data: ChromeEventMap["sheet.dismissed"]) => void) | null;
-};
-
-export type KeyboardOptions = KeyboardState & {
-  /** Called when a keyboard accessory bar button is tapped. */
-  onAccessoryItemTap?: ((data: ChromeEventMap["keyboard.accessory.itemTapped"]) => void) | null;
-};
-
-export type SidebarOptions = SidebarState & {
-  /** Called when a sidebar item is selected. */
-  onItemSelect?: ((data: ChromeEventMap["sidebar.itemSelected"]) => void) | null;
-};
-
-export type MenuBarOptions = MenuBarState & {
-  /** Called when a macOS menu item is selected. */
-  onItemSelect?: ((data: ChromeEventMap["menuBar.itemSelected"]) => void) | null;
-};
+/** A function returned by `on*` methods to remove the event listener. */
+export type Unsubscribe = () => void;
 
 /**
  * The full chrome state descriptor. All fields are optional — only the keys

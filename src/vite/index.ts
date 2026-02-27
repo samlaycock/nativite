@@ -38,6 +38,7 @@ import {
 } from "../platforms/registry.ts";
 import { resolveNativitePlugins } from "../plugins/resolve.ts";
 import { platformExtensionsPlugin } from "./platform-extensions-plugin.ts";
+import { shouldTransformNativeRequest } from "./request-routing.ts";
 
 export type { NativiteConfig, Platform };
 export { defineConfig } from "../index.ts";
@@ -97,7 +98,10 @@ async function isStale(
     if (!pbxproj.includes("$SRCROOT/../../../dist-ios")) {
       return true;
     }
-    if (config.app.platforms.macos && !pbxproj.includes("$SRCROOT/../../../dist-macos")) {
+    if (
+      hasConfiguredPlatform(config, "macos") &&
+      !pbxproj.includes("$SRCROOT/../../../dist-macos")
+    ) {
       return true;
     }
   } catch {
@@ -156,6 +160,14 @@ function toBundlePlatform(
 function platformOutDir(baseOutDir: string, platform: BundlePlatform): string {
   const normalizedBase = baseOutDir.replace(/[\\/]+$/, "");
   return `${normalizedBase}-${platform}`;
+}
+
+function hasConfiguredPlatform(config: NativiteConfig, platformId: string): boolean {
+  return (config.platforms ?? []).some((platform) => platform.platform === platformId);
+}
+
+function hasBuiltInAppleTargets(config: NativiteConfig): boolean {
+  return hasConfiguredPlatform(config, "ios") || hasConfiguredPlatform(config, "macos");
 }
 
 // ─── Config loading ───────────────────────────────────────────────────────────
@@ -309,6 +321,18 @@ function devDefineValue(mode: string): string {
   return JSON.stringify(mode !== "production");
 }
 
+function parseBooleanEnv(raw: string | undefined): boolean | undefined {
+  if (raw === undefined) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+    return false;
+  }
+  return undefined;
+}
+
 function nativeEnvironmentOptions(platform: Platform, mode: string): EnvironmentOptions {
   return {
     consumer: "client",
@@ -335,6 +359,27 @@ function isNativeVariantFile(file: string, suffixes: Set<string>): boolean {
   return false;
 }
 
+function canonicalizeNativeVariantUrl(url: string, suffixes: Set<string>): string | undefined {
+  const queryIndex = url.search(/[?#]/);
+  const pathname = queryIndex === -1 ? url : url.slice(0, queryIndex);
+  const suffix = queryIndex === -1 ? "" : url.slice(queryIndex);
+  const slashIndex = pathname.lastIndexOf("/");
+  const dirname = slashIndex === -1 ? "" : pathname.slice(0, slashIndex + 1);
+  const basename = slashIndex === -1 ? pathname : pathname.slice(slashIndex + 1);
+
+  const orderedSuffixes = [...suffixes].sort((a, b) => b.length - a.length);
+  for (const variantSuffix of orderedSuffixes) {
+    const marker = `${variantSuffix}.`;
+    const markerIndex = basename.lastIndexOf(marker);
+    if (markerIndex === -1) continue;
+    const canonicalBasename =
+      basename.slice(0, markerIndex) + basename.slice(markerIndex + variantSuffix.length);
+    return `${dirname}${canonicalBasename}${suffix}`;
+  }
+
+  return undefined;
+}
+
 // ─── Core plugin (internal) ───────────────────────────────────────────────────
 
 function nativiteCorePlugin(): Plugin {
@@ -355,7 +400,7 @@ function nativiteCorePlugin(): Plugin {
     ".desktop",
   ]);
   let buildPlatform: BundlePlatform | undefined;
-  let lastNativeVariantReloadToken: string | undefined;
+  let lastNativeVariantClientUpdateToken: string | undefined;
 
   return {
     name: "nativite",
@@ -394,6 +439,33 @@ function nativiteCorePlugin(): Plugin {
         command === "build" && buildPlatform
           ? platformOutDir(userConfig.build?.outDir ?? "dist", buildPlatform)
           : undefined;
+      const nativeBuildBase =
+        command === "build" && envPlatform && envPlatform !== "web" && userConfig.base === undefined
+          ? "./"
+          : undefined;
+      const nativeErrorOverlay =
+        parseBooleanEnv(process.env["NATIVITE_DEV_ERROR_OVERLAY"]) ?? false;
+      const hmrConfig = userConfig.server?.hmr;
+      const serverConfig =
+        command === "serve"
+          ? {
+              hmr:
+                hmrConfig === false
+                  ? false
+                  : typeof hmrConfig === "object" && hmrConfig !== null
+                    ? { ...hmrConfig, overlay: nativeErrorOverlay }
+                    : { overlay: nativeErrorOverlay },
+            }
+          : undefined;
+      const userOptimizeDeps = userConfig.optimizeDeps ?? {};
+      const optimizeDepsExclude = Array.from(
+        new Set([
+          ...(userOptimizeDeps.exclude ?? []),
+          "nativite/chrome",
+          "nativite/client",
+          "nativite/css-vars",
+        ]),
+      );
 
       const environments: Record<string, EnvironmentOptions> = {};
       for (const p of nativePlatforms) {
@@ -408,7 +480,13 @@ function nativiteCorePlugin(): Plugin {
           __IS_NATIVE__: "false",
           __DEV__: devDefineValue(mode),
         },
+        ...(serverConfig ? { server: serverConfig } : {}),
+        ...(nativeBuildBase ? { base: nativeBuildBase } : {}),
         ...(buildOutDir ? { build: { outDir: buildOutDir } } : {}),
+        optimizeDeps: {
+          ...userOptimizeDeps,
+          exclude: optimizeDepsExclude,
+        },
         environments,
       };
     },
@@ -469,35 +547,10 @@ function nativiteCorePlugin(): Plugin {
         if (!platformEnv) return next(); // Unknown or unregistered platform.
 
         const url = req.url ?? "/";
-        // HTML is environment-agnostic — let Vite's HTML middleware handle it.
-        // The <script type="module"> it emits drives all subsequent module
-        // fetches, which are what this middleware actually intercepts.
-        if (url === "/" || url.endsWith(".html")) return next();
-
-        // Only intercept ES-module fetches — not direct resource fetches (images,
-        // fonts, audio, video, etc.). WKWebView sends the same User-Agent on ALL
-        // requests, including <img src>, <link>, and @font-face fetches. If we
-        // route those through transformRequest we return JS with the wrong
-        // Content-Type and the browser rejects the resource.
-        //
-        // Sec-Fetch-Dest (supported in WebKit / WKWebView since iOS 16.4 /
-        // Safari 16.4) tells us the browser's intended destination:
-        //   "empty"  → fetch() or dynamic import() — i.e. a module sub-resource
-        //   "script" → <script type="module"> or classic <script>
-        //   anything else ("image", "font", "style", …) → static resource
-        //
-        // For older runtimes that don't send Sec-Fetch-Dest we fall back to the
-        // Accept header: image/font/audio/video Accept values indicate a resource
-        // fetch rather than a module fetch.
-        const rawFetchDest = req.headers["sec-fetch-dest"];
-        const fetchDest = Array.isArray(rawFetchDest) ? rawFetchDest[0] : rawFetchDest;
-        if (fetchDest) {
-          if (fetchDest !== "script" && fetchDest !== "empty") return next();
-        } else {
-          const rawAccept = req.headers["accept"];
-          const accept = Array.isArray(rawAccept) ? rawAccept.join(",") : (rawAccept ?? "");
-          if (/\bimage\/|\bfont\/|\baudio\/|\bvideo\//.test(accept)) return next();
-        }
+        // Native WebViews send the same UA on all requests. Only module-like
+        // requests should be routed through transformRequest; direct asset URLs
+        // must pass through to Vite's static file handlers.
+        if (!shouldTransformNativeRequest(url, req.headers)) return next();
 
         try {
           const result = await platformEnv.transformRequest(url);
@@ -548,7 +601,7 @@ function nativiteCorePlugin(): Plugin {
         mkdirSync(nativiteDir, { recursive: true });
         writeFileSync(join(nativiteDir, "dev.json"), JSON.stringify({ devURL: devUrl }, null, 2));
 
-        const hasAppleTargets = Boolean(config.app.platforms.ios || config.app.platforms.macos);
+        const hasAppleTargets = hasBuiltInAppleTargets(config);
         if (hasAppleTargets) {
           if (await isStale(config, nativiteDir, viteConfig.root, "dev")) {
             viteConfig.logger.info("[nativite] Generating native project...");
@@ -559,10 +612,10 @@ function nativiteCorePlugin(): Plugin {
         }
 
         const launchIos =
-          config.app.platforms.ios &&
+          hasConfiguredPlatform(config, "ios") &&
           (!launchPlatform || launchPlatform === "ios" || launchPlatform === "ipad");
         const launchMacOS =
-          config.app.platforms.macos && (!launchPlatform || launchPlatform === "macos");
+          hasConfiguredPlatform(config, "macos") && (!launchPlatform || launchPlatform === "macos");
 
         if (launchIos) {
           if (process.platform !== "darwin") {
@@ -632,7 +685,7 @@ function nativiteCorePlugin(): Plugin {
             nativeVariantSuffixes = new Set(
               configuredPlatformRuntimes.flatMap((runtime) => runtime.extensions).concat(".native"),
             );
-            if (freshConfig.app.platforms.ios || freshConfig.app.platforms.macos) {
+            if (hasBuiltInAppleTargets(freshConfig)) {
               if (await isStale(freshConfig, nativiteDir, viteConfig.root, "dev")) {
                 config = freshConfig;
                 viteConfig.logger.info("[nativite] Config changed. Regenerating native project...");
@@ -650,27 +703,50 @@ function nativiteCorePlugin(): Plugin {
     },
 
     // ── HMR ───────────────────────────────────────────────────────────────
-    // Suppress HMR for native platform environments. The WKWebView's HMR
-    // channel connects to "client" (via the Vite HMR client in the HTML)
-    // and cannot receive updates from the named platform environments.
+    // Native environments use an internal hot channel (not browser WebSocket),
+    // so bridge native-variant updates into the client channel as `update`
+    // payloads instead of forcing page reloads.
     hotUpdate(options: HotUpdateOptions) {
-      // Native-only variants (.ios/.native/etc.) are invisible to the "client"
-      // environment's module graph, so normal HMR won't fire there. Bridge
-      // them into the client channel by forcing a page reload.
-      if (isNativeVariantFile(options.file, nativeVariantSuffixes)) {
-        const shouldReload = options.type !== "update" || options.modules.length > 0;
-        if (shouldReload) {
-          const token = `${options.type}:${options.timestamp}:${options.file}`;
-          if (lastNativeVariantReloadToken !== token) {
-            lastNativeVariantReloadToken = token;
-            options.server.environments.client?.hot.send({
-              type: "full-reload",
-              path: "*",
-              triggeredBy: options.file,
-            });
+      if (!isNativeVariantFile(options.file, nativeVariantSuffixes)) return [];
+
+      const seenUpdates = new Set<string>();
+      const updates = options.modules
+        .filter((mod) => mod.type === "js" || mod.type === "css")
+        .flatMap((mod) => {
+          const urls = [mod.url];
+          const canonicalUrl = canonicalizeNativeVariantUrl(mod.url, nativeVariantSuffixes);
+          if (canonicalUrl && canonicalUrl !== mod.url) {
+            urls.push(canonicalUrl);
           }
+
+          return urls
+            .filter((url) => {
+              const key = `${mod.type}:${url}`;
+              if (seenUpdates.has(key)) return false;
+              seenUpdates.add(key);
+              return true;
+            })
+            .map((url) => ({
+              type: `${mod.type}-update` as "js-update" | "css-update",
+              path: url,
+              acceptedPath: url,
+              timestamp: options.timestamp,
+              firstInvalidatedBy: options.file,
+            }));
+        });
+
+      if (updates.length > 0) {
+        const signature = updates.map((update) => `${update.type}:${update.path}`).join("|");
+        const token = `${options.type}:${options.timestamp}:${options.file}:${signature}`;
+        if (lastNativeVariantClientUpdateToken !== token) {
+          lastNativeVariantClientUpdateToken = token;
+          options.server.environments.client?.hot.send({
+            type: "update",
+            updates,
+          });
         }
       }
+
       return [];
     },
 
@@ -722,7 +798,7 @@ function nativiteCorePlugin(): Plugin {
         });
       }
 
-      if (config.app.platforms.ios || config.app.platforms.macos) {
+      if (hasBuiltInAppleTargets(config)) {
         if (await isStale(config, nativiteDir, viteConfig.root, "build")) {
           await generateProject(config, viteConfig.root, false, "build");
         }

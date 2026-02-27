@@ -3,6 +3,40 @@ import type { NativiteConfig } from "../../index.ts";
 export function viewControllerTemplate(config: NativiteConfig): string {
   const hasOta = Boolean(config.updates);
   const hasDefaultChrome = Boolean(config.defaultChrome);
+  const splashBackgroundColor = config.splash?.backgroundColor
+    ? swiftUIColorFromHex(config.splash.backgroundColor)
+    : "UIColor.systemBackground";
+  const splashImageOverlay = config.splash?.image
+    ? `
+    if let splashImage = UIImage(named: "Splash") {
+      let splashImageView = UIImageView(image: splashImage)
+      splashImageView.translatesAutoresizingMaskIntoConstraints = false
+      splashImageView.contentMode = .center
+      splashView.addSubview(splashImageView)
+
+      NSLayoutConstraint.activate([
+        splashImageView.centerXAnchor.constraint(equalTo: splashView.centerXAnchor),
+        splashImageView.centerYAnchor.constraint(equalTo: splashView.centerYAnchor),
+        splashImageView.widthAnchor.constraint(lessThanOrEqualTo: splashView.widthAnchor, multiplier: 0.8),
+        splashImageView.heightAnchor.constraint(lessThanOrEqualTo: splashView.heightAnchor, multiplier: 0.8),
+      ])
+    }
+`
+    : "";
+  const splashDefaultActivityIndicator = config.splash
+    ? ""
+    : `
+    let activityIndicator = UIActivityIndicatorView(style: .large)
+    activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+    activityIndicator.color = .secondaryLabel
+    activityIndicator.startAnimating()
+    splashView.addSubview(activityIndicator)
+
+    NSLayoutConstraint.activate([
+      activityIndicator.centerXAnchor.constraint(equalTo: splashView.centerXAnchor),
+      activityIndicator.centerYAnchor.constraint(equalTo: splashView.centerYAnchor),
+    ])
+`;
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
   // These methods are identical on both platforms and compiled into both targets.
@@ -45,7 +79,8 @@ export function viewControllerTemplate(config: NativiteConfig): string {
       withExtension: "json",
       subdirectory: "dist"
     ) else {
-      fatalError("[Nativite] Missing embedded dist/manifest.json. Build the web bundle first.")
+      print("[Nativite] Warning: Missing embedded dist/manifest.json. Build the web bundle first.")
+      return
     }
 
     guard
@@ -53,31 +88,59 @@ export function viewControllerTemplate(config: NativiteConfig): string {
       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
       let bundlePlatform = json["platform"] as? String
     else {
-      fatalError("[Nativite] Invalid embedded dist/manifest.json. Rebuild the web bundle.")
+      print("[Nativite] Warning: Invalid embedded dist/manifest.json. Rebuild the web bundle.")
+      return
     }
 
     #if os(iOS)
-    let expectedPlatform = "ios"
+    let compatiblePlatforms: Set<String> = ["ios", "ipad"]
+    let expectedPlatformDescription = "ios or ipad"
     #elseif os(macOS)
-    let expectedPlatform = "macos"
+    let compatiblePlatforms: Set<String> = ["macos"]
+    let expectedPlatformDescription = "macos"
     #else
-    let expectedPlatform = "unknown"
+    let compatiblePlatforms: Set<String> = ["unknown"]
+    let expectedPlatformDescription = "unknown"
     #endif
 
-    guard bundlePlatform == expectedPlatform else {
-      fatalError(
+    guard compatiblePlatforms.contains(bundlePlatform) else {
+      print(
         "[Nativite] Embedded web bundle platform mismatch: " +
-          "expected \\(expectedPlatform), got \\(bundlePlatform)."
+          "expected \\(expectedPlatformDescription), got \\(bundlePlatform)."
       )
+      return
     }
   }`;
 
   const resolveDevURLMethod = `
   #if DEBUG
   private func resolveDevURL() -> URL? {
+    let devURLDefaultsKey = "nativite.dev.url"
+
     if let envValue = ProcessInfo.processInfo.environment["NATIVITE_DEV_URL"],
        let url = URL(string: envValue) {
+      UserDefaults.standard.set(envValue, forKey: devURLDefaultsKey)
       return url
+    }
+
+    if let persistedValue = UserDefaults.standard.string(forKey: devURLDefaultsKey),
+       let url = URL(string: persistedValue) {
+      return url
+    }
+
+    if
+      let configURL = Bundle.main.url(forResource: "dev", withExtension: "json"),
+      let data = try? Data(contentsOf: configURL),
+      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    {
+      if let rawURL = json["devURL"] as? String, let url = URL(string: rawURL) {
+        UserDefaults.standard.set(rawURL, forKey: devURLDefaultsKey)
+        return url
+      }
+      if let rawURL = json["devUrl"] as? String, let url = URL(string: rawURL) {
+        UserDefaults.standard.set(rawURL, forKey: devURLDefaultsKey)
+        return url
+      }
     }
     return nil
   }
@@ -109,6 +172,8 @@ class ViewController: UIViewController {
   private let bridge   = NativiteBridge()
   private let vars     = NativiteVars()
   private let keyboard = NativiteKeyboard()${hasOta ? "\n  private let otaUpdater = OTAUpdater()" : ""}
+  private var splashOverlayView: UIView?
+  private var splashOverlayHidden = false
 
   // Chrome-controllable properties — set by NativiteChrome and read by UIKit overrides
   var statusBarStyle: UIStatusBarStyle = .default
@@ -138,6 +203,11 @@ class ViewController: UIViewController {
     vars.installUserScript(into: config)
 
     webView = NativiteWebView(frame: view.bounds, configuration: config)
+    #if DEBUG
+    if #available(iOS 16.4, *) {
+      webView.isInspectable = true
+    }
+    #endif
     webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     // Disable automatic content inset adjustment — NativiteVars owns keyboard layout.
     webView.scrollView.contentInsetAdjustmentBehavior = .never
@@ -148,6 +218,7 @@ class ViewController: UIViewController {
     // Re-push CSS variables after each navigation so the real device values
     // replace the zero defaults that the user script seeds at documentStart.
     webView.navigationDelegate = self
+    webView.uiDelegate = self
     view.addSubview(webView)
 
     vars.webView = webView
@@ -163,7 +234,8 @@ class ViewController: UIViewController {
     bridge.chrome.keyboard = keyboard
     keyboard.install(on: webView)
 
-    ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()\n    " : ""}loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
+    ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()\n    " : ""}showSplashOverlay()
+    loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
   }
 
   override func viewDidLayoutSubviews() {
@@ -184,6 +256,59 @@ class ViewController: UIViewController {
     super.traitCollectionDidChange(previousTraitCollection)
     vars.updateTraits(traitCollection)
   }
+
+  private func showSplashOverlay() {
+    guard splashOverlayView == nil else { return }
+
+    let splashView = UIView(frame: view.bounds)
+    splashView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    splashView.backgroundColor = ${splashBackgroundColor}
+${splashImageOverlay}${splashDefaultActivityIndicator}    view.addSubview(splashView)
+    view.bringSubviewToFront(splashView)
+    splashOverlayView = splashView
+  }
+
+  private func hideSplashOverlay() {
+    guard !splashOverlayHidden else { return }
+    splashOverlayHidden = true
+
+    guard let splashView = splashOverlayView else { return }
+    UIView.animate(
+      withDuration: 0.2,
+      animations: {
+        splashView.alpha = 0
+      },
+      completion: { _ in
+        splashView.removeFromSuperview()
+      }
+    )
+  }
+
+  private func isExternalURL(_ url: URL) -> Bool {
+    guard let scheme = url.scheme?.lowercased(),
+          scheme == "http" || scheme == "https"
+    else { return false }
+
+    guard let currentURL = webView.url,
+          let currentScheme = currentURL.scheme?.lowercased()
+    else { return true }
+
+    if currentScheme == "file" {
+      return true
+    }
+    guard currentScheme == "http" || currentScheme == "https" else { return true }
+
+    let currentHost = currentURL.host?.lowercased()
+    let targetHost = url.host?.lowercased()
+    return !(currentScheme == scheme && currentHost == targetHost && currentURL.port == url.port)
+  }
+
+  @discardableResult
+  private func openExternalURL(_ url: URL) -> Bool {
+    guard isExternalURL(url) else { return false }
+    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+    return true
+  }
 ${loadContentMethod}
 ${assertEmbeddedBundlePlatformMethod}
 ${resolveDevURLMethod}
@@ -194,12 +319,101 @@ ${sendToWebViewMethod}
 // Required conformances for NativiteChrome's search bar support.
 
 extension ViewController: WKNavigationDelegate {
+  func webView(
+    _ webView: WKWebView,
+    decidePolicyFor navigationAction: WKNavigationAction,
+    decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+  ) {
+    guard let url = navigationAction.request.url else {
+      decisionHandler(.allow)
+      return
+    }
+
+    if navigationAction.navigationType == .linkActivated && openExternalURL(url) {
+      decisionHandler(.cancel)
+      return
+    }
+
+    decisionHandler(.allow)
+  }
+
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     // The user script seeds :root with zero defaults at documentStart.
     // Re-push the real device values now that the JS context exists so
     // all --nk-* variables reflect actual safe area, traits, etc.
     vars.updateSafeArea(view.safeAreaInsets, in: self)
     vars.updateTraits(traitCollection)
+    hideSplashOverlay()
+  }
+}
+
+extension ViewController: WKUIDelegate {
+  func webView(
+    _ webView: WKWebView,
+    createWebViewWith configuration: WKWebViewConfiguration,
+    for navigationAction: WKNavigationAction,
+    windowFeatures: WKWindowFeatures
+  ) -> WKWebView? {
+    guard
+      navigationAction.targetFrame == nil,
+      let url = navigationAction.request.url
+    else { return nil }
+
+    if openExternalURL(url) {
+      return nil
+    }
+
+    webView.load(URLRequest(url: url))
+    return nil
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    runJavaScriptAlertPanelWithMessage message: String,
+    initiatedByFrame frame: WKFrameInfo,
+    completionHandler: @escaping () -> Void
+  ) {
+    let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+      completionHandler()
+    })
+    present(alert, animated: true, completion: nil)
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    runJavaScriptConfirmPanelWithMessage message: String,
+    initiatedByFrame frame: WKFrameInfo,
+    completionHandler: @escaping (Bool) -> Void
+  ) {
+    let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+      completionHandler(false)
+    })
+    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+      completionHandler(true)
+    })
+    present(alert, animated: true, completion: nil)
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    runJavaScriptTextInputPanelWithPrompt prompt: String,
+    defaultText: String?,
+    initiatedByFrame frame: WKFrameInfo,
+    completionHandler: @escaping (String?) -> Void
+  ) {
+    let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+    alert.addTextField { textField in
+      textField.text = defaultText
+    }
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+      completionHandler(nil)
+    })
+    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+      completionHandler(alert.textFields?.first?.text)
+    })
+    present(alert, animated: true, completion: nil)
   }
 }
 
@@ -247,7 +461,14 @@ class ViewController: NSViewController {
     vars.installUserScript(into: config)
 
     webView = WKWebView(frame: view.bounds, configuration: config)
+    #if DEBUG
+    if #available(macOS 13.3, *) {
+      webView.isInspectable = true
+    }
+    #endif
     webView.autoresizingMask = [.width, .height]
+    webView.navigationDelegate = self
+    webView.uiDelegate = self
     view.addSubview(webView)
 
     vars.webView = webView
@@ -271,10 +492,150 @@ class ViewController: NSViewController {
       "right": insets.right,
     ])
   }
+
+  private func isExternalURL(_ url: URL) -> Bool {
+    guard let scheme = url.scheme?.lowercased(),
+          scheme == "http" || scheme == "https"
+    else { return false }
+
+    guard let currentURL = webView.url,
+          let currentScheme = currentURL.scheme?.lowercased()
+    else { return true }
+
+    if currentScheme == "file" {
+      return true
+    }
+    guard currentScheme == "http" || currentScheme == "https" else { return true }
+
+    let currentHost = currentURL.host?.lowercased()
+    let targetHost = url.host?.lowercased()
+    return !(currentScheme == scheme && currentHost == targetHost && currentURL.port == url.port)
+  }
+
+  @discardableResult
+  private func openExternalURL(_ url: URL) -> Bool {
+    guard isExternalURL(url) else { return false }
+    NSWorkspace.shared.open(url)
+    return true
+  }
 ${loadContentMethod}
 ${assertEmbeddedBundlePlatformMethod}
 ${resolveDevURLMethod}
 ${sendToWebViewMethod}
+}
+
+extension ViewController: WKNavigationDelegate {
+  func webView(
+    _ webView: WKWebView,
+    decidePolicyFor navigationAction: WKNavigationAction,
+    decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+  ) {
+    guard let url = navigationAction.request.url else {
+      decisionHandler(.allow)
+      return
+    }
+
+    if navigationAction.navigationType == .linkActivated && openExternalURL(url) {
+      decisionHandler(.cancel)
+      return
+    }
+
+    decisionHandler(.allow)
+  }
+}
+
+extension ViewController: WKUIDelegate {
+  func webView(
+    _ webView: WKWebView,
+    createWebViewWith configuration: WKWebViewConfiguration,
+    for navigationAction: WKNavigationAction,
+    windowFeatures: WKWindowFeatures
+  ) -> WKWebView? {
+    guard
+      navigationAction.targetFrame == nil,
+      let url = navigationAction.request.url
+    else { return nil }
+
+    if openExternalURL(url) {
+      return nil
+    }
+
+    webView.load(URLRequest(url: url))
+    return nil
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    runJavaScriptAlertPanelWithMessage message: String,
+    initiatedByFrame frame: WKFrameInfo,
+    completionHandler: @escaping () -> Void
+  ) {
+    let alert = NSAlert()
+    alert.alertStyle = .informational
+    alert.messageText = message
+    alert.addButton(withTitle: "OK")
+
+    if let window = view.window {
+      alert.beginSheetModal(for: window) { _ in
+        completionHandler()
+      }
+      return
+    }
+
+    _ = alert.runModal()
+    completionHandler()
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    runJavaScriptConfirmPanelWithMessage message: String,
+    initiatedByFrame frame: WKFrameInfo,
+    completionHandler: @escaping (Bool) -> Void
+  ) {
+    let alert = NSAlert()
+    alert.alertStyle = .informational
+    alert.messageText = message
+    alert.addButton(withTitle: "OK")
+    alert.addButton(withTitle: "Cancel")
+
+    if let window = view.window {
+      alert.beginSheetModal(for: window) { response in
+        completionHandler(response == .alertFirstButtonReturn)
+      }
+      return
+    }
+
+    let response = alert.runModal()
+    completionHandler(response == .alertFirstButtonReturn)
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    runJavaScriptTextInputPanelWithPrompt prompt: String,
+    defaultText: String?,
+    initiatedByFrame frame: WKFrameInfo,
+    completionHandler: @escaping (String?) -> Void
+  ) {
+    let textField = NSTextField(string: defaultText ?? "")
+    textField.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
+
+    let alert = NSAlert()
+    alert.alertStyle = .informational
+    alert.messageText = prompt
+    alert.accessoryView = textField
+    alert.addButton(withTitle: "OK")
+    alert.addButton(withTitle: "Cancel")
+
+    if let window = view.window {
+      alert.beginSheetModal(for: window) { response in
+        completionHandler(response == .alertFirstButtonReturn ? textField.stringValue : nil)
+      }
+      return
+    }
+
+    let response = alert.runModal()
+    completionHandler(response == .alertFirstButtonReturn ? textField.stringValue : nil)
+  }
 }`;
 
   return `${iosViewController}
@@ -282,4 +643,27 @@ ${sendToWebViewMethod}
 ${macosViewController}
 #endif
 `;
+}
+
+function swiftUIColorFromHex(hex: string): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `UIColor(red: ${r.toFixed(4)}, green: ${g.toFixed(4)}, blue: ${b.toFixed(4)}, alpha: 1)`;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  let cleaned = hex.trim();
+  if (cleaned.startsWith("#")) cleaned = cleaned.slice(1);
+  if (cleaned.length === 3) {
+    cleaned = cleaned
+      .split("")
+      .map((char) => char + char)
+      .join("");
+  }
+  const value = parseInt(cleaned.slice(0, 6), 16);
+  if (Number.isNaN(value)) return { r: 1, g: 1, b: 1 };
+  return {
+    r: ((value >> 16) & 0xff) / 255,
+    g: ((value >> 8) & 0xff) / 255,
+    b: (value & 0xff) / 255,
+  };
 }

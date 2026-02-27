@@ -48,10 +48,10 @@ extension NativiteWebView: UIScrollViewDelegate {
 // animates with the keyboard frame automatically.
 //
 // JS usage:
-//   chrome.keyboard({
-//     inputAccessory: { items: [{ type: "button", id: "done", title: "Done" }] },
-//     dismissMode: "interactive",
+//   chrome.keyboard.setAccessory({
+//     items: [{ type: "button", id: "done", title: "Done" }],
 //   })
+//   chrome.keyboard.configure({ dismissMode: "interactive" })
 class NativiteKeyboard: NSObject {
 
   weak var viewController: ViewController?

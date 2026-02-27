@@ -1,4 +1,38 @@
-import type { NativiteConfig } from "../index.ts";
+import { ios, macos, type NativiteConfig, type NativiteUserConfig } from "../index.ts";
+
+const iosPlatformEntry = ios({ minimumVersion: "17.0" });
+const macosPlatformEntry = macos({ minimumVersion: "14.0" });
+
+/** Minimal valid user config input shape. */
+export const baseUserConfig: NativiteUserConfig = {
+  app: {
+    name: "TestApp",
+    bundleId: "com.example.testapp",
+    version: "1.0.0",
+    buildNumber: 1,
+  },
+  platforms: [iosPlatformEntry],
+};
+
+/** User config with signing info. */
+export const signedUserConfig: NativiteUserConfig = {
+  ...baseUserConfig,
+  signing: {
+    ios: { mode: "automatic", teamId: "ABCDE12345" },
+  },
+};
+
+/** User config with only macOS platform. */
+export const macosUserConfig: NativiteUserConfig = {
+  ...baseUserConfig,
+  platforms: [macosPlatformEntry],
+};
+
+/** User config with both iOS and macOS platforms. */
+export const dualPlatformUserConfig: NativiteUserConfig = {
+  ...baseUserConfig,
+  platforms: [iosPlatformEntry, macosPlatformEntry],
+};
 
 /**
  * Minimal valid config — every required field present, all optionals absent.
@@ -10,10 +44,8 @@ export const baseConfig: NativiteConfig = {
     bundleId: "com.example.testapp",
     version: "1.0.0",
     buildNumber: 1,
-    platforms: {
-      ios: { minimumVersion: "17.0" },
-    },
   },
+  platforms: [iosPlatformEntry],
 };
 
 /** Config with a splash screen (color only, no image). */
@@ -75,10 +107,8 @@ export const macosConfig: NativiteConfig = {
     bundleId: "com.example.testapp",
     version: "1.0.0",
     buildNumber: 1,
-    platforms: {
-      macos: { minimumVersion: "14.0" },
-    },
   },
+  platforms: [macosPlatformEntry],
 };
 
 /** Config with both iOS and macOS platforms. */
@@ -88,9 +118,6 @@ export const dualPlatformConfig: NativiteConfig = {
     bundleId: "com.example.testapp",
     version: "1.0.0",
     buildNumber: 1,
-    platforms: {
-      ios: { minimumVersion: "17.0" },
-      macos: { minimumVersion: "14.0" },
-    },
   },
+  platforms: [iosPlatformEntry, macosPlatformEntry],
 };

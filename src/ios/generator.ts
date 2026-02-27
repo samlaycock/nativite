@@ -100,7 +100,7 @@ export async function generateProject(
   writeFileSync(join(appDir, "Info.plist"), infoPlistTemplate(iosConfig));
 
   // Write macOS Info.plist when the macOS platform is configured.
-  if (config.app.platforms.macos) {
+  if ((config.platforms ?? []).some((platform) => platform.platform === "macos")) {
     writeFileSync(join(appDir, "Info-macOS.plist"), infoPlistMacOSTemplate(macosConfig));
   }
 

@@ -20,7 +20,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     } else {
       window = UIWindow()
     }
-    window?.rootViewController = ViewController()
+    let nav = UINavigationController(rootViewController: ViewController())
+    nav.setNavigationBarHidden(true, animated: false)
+    window?.rootViewController = nav
     window?.makeKeyAndVisible()
     return true
   }

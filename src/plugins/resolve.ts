@@ -377,8 +377,9 @@ export async function resolveNativitePlugins(
   const plugins: NativitePlugin[] = config.plugins ?? [];
   const resolvedPlugins: ResolvedNativitePlugin[] = [];
 
-  const iosEnabled = config.app.platforms.ios !== undefined;
-  const macosEnabled = config.app.platforms.macos !== undefined;
+  const configuredPlatforms = new Set((config.platforms ?? []).map((entry) => entry.platform));
+  const iosEnabled = configuredPlatforms.has("ios");
+  const macosEnabled = configuredPlatforms.has("macos");
 
   for (const plugin of plugins) {
     const rootDir = resolve(

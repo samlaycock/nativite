@@ -68,9 +68,6 @@ export type NativitePlugin = {
   [key: string]: unknown;
 };
 
-/** Backwards-compatible plugin config entry type used in nativite.config.ts. */
-export type PluginConfig = NativitePlugin;
-
 export type NativiteDevTarget = "simulator" | "device";
 
 export type NativiteRootConfigOverrides = {
@@ -90,7 +87,7 @@ export type NativiteRootConfigOverrides = {
     url: string;
     channel: string;
   };
-  plugins?: PluginConfig[];
+  plugins?: NativitePlugin[];
   defaultChrome?: ChromeState;
   icon?: string;
   splash?: {
@@ -100,6 +97,7 @@ export type NativiteRootConfigOverrides = {
   dev?: {
     target: NativiteDevTarget;
     simulator: string;
+    errorOverlay?: boolean;
   };
 };
 
@@ -108,6 +106,7 @@ export type NativiteIOSPlatformConfig = {
   minimumVersion: string;
   target?: NativiteDevTarget;
   simulator?: string;
+  errorOverlay?: boolean;
   overrides?: NativiteRootConfigOverrides;
 };
 
@@ -182,7 +181,7 @@ export type NativitePlatformPlugin = {
  * Define iOS platform configuration in `nativite.config.ts`.
  *
  * @example
- * platforms: [ios({ minimumVersion: "17.0", target: "simulator", simulator: "iPhone 17 Pro" })]
+ * platforms: [ios({ minimumVersion: "17.0", target: "simulator", simulator: "iPhone 17 Pro", errorOverlay: false })]
  */
 export function ios(
   config: Omit<NativiteIOSPlatformConfig, "platform">,
@@ -233,7 +232,7 @@ export function definePlugin(plugin: NativitePlugin): NativitePlugin {
   return plugin;
 }
 
-function isPluginConfig(value: unknown): value is PluginConfig {
+function isPluginConfig(value: unknown): value is NativitePlugin {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as { name?: unknown; resolve?: unknown };
   if (typeof candidate.name !== "string" || candidate.name.length === 0) return false;
@@ -274,18 +273,12 @@ function isPlatformPluginConfig(value: unknown): value is NativitePlatformPlugin
   return true;
 }
 
-type NativiteAppPlatforms = {
-  ios?: { minimumVersion: string };
-  macos?: { minimumVersion: string };
-};
-
 type NormalizedNativiteConfig = {
   app: {
     name: string;
     bundleId: string;
     version: string;
     buildNumber: number;
-    platforms: NativiteAppPlatforms;
   };
   platforms?: NativitePlatformConfig[];
   platformPlugins?: NativitePlatformPlugin[];
@@ -299,7 +292,7 @@ type NormalizedNativiteConfig = {
     url: string;
     channel: string;
   };
-  plugins?: PluginConfig[];
+  plugins?: NativitePlugin[];
   defaultChrome?: ChromeState;
   icon?: string;
   splash?: {
@@ -309,6 +302,7 @@ type NormalizedNativiteConfig = {
   dev?: {
     target: NativiteDevTarget;
     simulator: string;
+    errorOverlay?: boolean;
   };
 };
 
@@ -351,7 +345,7 @@ const RootConfigOverridesSchema = z
       .optional(),
     plugins: z
       .array(
-        z.custom<PluginConfig>(isPluginConfig, {
+        z.custom<NativitePlugin>(isPluginConfig, {
           message: "Each plugin must be an object with a non-empty string `name`.",
         }),
       )
@@ -368,6 +362,7 @@ const RootConfigOverridesSchema = z
       .object({
         target: z.enum(["simulator", "device"]),
         simulator: z.string(),
+        errorOverlay: z.boolean().optional(),
       })
       .optional(),
   })
@@ -377,31 +372,26 @@ const RootConfigOverridesSchema = z
 
 export const NativiteConfigSchema = z
   .object({
-    app: z.object({
-      name: z
-        .string()
-        .min(1)
-        .regex(
-          /^[a-zA-Z0-9][a-zA-Z0-9 _-]*$/,
-          "app.name may only contain letters, numbers, spaces, hyphens, and underscores, " +
-            "and must start with a letter or number",
-        ),
-      bundleId: z
-        .string()
-        .regex(
-          /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/i,
-          "bundleId must be a reverse-domain identifier like com.example.myapp",
-        ),
-      version: z.string().min(1),
-      buildNumber: z.number().int().min(1),
-      // Deprecated shape kept for backwards compatibility.
-      platforms: z
-        .object({
-          ios: z.object({ minimumVersion: z.string() }).optional(),
-          macos: z.object({ minimumVersion: z.string() }).optional(),
-        })
-        .optional(),
-    }),
+    app: z
+      .object({
+        name: z
+          .string()
+          .min(1)
+          .regex(
+            /^[a-zA-Z0-9][a-zA-Z0-9 _-]*$/,
+            "app.name may only contain letters, numbers, spaces, hyphens, and underscores, " +
+              "and must start with a letter or number",
+          ),
+        bundleId: z
+          .string()
+          .regex(
+            /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/i,
+            "bundleId must be a reverse-domain identifier like com.example.myapp",
+          ),
+        version: z.string().min(1),
+        buildNumber: z.number().int().min(1),
+      })
+      .strict(),
     platforms: z
       .array(
         z
@@ -447,7 +437,7 @@ export const NativiteConfigSchema = z
       .optional(),
     plugins: z
       .array(
-        z.custom<PluginConfig>(isPluginConfig, {
+        z.custom<NativitePlugin>(isPluginConfig, {
           message: "Each plugin must be an object with a non-empty string `name`.",
         }),
       )
@@ -468,26 +458,16 @@ export const NativiteConfigSchema = z
         image: z.string().optional(),
       })
       .optional(),
-    // Deprecated top-level dev options. Prefer iOS platform options.
-    dev: z
-      .object({
-        target: z.enum(["simulator", "device"]).optional().default("simulator"),
-        simulator: z.string().optional().default("iPhone 16 Pro"),
-      })
-      .optional(),
   })
+  .strict()
   .superRefine((config, ctx) => {
-    const hasLegacyPlatforms =
-      config.app.platforms?.ios !== undefined || config.app.platforms?.macos !== undefined;
     const hasTopLevelPlatforms = (config.platforms?.length ?? 0) > 0;
 
-    if (!hasLegacyPlatforms && !hasTopLevelPlatforms) {
+    if (!hasTopLevelPlatforms) {
       ctx.addIssue({
         code: "custom",
         path: ["platforms"],
-        message:
-          "At least one platform must be configured via platforms: [ios(...), macos(...)] " +
-          "or app.platforms.",
+        message: "At least one platform must be configured via platforms: [ios(...), macos(...)].",
       });
     }
 
@@ -520,47 +500,22 @@ export const NativiteConfigSchema = z
     }
   })
   .transform<NormalizedNativiteConfig>((config) => {
-    const normalizedPlatforms: NativiteAppPlatforms = {};
-    if (config.app.platforms?.ios) normalizedPlatforms.ios = config.app.platforms.ios;
-    if (config.app.platforms?.macos) normalizedPlatforms.macos = config.app.platforms.macos;
-
-    const normalizedPlatformEntries = [...(config.platforms ?? [])];
-    if (normalizedPlatformEntries.length === 0) {
-      if (config.app.platforms?.ios) {
-        normalizedPlatformEntries.push({
-          platform: "ios",
-          minimumVersion: config.app.platforms.ios.minimumVersion,
-        });
-      }
-      if (config.app.platforms?.macos) {
-        normalizedPlatformEntries.push({
-          platform: "macos",
-          minimumVersion: config.app.platforms.macos.minimumVersion,
-        });
-      }
-    }
-
-    let iosPlatformConfig: NativiteIOSPlatformConfig | undefined;
-    for (const platformEntry of normalizedPlatformEntries) {
-      if (platformEntry.platform === "ios" && typeof platformEntry.minimumVersion === "string") {
-        iosPlatformConfig = platformEntry as NativiteIOSPlatformConfig;
-        normalizedPlatforms.ios = { minimumVersion: platformEntry.minimumVersion };
-      } else if (
-        platformEntry.platform === "macos" &&
-        typeof platformEntry.minimumVersion === "string"
-      ) {
-        normalizedPlatforms.macos = { minimumVersion: platformEntry.minimumVersion };
-      }
-    }
+    const normalizedPlatformEntries = [...(config.platforms ?? [])] as NativitePlatformConfig[];
+    const iosPlatformConfig = normalizedPlatformEntries.find(
+      (entry): entry is NativiteIOSPlatformConfig => entry.platform === "ios",
+    );
 
     const hasIosDevOverrides =
-      iosPlatformConfig?.target !== undefined || iosPlatformConfig?.simulator !== undefined;
+      iosPlatformConfig?.target !== undefined ||
+      iosPlatformConfig?.simulator !== undefined ||
+      iosPlatformConfig?.errorOverlay !== undefined;
     const normalizedDev = hasIosDevOverrides
       ? {
-          target: iosPlatformConfig?.target ?? config.dev?.target ?? "simulator",
-          simulator: iosPlatformConfig?.simulator ?? config.dev?.simulator ?? "iPhone 16 Pro",
+          target: iosPlatformConfig?.target ?? "simulator",
+          simulator: iosPlatformConfig?.simulator ?? "iPhone 16 Pro",
+          errorOverlay: iosPlatformConfig?.errorOverlay,
         }
-      : config.dev;
+      : undefined;
 
     const normalized: NormalizedNativiteConfig = {
       app: {
@@ -568,7 +523,6 @@ export const NativiteConfigSchema = z
         bundleId: config.app.bundleId,
         version: config.app.version,
         buildNumber: config.app.buildNumber,
-        platforms: normalizedPlatforms,
       },
     };
 
@@ -629,20 +583,6 @@ export type BridgeCallMessage = {
 };
 
 /** @internal */
-export type BridgeResponseMessage = {
-  id: string;
-  type: "response";
-  result: unknown;
-};
-
-/** @internal */
-export type BridgeErrorMessage = {
-  id: string;
-  type: "error";
-  error: string;
-};
-
-/** @internal */
 export type BridgeEventMessage = {
   id: null;
   type: "event";
@@ -654,7 +594,7 @@ export type BridgeEventMessage = {
 export type JsToNativeMessage = BridgeCallMessage;
 
 /** @internal */
-export type NativeToJsMessage = BridgeResponseMessage | BridgeErrorMessage | BridgeEventMessage;
+export type NativeToJsMessage = BridgeEventMessage;
 
 // ─── Dev / Build State ────────────────────────────────────────────────────────
 

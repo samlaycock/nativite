@@ -85,11 +85,14 @@ function resolveRequestedPlatform(
 
 function createPlatformEnv(config: NativiteConfig, selectedPlatform: string): NodeJS.ProcessEnv {
   const runtimes = resolveConfiguredPlatformRuntimes(config);
+  const platformConfig = resolveConfigForPlatform(config, selectedPlatform);
+  const errorOverlay = platformConfig.dev?.errorOverlay === true ? "true" : "false";
   return {
     ...process.env,
     NATIVITE_PLATFORM: selectedPlatform,
     NATIVITE_PLATFORMS: runtimes.map((runtime) => runtime.id).join(","),
     NATIVITE_PLATFORM_METADATA: serializePlatformRuntimeMetadata(runtimes),
+    NATIVITE_DEV_ERROR_OVERLAY: errorOverlay,
   };
 }
 

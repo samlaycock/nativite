@@ -48,26 +48,8 @@ function normalizeEnvironments(platformId: string, environments: string[] | unde
   return unique(environments.map((entry) => entry.trim()).filter((entry) => entry.length > 0));
 }
 
-function deriveLegacyConfiguredPlatforms(config: NativiteConfig): NativitePlatformConfig[] {
-  const platforms: NativitePlatformConfig[] = [];
-  if (config.app.platforms.ios) {
-    platforms.push({
-      platform: "ios",
-      minimumVersion: config.app.platforms.ios.minimumVersion,
-    });
-  }
-  if (config.app.platforms.macos) {
-    platforms.push({
-      platform: "macos",
-      minimumVersion: config.app.platforms.macos.minimumVersion,
-    });
-  }
-  return platforms;
-}
-
 export function getConfiguredPlatforms(config: NativiteConfig): NativitePlatformConfig[] {
-  if (config.platforms && config.platforms.length > 0) return config.platforms;
-  return deriveLegacyConfiguredPlatforms(config);
+  return config.platforms ?? [];
 }
 
 export function resolveConfiguredPlatformRuntimes(
@@ -136,7 +118,6 @@ export function resolveConfigForPlatform(
     app: {
       ...config.app,
       ...overrides.app,
-      platforms: config.app.platforms,
     },
   };
 

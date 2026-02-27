@@ -94,12 +94,34 @@ export function nativiteVarsTemplate(): string {
       --nk-font-subheadline:15px;--nk-font-title1:28px;--nk-font-title2:22px;
       --nk-font-title3:20px;--nk-font-largeTitle:34px;
     """
+    // Keep Vite's error overlay host inside native insets so its controls
+    // remain reachable when debugging in WKWebView.
+    let devOverlayInsets = """
+      vite-error-overlay{
+        position:fixed !important;
+        inset:var(--nk-inset-top,0px) 0 var(--nk-inset-bottom,0px) 0 !important;
+        height:auto !important;
+        max-height:calc(100vh - var(--nk-inset-top,0px) - var(--nk-inset-bottom,0px)) !important;
+        box-sizing:border-box !important;
+      }
+    """
     // Resolve the platform string at runtime so iPad is distinguished from iPhone.
     #if os(iOS)
     let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
     #elseif os(macOS)
     let nkPlatform = "macos"
     #endif
+
+    // Collapse multi-line strings to single lines before embedding in JS.
+    // Swift multi-line string literals contain literal newlines; embedding them
+    // directly inside a JS single-quoted string causes a syntax error and
+    // silently prevents all CSS variables from being set in WKWebView.
+    let css = defaults.components(separatedBy: .newlines)
+                      .map { $0.trimmingCharacters(in: .whitespaces) }
+                      .joined()
+    let devCSS = devOverlayInsets.components(separatedBy: .newlines)
+                                 .map { $0.trimmingCharacters(in: .whitespaces) }
+                                 .joined()
 
     // Inject as a <style> block so it is in the cascade (not inline style).
     // Also attach a tiny patcher function used by subsequent updates.
@@ -109,7 +131,7 @@ export function nativiteVarsTemplate(): string {
     (function(){
       var s=document.createElement('style');
       s.id='__nk_vars__';
-      s.textContent=':root{\\(defaults)}';
+      s.textContent=':root{\\(css)}\\(devCSS)';
       document.documentElement.appendChild(s);
       window.__nk_patch=function(vars){
         var r=document.documentElement;
