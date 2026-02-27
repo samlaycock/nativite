@@ -69,6 +69,10 @@ function hasStaticAssetExtension(pathname: string): boolean {
   return STATIC_ASSET_EXTENSIONS.has(extension);
 }
 
+function acceptsHtmlDocument(acceptHeader: string): boolean {
+  return /\btext\/html\b|\bapplication\/xhtml\+xml\b/.test(acceptHeader);
+}
+
 export function shouldTransformNativeRequest(url: string, headers: RequestHeaders): boolean {
   const pathname = stripQueryAndHash(url);
   const moduleQuery = hasModuleQuery(url);
@@ -76,6 +80,10 @@ export function shouldTransformNativeRequest(url: string, headers: RequestHeader
   const accept = normalizeHeaderValue(headers["accept"]) ?? "";
   if (pathname === "/") return false;
   if (pathname.endsWith(".html") && !moduleQuery) return false;
+  // Top-level navigations (e.g. "/sheet") must be served as HTML documents
+  // so SPA routes can bootstrap. Transforming these as modules leads to blank
+  // pages in WKWebView when fetch metadata headers are absent.
+  if (!moduleQuery && acceptsHtmlDocument(accept)) return false;
 
   // Query markers are authoritative signals from Vite's module graph.
   // Honor them even when request headers are ambiguous on WKWebView.

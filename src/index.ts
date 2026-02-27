@@ -135,6 +135,7 @@ export type NativitePlatformLogger = {
 };
 
 export type NativitePlatformHookContext = {
+  rootConfig: NativiteConfig;
   config: NativiteConfig;
   projectRoot: string;
   platform: NativitePlatformConfig;
@@ -143,6 +144,7 @@ export type NativitePlatformHookContext = {
 
 export type NativitePlatformGenerateContext = NativitePlatformHookContext & {
   force: boolean;
+  mode?: NativitePluginMode;
 };
 
 export type NativitePlatformDevContext = NativitePlatformHookContext & {
@@ -461,6 +463,7 @@ export const NativiteConfigSchema = z
   })
   .strict()
   .superRefine((config, ctx) => {
+    const firstPartyPlatformIds = new Set(["ios", "macos"]);
     const hasTopLevelPlatforms = (config.platforms?.length ?? 0) > 0;
 
     if (!hasTopLevelPlatforms) {
@@ -483,11 +486,23 @@ export const NativiteConfigSchema = z
       }
     }
 
-    const pluginPlatforms = new Set(
-      (config.platformPlugins ?? []).map((plugin) => plugin.platform),
-    );
+    for (const plugin of config.platformPlugins ?? []) {
+      if (firstPartyPlatformIds.has(plugin.platform)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["platformPlugins"],
+          message:
+            `Platform plugin "${plugin.platform}" is reserved for Nativite first-party ` +
+            "platform support and cannot be overridden.",
+        });
+      }
+    }
+
+    const pluginPlatforms = new Set([
+      ...firstPartyPlatformIds,
+      ...(config.platformPlugins ?? []).map((plugin) => plugin.platform),
+    ]);
     for (const entry of config.platforms ?? []) {
-      if (entry.platform === "ios" || entry.platform === "macos") continue;
       if (!pluginPlatforms.has(entry.platform)) {
         ctx.addIssue({
           code: "custom",

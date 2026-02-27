@@ -96,6 +96,12 @@ export type SheetState = {
   presented: boolean;
   detents?: SheetDetent[];
   selectedDetent?: SheetDetent;
+  /**
+   * URL to load in the sheet webview.
+   * - `"/route"` keeps the current host in dev and bootstraps bundled `index.html` + SPA route in prod.
+   * - Relative paths resolve against the current main webview URL.
+   */
+  url?: string;
   grabberVisible?: boolean;
   /** Hex colour for the sheet background. */
   backgroundColor?: string;
@@ -214,6 +220,10 @@ export type ChromeEventMap = {
   "sheet.detentChanged": { detent: SheetDetent };
   /** The sheet was dismissed. */
   "sheet.dismissed": Record<string, never>;
+  /** Message from sheet webview JS to the main webview context. */
+  "sheet.message": { message: unknown };
+  /** The sheet webview failed to load its URL. */
+  "sheet.loadFailed": { message: string; code: number; domain: string; url?: string };
   /** A sidebar item was selected. */
   "sidebar.itemSelected": { id: string };
   /** A macOS menu item was selected. */

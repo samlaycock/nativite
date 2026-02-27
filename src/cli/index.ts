@@ -8,7 +8,6 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 
 import { NativiteConfigSchema, type NativiteConfig } from "../index.ts";
-import { generateProject } from "../ios/index.ts";
 import {
   resolveConfigForPlatform,
   resolveConfiguredPlatformRuntimes,
@@ -115,26 +114,19 @@ program
     if (!runtime) process.exit(1);
 
     logger.info(`Generating ${platform} project...`);
-    if (runtime.isBuiltIn) {
-      const result = await generateProject(config, cwd, options.force ?? false);
-      if (result.skipped) {
-        logger.info("Project is up to date. Use --force to regenerate.");
-      } else {
-        logger.info(`Generated: ${result.projectPath}`);
-      }
+    if (typeof runtime.plugin.generate !== "function") {
+      logger.warn(`[nativite] Platform "${platform}" has no generate hook. Nothing to generate.`);
     } else {
-      if (typeof runtime.plugin?.generate !== "function") {
-        logger.warn(`[nativite] Platform "${platform}" has no generate hook. Nothing to generate.`);
-      } else {
-        const platformConfig = resolveConfigForPlatform(config, platform);
-        await runtime.plugin.generate({
-          config: platformConfig,
-          projectRoot: cwd,
-          platform: runtime.config,
-          logger,
-          force: options.force ?? false,
-        });
-      }
+      const platformConfig = resolveConfigForPlatform(config, platform);
+      await runtime.plugin.generate({
+        rootConfig: config,
+        config: platformConfig,
+        projectRoot: cwd,
+        platform: runtime.config,
+        logger,
+        force: options.force ?? false,
+        mode: "generate",
+      });
     }
   });
 

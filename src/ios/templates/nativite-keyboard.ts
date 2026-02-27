@@ -16,6 +16,9 @@ import WebKit
 
 class NativiteWebView: WKWebView {
   var customInputAccessoryView: UIView?
+  // When true, pins root scroll position at y=0 to prevent keyboard-driven
+  // document shifts. Keep enabled for the primary app webview.
+  var lockRootScroll: Bool = true
 
   override var inputAccessoryView: UIView? {
     customInputAccessoryView
@@ -37,6 +40,7 @@ extension NativiteWebView: UIScrollViewDelegate {
   // Inner overflow:scroll/auto elements have their own nested UIScrollViews
   // inside WKWebView and are completely unaffected by this.
   func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    guard lockRootScroll else { return }
     if scrollView.contentOffset.y != 0 {
       scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: 0)
     }
@@ -101,7 +105,7 @@ class NativiteKeyboard: NSObject {
         // Report height to NativiteVars after layout.
         DispatchQueue.main.async { [weak self] in
           guard let self else { return }
-          let h = self.accessoryView.isHidden ? 0.0 : self.accessoryView.frame.height
+          let h = self.accessoryView.isHidden ? 0.0 : self.accessoryView.reportedHeight
           self.vars?.updateAccessoryHeight(h)
         }
       }
@@ -128,6 +132,7 @@ class NativiteKeyboard: NSObject {
 private class NativiteAccessoryView: UIInputView {
 
   weak var keyboard: NativiteKeyboard?
+  private let accessoryHeight: CGFloat = 44
   private var toolbar: UIToolbar!
 
   var barTintColor: UIColor? {
@@ -136,21 +141,22 @@ private class NativiteAccessoryView: UIInputView {
 
   init() {
     // UIInputView needs an explicit frame; the system resizes it to fit.
-    super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44),
+    super.init(frame: CGRect(x: 0, y: 0, width: 0, height: accessoryHeight),
                inputViewStyle: .keyboard)
 
     toolbar = UIToolbar(frame: bounds)
-    toolbar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    toolbar.sizeToFit()
+    toolbar.autoresizingMask = [.flexibleWidth]
     addSubview(toolbar)
-
-    translatesAutoresizingMaskIntoConstraints = false
   }
 
   @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: toolbar.frame.height)
+    CGSize(width: UIView.noIntrinsicMetric, height: accessoryHeight)
+  }
+
+  var reportedHeight: CGFloat {
+    accessoryHeight
   }
 
   func setItems(_ itemStates: [[String: Any]], keyboard: NativiteKeyboard) {

@@ -53,6 +53,14 @@ describe("native dev request routing", () => {
     expect(shouldTransform).toBe(true);
   });
 
+  it("bypasses html document route requests when fetch metadata headers are absent", () => {
+    const shouldTransform = shouldTransformNativeRequest("/sheet", {
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    });
+
+    expect(shouldTransform).toBe(false);
+  });
+
   it("keeps Vite html-proxy module requests transformable", () => {
     const shouldTransform = shouldTransformNativeRequest("/index.html?html-proxy&index=0.js", {
       "sec-fetch-dest": "script",

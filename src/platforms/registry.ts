@@ -1,32 +1,20 @@
 import type { NativiteConfig, NativitePlatformConfig, NativitePlatformPlugin } from "../index.ts";
 
+import { FIRST_PARTY_PLATFORM_PLUGINS } from "./first-party.ts";
+
 export type ResolvedNativitePlatformRuntime = {
   id: string;
   config: NativitePlatformConfig;
-  plugin?: NativitePlatformPlugin;
+  plugin: NativitePlatformPlugin;
   extensions: string[];
   environments: string[];
   bundlePlatform: string;
-  isBuiltIn: boolean;
 };
 
 type PlatformMetadata = {
   extensions: string[];
   environments: string[];
   bundlePlatform: string;
-};
-
-const BUILT_IN_PLATFORM_METADATA: Record<string, PlatformMetadata> = {
-  ios: {
-    extensions: [".ios", ".mobile", ".native"],
-    environments: ["ios", "ipad"],
-    bundlePlatform: "ios",
-  },
-  macos: {
-    extensions: [".macos", ".desktop", ".native"],
-    environments: ["macos"],
-    bundlePlatform: "macos",
-  },
 };
 
 function unique(items: string[]): string[] {
@@ -57,23 +45,14 @@ export function resolveConfiguredPlatformRuntimes(
 ): ResolvedNativitePlatformRuntime[] {
   const configuredPlatforms = getConfiguredPlatforms(config);
   const pluginByPlatform = new Map<string, NativitePlatformPlugin>();
+  for (const plugin of FIRST_PARTY_PLATFORM_PLUGINS) {
+    pluginByPlatform.set(plugin.platform, plugin);
+  }
   for (const plugin of config.platformPlugins ?? []) {
     pluginByPlatform.set(plugin.platform, plugin);
   }
 
   return configuredPlatforms.map((platformEntry) => {
-    const builtIn = BUILT_IN_PLATFORM_METADATA[platformEntry.platform];
-    if (builtIn) {
-      return {
-        id: platformEntry.platform,
-        config: platformEntry,
-        extensions: builtIn.extensions,
-        environments: builtIn.environments,
-        bundlePlatform: builtIn.bundlePlatform,
-        isBuiltIn: true,
-      };
-    }
-
     const plugin = pluginByPlatform.get(platformEntry.platform);
     if (!plugin) {
       throw new Error(
@@ -89,7 +68,6 @@ export function resolveConfiguredPlatformRuntimes(
       extensions: toDotPrefixedSuffixes(platformEntry.platform, plugin.extensions),
       environments: normalizeEnvironments(platformEntry.platform, plugin.environments),
       bundlePlatform: platformEntry.platform,
-      isBuiltIn: false,
     };
   });
 }

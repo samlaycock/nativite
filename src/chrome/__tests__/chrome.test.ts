@@ -37,6 +37,9 @@ beforeEach(() => {
   sendSpy.mockClear();
   sendCalls = [];
   _resetChromeState();
+  if (typeof window !== "undefined") {
+    delete (window as Window & { nativiteSheet?: unknown }).nativiteSheet;
+  }
 });
 
 // ─── Helper: simulate an incoming native event ────────────────────────────────
@@ -347,8 +350,8 @@ describe("chrome.sheet", () => {
   });
 
   it("setDetents() sends detents key", () => {
-    chrome.sheet.setDetents(["medium", "large"]);
-    expect(sendCalls[0]![2]).toMatchObject({ sheet: { detents: ["medium", "large"] } });
+    chrome.sheet.setDetents(["small", "medium", "large"]);
+    expect(sendCalls[0]![2]).toMatchObject({ sheet: { detents: ["small", "medium", "large"] } });
   });
 
   it("setSelectedDetent() sends selectedDetent key", () => {
@@ -361,6 +364,48 @@ describe("chrome.sheet", () => {
     expect(sendCalls[0]![2]).toMatchObject({
       sheet: { grabberVisible: true, cornerRadius: 16 },
     });
+  });
+
+  it("setURL() sends url key", () => {
+    chrome.sheet.setURL("./sheet/index.html");
+    expect(sendCalls[0]![2]).toMatchObject({ sheet: { url: "./sheet/index.html" } });
+  });
+
+  it("postMessage() sends a fire-and-forget sheet message bridge call", () => {
+    const message = { type: "ping", value: 1 };
+    chrome.sheet.postMessage(message);
+    expect(sendSpy).toHaveBeenCalledWith(
+      "__chrome__",
+      "__chrome_sheet_post_message_to_sheet__",
+      message,
+    );
+  });
+
+  it("postMessage() routes to nativiteSheet when called inside sheet context", () => {
+    const sheetPostSpy = mock((_message: unknown) => {});
+    const globalObject = globalThis as typeof globalThis & {
+      window?: Window & { nativiteSheet?: { postMessage: (message: unknown) => void } };
+    };
+    const previousWindow = globalObject.window;
+    const nextWindow = (previousWindow ?? ({} as Window)) as Window & {
+      nativiteSheet?: { postMessage: (message: unknown) => void };
+    };
+    nextWindow.nativiteSheet = {
+      postMessage: sheetPostSpy,
+    };
+    globalObject.window = nextWindow;
+
+    const message = { type: "from-sheet", value: 2 };
+    chrome.sheet.postMessage(message);
+
+    expect(sheetPostSpy).toHaveBeenCalledWith(message);
+    expect(sendSpy).not.toHaveBeenCalled();
+
+    if (previousWindow === undefined) {
+      delete globalObject.window;
+    } else {
+      globalObject.window = previousWindow;
+    }
   });
 
   it("onDetentChange fires handler and unsubscribe stops it", () => {
@@ -379,6 +424,41 @@ describe("chrome.sheet", () => {
     simulateEvent("sheet.dismissed", {});
     expect(handler).toHaveBeenCalledTimes(1);
     unsub();
+  });
+
+  it("onMessage fires handler and unsubscribe stops it", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.sheet.onMessage(handler);
+    const message = { type: "pong", value: 2 };
+    simulateEvent("sheet.message", { message });
+    expect(handler).toHaveBeenCalledWith({ message });
+    unsub();
+    simulateEvent("sheet.message", { message: { type: "ignored" } });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("onLoadFailed fires handler and unsubscribe stops it", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.sheet.onLoadFailed(handler);
+    simulateEvent("sheet.loadFailed", {
+      message: "Load failed",
+      code: -1002,
+      domain: "NSURLErrorDomain",
+      url: "http://localhost:5173/sheet",
+    });
+    expect(handler).toHaveBeenCalledWith({
+      message: "Load failed",
+      code: -1002,
+      domain: "NSURLErrorDomain",
+      url: "http://localhost:5173/sheet",
+    });
+    unsub();
+    simulateEvent("sheet.loadFailed", {
+      message: "ignored",
+      code: -1,
+      domain: "NSURLErrorDomain",
+    });
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });
 

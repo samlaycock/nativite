@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { NativiteConfigSchema, definePlatformPlugin, ios, platform } from "../../index.ts";
+import { NativiteConfigSchema, definePlatformPlugin, ios, macos, platform } from "../../index.ts";
 import {
   resolveConfigForPlatform,
   resolveConfiguredPlatformRuntimes,
@@ -22,6 +22,7 @@ describe("platform registry", () => {
     const runtimes = resolveConfiguredPlatformRuntimes(config);
     expect(runtimes).toHaveLength(1);
     expect(runtimes[0]?.id).toBe("ios");
+    expect(runtimes[0]?.plugin.name).toBe("nativite-ios");
     expect(runtimes[0]?.environments).toEqual(["ios", "ipad"]);
     expect(runtimes[0]?.extensions).toEqual([".ios", ".mobile", ".native"]);
   });
@@ -50,6 +51,25 @@ describe("platform registry", () => {
     expect(runtimes[0]?.id).toBe("android");
     expect(runtimes[0]?.environments).toEqual(["android", "android-tablet"]);
     expect(runtimes[0]?.extensions).toEqual([".android", ".mobile", ".native"]);
+  });
+
+  it("resolves built-in macOS metadata from the first-party plugin", () => {
+    const config = NativiteConfigSchema.parse({
+      app: {
+        name: "TestApp",
+        bundleId: "com.example.testapp",
+        version: "1.0.0",
+        buildNumber: 1,
+      },
+      platforms: [macos({ minimumVersion: "14.0" })],
+    });
+
+    const runtimes = resolveConfiguredPlatformRuntimes(config);
+    expect(runtimes).toHaveLength(1);
+    expect(runtimes[0]?.id).toBe("macos");
+    expect(runtimes[0]?.plugin.name).toBe("nativite-macos");
+    expect(runtimes[0]?.environments).toEqual(["macos"]);
+    expect(runtimes[0]?.extensions).toEqual([".macos", ".desktop", ".native"]);
   });
 
   it("serializes runtime metadata for CLI -> Vite handoff", () => {

@@ -186,6 +186,7 @@ class ViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    view.backgroundColor = .systemBackground
 
     let config = WKWebViewConfiguration()
     // Appended to every request's User-Agent so the Vite dev server can route
@@ -208,6 +209,12 @@ class ViewController: UIViewController {
       webView.isInspectable = true
     }
     #endif
+    // Let the host view's dynamic systemBackground color show through while
+    // content is loading so dark mode starts dark instead of white.
+    webView.isOpaque = false
+    webView.backgroundColor = .clear
+    webView.scrollView.backgroundColor = .clear
+    bridge.primaryWebView = webView
     webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     // Disable automatic content inset adjustment — NativiteVars owns keyboard layout.
     webView.scrollView.contentInsetAdjustmentBehavior = .never
@@ -313,6 +320,12 @@ ${loadContentMethod}
 ${assertEmbeddedBundlePlatformMethod}
 ${resolveDevURLMethod}
 ${sendToWebViewMethod}
+
+  // Expose the bridge handler so sibling native controllers (e.g. sheet-hosted
+  // webviews) can register the same native JS bridge channel.
+  func nativiteBridgeHandler() -> NativiteBridge {
+    bridge
+  }
 }
 
 // ─── UISearchResultsUpdating + UISearchBarDelegate ───────────────────────────
@@ -466,6 +479,7 @@ class ViewController: NSViewController {
       webView.isInspectable = true
     }
     #endif
+    bridge.primaryWebView = webView
     webView.autoresizingMask = [.width, .height]
     webView.navigationDelegate = self
     webView.uiDelegate = self

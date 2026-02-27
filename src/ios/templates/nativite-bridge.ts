@@ -15,6 +15,7 @@ typealias NativiteHandler = (_ args: Any?, _ completion: @escaping (Result<Any?,
 class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
 
   weak var viewController: ViewController?
+  weak var primaryWebView: WKWebView?
 
   // Keyed as "namespace.method" for O(1) dispatch
   private var handlers: [String: NativiteHandler] = [:]
@@ -58,8 +59,28 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     // Chrome setState — fire-and-forget, reply immediately
     if namespace == "__chrome__" && method == "__chrome_set_state__" {
+      guard isMessageFromPrimaryWebView(message) else {
+        replyHandler(nil, nil)
+        return
+      }
       chrome.viewController = viewController
       chrome.applyState(body["args"])
+      replyHandler(nil, nil)
+      return
+    }
+
+    // Chrome sheet message (main webview -> sheet webview) — fire-and-forget
+    if namespace == "__chrome__" && method == "__chrome_sheet_post_message_to_sheet__" {
+      if !isMessageFromPrimaryWebView(message) {
+        // Sheet webview fallback: treat chrome.sheet.postMessage(...) as
+        // sheet->main messaging so host listeners still receive it.
+        chrome.viewController = viewController
+        chrome.sendEvent(name: "sheet.message", data: ["message": body["args"] ?? NSNull()])
+        replyHandler(nil, nil)
+        return
+      }
+      chrome.viewController = viewController
+      chrome.postMessageToSheet(body["args"])
       replyHandler(nil, nil)
       return
     }
@@ -77,6 +98,12 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
   }
 
   // ── Dispatch ────────────────────────────────────────────────────────────────
+
+  private func isMessageFromPrimaryWebView(_ message: WKScriptMessage) -> Bool {
+    guard let primaryWebView else { return true }
+    guard let sourceWebView = message.webView else { return true }
+    return sourceWebView === primaryWebView
+  }
 
   private func dispatch(
     namespace: String,

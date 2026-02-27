@@ -18,3 +18,11 @@ declare const __IS_NATIVE__: boolean;
 
 /** `true` in development mode (`vite dev`), `false` in production (`vite build`). */
 declare const __DEV__: boolean;
+
+interface Window {
+  /** Available inside the native sheet webview context created by `chrome.sheet`. */
+  nativiteSheet?: {
+    postMessage(message: unknown): void;
+    onMessage(handler: (message: unknown) => void): () => void;
+  };
+}

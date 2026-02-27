@@ -89,6 +89,34 @@ describe("NativiteConfigSchema", () => {
     ).toThrow();
   });
 
+  it("rejects overriding the first-party ios platform plugin", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platformPlugins: [
+          definePlatformPlugin({
+            name: "custom-ios-plugin",
+            platform: "ios",
+          }),
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects overriding the first-party macos platform plugin", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platformPlugins: [
+          definePlatformPlugin({
+            name: "custom-macos-plugin",
+            platform: "macos",
+          }),
+        ],
+      }),
+    ).toThrow();
+  });
+
   it("accepts 'manual' signing mode", () => {
     expect(() =>
       NativiteConfigSchema.parse({

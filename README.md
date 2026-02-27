@@ -308,19 +308,19 @@ Each namespace exposes dedicated setters and subscriptions. Event handlers are a
 
 #### Per-element namespaces
 
-| Namespace              | Key methods                                            | Description                         |
-| ---------------------- | ------------------------------------------------------ | ----------------------------------- |
-| `chrome.navigationBar` | `show`, `hide`, `setTitle`, `setToolbar*`, `configure` | Navigation bar title, buttons, tint |
-| `chrome.tabBar`        | `show`, `hide`, `setTabs`, `setActiveTab`, `configure` | Tab bar items, selection, badges    |
-| `chrome.toolbar`       | `show`, `hide`, `setItems`, `configure`                | Bottom toolbar items                |
-| `chrome.searchBar`     | `setText`, `setPlaceholder`, `configure`               | Search bar text and actions         |
-| `chrome.sheet`         | `present`, `dismiss`, `setDetents`, `configure`        | Modal sheet detents and dismissal   |
-| `chrome.keyboard`      | `setAccessory`, `configure`                            | Input accessory bar, dismiss mode   |
-| `chrome.sidebar`       | `show`, `hide`, `setItems`, `setActiveItem`            | iPad/macOS sidebar                  |
-| `chrome.menuBar`       | `setMenus`                                             | macOS menu bar                      |
-| `chrome.statusBar`     | `show`, `hide`, `setStyle`                             | Status bar style, visibility        |
-| `chrome.homeIndicator` | `show`, `hide`                                         | Home indicator visibility           |
-| `chrome.window`        | `setTitle`, `setSubtitle`, `configure`                 | macOS window title bar              |
+| Namespace              | Key methods                                                                                   | Description                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `chrome.navigationBar` | `show`, `hide`, `setTitle`, `setToolbar*`, `configure`                                        | Navigation bar title, buttons, tint             |
+| `chrome.tabBar`        | `show`, `hide`, `setTabs`, `setActiveTab`, `configure`                                        | Tab bar items, selection, badges                |
+| `chrome.toolbar`       | `show`, `hide`, `setItems`, `configure`                                                       | Bottom toolbar items                            |
+| `chrome.searchBar`     | `setText`, `setPlaceholder`, `configure`                                                      | Search bar text and actions                     |
+| `chrome.sheet`         | `present`, `dismiss`, `setDetents`, `setSelectedDetent`, `setURL`, `postMessage`, `configure` | Modal sheet detents, URL content, and messaging |
+| `chrome.keyboard`      | `setAccessory`, `configure`                                                                   | Input accessory bar, dismiss mode               |
+| `chrome.sidebar`       | `show`, `hide`, `setItems`, `setActiveItem`                                                   | iPad/macOS sidebar                              |
+| `chrome.menuBar`       | `setMenus`                                                                                    | macOS menu bar                                  |
+| `chrome.statusBar`     | `show`, `hide`, `setStyle`                                                                    | Status bar style, visibility                    |
+| `chrome.homeIndicator` | `show`, `hide`                                                                                | Home indicator visibility                       |
+| `chrome.window`        | `setTitle`, `setSubtitle`, `configure`                                                        | macOS window title bar                          |
 
 #### Batch updates
 
@@ -351,21 +351,63 @@ Per-element `on*` listeners and `chrome.on()` listeners both fire for the same e
 
 #### Chrome events reference
 
-| Event                           | Payload                        | Description                         |
-| ------------------------------- | ------------------------------ | ----------------------------------- |
-| `navigationBar.buttonTapped`    | `{ id }`                       | A nav bar button was tapped         |
-| `navigationBar.backTapped`      | `{}`                           | The back button was tapped          |
-| `tabBar.tabSelected`            | `{ id }`                       | A tab was selected                  |
-| `toolbar.buttonTapped`          | `{ id }`                       | A toolbar button was tapped         |
-| `searchBar.textChanged`         | `{ text }`                     | Search text changed                 |
-| `searchBar.submitted`           | `{ text }`                     | Return key tapped in search bar     |
-| `searchBar.cancelled`           | `{}`                           | Cancel button tapped                |
-| `sheet.detentChanged`           | `{ detent }`                   | Sheet dragged to a new detent       |
-| `sheet.dismissed`               | `{}`                           | Sheet dismissed                     |
-| `sidebar.itemSelected`          | `{ id }`                       | Sidebar item selected               |
-| `menuBar.itemSelected`          | `{ id }`                       | macOS menu item selected            |
-| `keyboard.accessory.itemTapped` | `{ id }`                       | Keyboard accessory button tapped    |
-| `safeArea.changed`              | `{ top, left, bottom, right }` | Safe area changed (load / rotation) |
+| Event                           | Payload                           | Description                         |
+| ------------------------------- | --------------------------------- | ----------------------------------- |
+| `navigationBar.buttonTapped`    | `{ id }`                          | A nav bar button was tapped         |
+| `navigationBar.backTapped`      | `{}`                              | The back button was tapped          |
+| `tabBar.tabSelected`            | `{ id }`                          | A tab was selected                  |
+| `toolbar.buttonTapped`          | `{ id }`                          | A toolbar button was tapped         |
+| `searchBar.textChanged`         | `{ text }`                        | Search text changed                 |
+| `searchBar.submitted`           | `{ text }`                        | Return key tapped in search bar     |
+| `searchBar.cancelled`           | `{}`                              | Cancel button tapped                |
+| `sheet.detentChanged`           | `{ detent }`                      | Sheet dragged to a new detent       |
+| `sheet.dismissed`               | `{}`                              | Sheet dismissed                     |
+| `sheet.message`                 | `{ message }`                     | Message posted from sheet webview   |
+| `sheet.loadFailed`              | `{ message, code, domain, url? }` | Sheet webview load failed           |
+| `sidebar.itemSelected`          | `{ id }`                          | Sidebar item selected               |
+| `menuBar.itemSelected`          | `{ id }`                          | macOS menu item selected            |
+| `keyboard.accessory.itemTapped` | `{ id }`                          | Keyboard accessory button tapped    |
+| `safeArea.changed`              | `{ top, left, bottom, right }`    | Safe area changed (load / rotation) |
+
+#### Sheet URL + messaging
+
+Load a dedicated page in the sheet webview and exchange messages with the main webview.
+
+- `chrome.sheet.setURL("/sheet")`:
+  - Dev: loads `http(s)://<dev-host>/sheet`
+  - Prod bundle: always loads bundled `dist/index.html` and applies `/sheet` via `history.replaceState(...)` (SPA-style, no hash routing)
+- `chrome.sheet.setURL("./sheet/index.html")`: loads an explicit file relative to the current main webview URL.
+- Calls to `chrome.*` from inside the sheet webview are ignored; only the primary app webview can mutate native chrome state.
+
+```ts
+chrome.sheet.setDetents(["small", "medium", "large"]);
+chrome.sheet.setURL("/sheet");
+chrome.sheet.present();
+
+chrome.sheet.postMessage({ type: "init", theme: "light" });
+const unsubSheetMessage = chrome.sheet.onMessage(({ message }) => {
+  console.log("sheet -> main", message);
+});
+```
+
+Inside the sheet page, use `window.nativiteSheet`:
+
+```ts
+window.nativiteSheet.postMessage({ type: "ready" });
+const off = window.nativiteSheet.onMessage((message) => {
+  console.log("main -> sheet", message);
+});
+```
+
+If you already use `nativite/chrome` inside the sheet page, `chrome.sheet.postMessage(...)` also routes to the host app in that context.
+
+Optional diagnostic hook while integrating:
+
+```ts
+const unsubSheetError = chrome.sheet.onLoadFailed((error) => {
+  console.error("sheet load failed", error);
+});
+```
 
 #### Keyboard input accessory
 

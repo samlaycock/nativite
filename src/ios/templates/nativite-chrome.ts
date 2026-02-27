@@ -44,9 +44,12 @@ export function nativiteChromeTemplate(config: NativiteConfig): string {
 
   const iosChrome = `#if os(iOS)
 import UIKit
+import WebKit
 
 // NativiteChrome reconciles declarative chrome state from JS onto UIKit.
 // Registered as a bridge handler under "__chrome_set_state__".
+private let nativiteSmallDetentIdentifier = UISheetPresentationController.Detent.Identifier("nativite.small")
+
 class NativiteChrome: NSObject {
 
   weak var viewController: ViewController?
@@ -360,29 +363,46 @@ ${applyInitialStateMethod}
     let presented = state["presented"] as? Bool ?? false
 
     if presented {
-      if vc.presentedViewController == nil {
-        let sheetVC = NativiteSheetViewController()
-        sheetVC.bridge = self
+      let sheetVC: NativiteSheetViewController
+      let shouldPresent: Bool
 
-        if let sheet = sheetVC.sheetPresentationController {
-          if let detentStrings = state["detents"] as? [String] {
-            sheet.detents = detentStrings.compactMap { sheetDetent(from: $0) }
-          } else {
-            sheet.detents = [.medium(), .large()]
-          }
-          if let selectedDetent = state["selectedDetent"] as? String {
-            sheet.selectedDetentIdentifier = sheetDetentIdentifier(from: selectedDetent)
-          }
-          sheet.prefersGrabberVisible = state["grabberVisible"] as? Bool ?? false
-          if let radius = state["cornerRadius"] as? CGFloat {
-            sheet.preferredCornerRadius = radius
-          }
-          sheet.delegate = sheetVC
-        }
-        if let hex = state["backgroundColor"] as? String {
-          sheetVC.view.backgroundColor = UIColor(hex: hex)
-        }
+      if let existing = vc.presentedViewController as? NativiteSheetViewController {
+        sheetVC = existing
+        shouldPresent = false
+      } else if vc.presentedViewController == nil {
+        let created = NativiteSheetViewController()
+        created.bridge = self
+        sheetVC = created
+        shouldPresent = true
+      } else {
+        return
+      }
 
+      if let sheet = sheetVC.sheetPresentationController {
+        if let detentStrings = state["detents"] as? [String] {
+          sheet.detents = detentStrings.compactMap { sheetDetent(from: $0) }
+        } else if shouldPresent {
+          sheet.detents = [.medium(), .large()]
+        }
+        if let selectedDetent = state["selectedDetent"] as? String {
+          sheet.selectedDetentIdentifier = sheetDetentIdentifier(from: selectedDetent)
+        }
+        sheet.prefersGrabberVisible = state["grabberVisible"] as? Bool ?? false
+        // Prioritise embedded webview interaction over "drag anywhere to resize".
+        sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+        if let radiusNumber = state["cornerRadius"] as? NSNumber {
+          sheet.preferredCornerRadius = CGFloat(truncating: radiusNumber)
+        }
+        sheet.delegate = sheetVC
+      }
+      sheetVC.nativeBridge = vc.nativiteBridgeHandler()
+      if let hex = state["backgroundColor"] as? String {
+        sheetVC.view.backgroundColor = UIColor(hex: hex)
+      }
+      if let rawURL = state["url"] as? String {
+        sheetVC.loadURL(rawURL, relativeTo: vc.webView.url)
+      }
+      if shouldPresent {
         vc.present(sheetVC, animated: true)
       }
     } else {
@@ -392,8 +412,16 @@ ${applyInitialStateMethod}
     }
   }
 
+  func postMessageToSheet(_ message: Any?) {
+    guard let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController else {
+      return
+    }
+    sheetVC.postMessage(message)
+  }
+
   private func sheetDetent(from string: String) -> UISheetPresentationController.Detent? {
     switch string {
+    case "small": return smallDetent()
     case "medium": return .medium()
     case "large": return .large()
     default: return nil
@@ -404,10 +432,27 @@ ${applyInitialStateMethod}
     from string: String
   ) -> UISheetPresentationController.Detent.Identifier? {
     switch string {
+    case "small": return smallDetentIdentifier()
     case "medium": return .medium
     case "large": return .large
     default: return nil
     }
+  }
+
+  private func smallDetent() -> UISheetPresentationController.Detent? {
+    if #available(iOS 16.0, *) {
+      return UISheetPresentationController.Detent.custom(identifier: nativiteSmallDetentIdentifier) { context in
+        max(120, context.maximumDetentValue * 0.25)
+      }
+    }
+    return .medium()
+  }
+
+  private func smallDetentIdentifier() -> UISheetPresentationController.Detent.Identifier? {
+    if #available(iOS 16.0, *) {
+      return nativiteSmallDetentIdentifier
+    }
+    return .medium
   }
 ${sendEventMethod}
 }
@@ -424,23 +469,318 @@ extension NativiteChrome: UITabBarDelegate {
 // ─── Supporting: NativiteSheetViewController ─────────────────────────────────
 
 private class NativiteSheetViewController: UIViewController,
-  UISheetPresentationControllerDelegate
+  UISheetPresentationControllerDelegate,
+  WKScriptMessageHandler,
+  WKNavigationDelegate
 {
   weak var bridge: NativiteChrome?
+  weak var nativeBridge: NativiteBridge?
+  private(set) var webView: NativiteWebView!
+  private var lastLoadedURL: URL?
+  private var pendingSPARoute: String?
 
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .systemBackground
+
+    let config = WKWebViewConfiguration()
+    let bridgeScript = """
+      (function () {
+        if (window.nativiteSheet) return;
+
+        const listeners = new Set();
+        window.nativiteSheet = {
+          postMessage(message) {
+            const payload = message ?? null;
+            const sheetHandler = window.webkit?.messageHandlers?.nativiteSheet;
+            if (sheetHandler && typeof sheetHandler.postMessage === "function") {
+              sheetHandler.postMessage(payload);
+              return;
+            }
+            const bridgeHandler = window.webkit?.messageHandlers?.nativite;
+            if (bridgeHandler && typeof bridgeHandler.postMessage === "function") {
+              bridgeHandler.postMessage({
+                id: null,
+                type: "call",
+                namespace: "__chrome__",
+                method: "__chrome_sheet_post_message_to_sheet__",
+                args: payload,
+              });
+            }
+          },
+          onMessage(handler) {
+            if (typeof handler !== "function") return () => {};
+            listeners.add(handler);
+            return () => listeners.delete(handler);
+          }
+        };
+
+        window.__nativiteSheetReceive = function(message) {
+          for (const listener of listeners) listener(message);
+          window.dispatchEvent(new CustomEvent("nativite:sheet-message", { detail: message }));
+        };
+      })();
+    """
+    let userScript = WKUserScript(
+      source: bridgeScript,
+      injectionTime: .atDocumentStart,
+      forMainFrameOnly: false
+    )
+    config.userContentController.addUserScript(userScript)
+    config.userContentController.add(self, name: "nativiteSheet")
+    if let nativeBridge {
+      config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")
+    }
+    let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+    config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"
+
+    webView = NativiteWebView(frame: view.bounds, configuration: config)
+    webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    // Mirror the primary webview blank-state behavior: keep the underlying
+    // dynamic system background visible while content bootstraps.
+    webView.isOpaque = false
+    webView.backgroundColor = .clear
+    webView.scrollView.backgroundColor = .clear
+    webView.lockRootScroll = false
+    webView.scrollView.contentInsetAdjustmentBehavior = .never
+    webView.scrollView.isScrollEnabled = true
+    webView.scrollView.bounces = false
+    webView.scrollView.alwaysBounceVertical = false
+    webView.scrollView.alwaysBounceHorizontal = false
+    webView.navigationDelegate = self
+    view.addSubview(webView)
+  }
+
+  deinit {
+    webView?.configuration.userContentController.removeScriptMessageHandler(forName: "nativite")
+    webView?.configuration.userContentController.removeScriptMessageHandler(forName: "nativiteSheet")
+  }
+
+  func loadURL(_ rawURL: String, relativeTo baseURL: URL?) {
+    loadViewIfNeeded()
+    guard let resolved = resolveURL(rawURL, relativeTo: baseURL) else { return }
+    let absoluteURL = resolved.absoluteURL
+    let nextSPARoute = pendingFileSPARoute(for: rawURL, resolvedURL: absoluteURL)
+    if absoluteURL == lastLoadedURL {
+      if let route = nextSPARoute {
+        applySPARoute(route)
+      }
+      return
+    }
+    pendingSPARoute = nextSPARoute
+    lastLoadedURL = absoluteURL
+
+    if absoluteURL.isFileURL {
+      let readAccessURL = fileReadAccessURL(for: absoluteURL, relativeTo: baseURL)
+      webView.loadFileURL(
+        absoluteURL,
+        allowingReadAccessTo: readAccessURL
+      )
+      return
+    }
+
+    webView.load(URLRequest(url: absoluteURL))
+  }
+
+  func postMessage(_ message: Any?) {
+    loadViewIfNeeded()
+    let payload = message ?? NSNull()
+    let envelope: [String: Any] = ["message": payload]
+    guard JSONSerialization.isValidJSONObject(envelope),
+      let data = try? JSONSerialization.data(withJSONObject: envelope),
+      let json = String(data: data, encoding: .utf8)
+    else { return }
+
+    let js = "if(window.__nativiteSheetReceive){window.__nativiteSheetReceive(\\(json).message);}"
+    webView.evaluateJavaScript(js, completionHandler: nil)
+  }
+
+  private func resolveURL(_ rawURL: String, relativeTo baseURL: URL?) -> URL? {
+    if let absoluteURL = URL(string: rawURL), absoluteURL.scheme != nil {
+      return absoluteURL
+    }
+
+    let effectiveBaseURL = baseURL ?? fallbackBaseURL()
+
+    if rawURL.hasPrefix("/") {
+      return resolveRootPath(rawURL, relativeTo: effectiveBaseURL)
+    }
+
+    if let effectiveBaseURL {
+      return URL(string: rawURL, relativeTo: effectiveBaseURL)
+    }
+    return nil
+  }
+
+  private func resolveRootPath(_ rawPath: String, relativeTo baseURL: URL?) -> URL? {
+    guard let baseURL else { return nil }
+
+    let baseScheme = baseURL.scheme?.lowercased()
+    if baseScheme == "file" {
+      if let explicitFileURL = explicitFilePathURL(rawPath, relativeTo: baseURL) {
+        return explicitFileURL
+      }
+      return bundleEntryURL(relativeTo: baseURL)
+    }
+
+    guard baseScheme == "http" || baseScheme == "https" else { return nil }
+    guard
+      let routeComponents = URLComponents(string: rawPath),
+      var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true)
+    else { return nil }
+
+    components.path = routeComponents.path.isEmpty ? rawPath : routeComponents.path
+    components.query = routeComponents.query
+    components.fragment = routeComponents.fragment
+    return components.url
+  }
+
+  private func explicitFilePathURL(_ rawPath: String, relativeTo baseURL: URL) -> URL? {
+    guard let routeComponents = URLComponents(string: rawPath) else { return nil }
+    guard routeComponents.query == nil && routeComponents.fragment == nil else { return nil }
+    let path = routeComponents.path
+    guard path.contains(".") else { return nil }
+
+    let relativePath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+    return bundleRootURL(relativeTo: baseURL)?.appendingPathComponent(relativePath)
+  }
+
+  private func canonicalRoute(from rawPath: String) -> String {
+    guard let routeComponents = URLComponents(string: rawPath) else { return rawPath }
+
+    var route = routeComponents.path
+    if route.isEmpty {
+      route = "/"
+    }
+    if let query = routeComponents.query, !query.isEmpty {
+      route += "?\\(query)"
+    }
+    if let nestedFragment = routeComponents.fragment, !nestedFragment.isEmpty {
+      route += "#\\(nestedFragment)"
+    }
+    return route
+  }
+
+  private func pendingFileSPARoute(for rawPath: String, resolvedURL: URL) -> String? {
+    guard resolvedURL.isFileURL else { return nil }
+    guard rawPath.hasPrefix("/") else { return nil }
+    guard let routeComponents = URLComponents(string: rawPath) else { return nil }
+
+    if routeComponents.query == nil && routeComponents.fragment == nil && routeComponents.path.contains(".") {
+      return nil
+    }
+
+    return canonicalRoute(from: rawPath)
+  }
+
+  private func fallbackBaseURL() -> URL? {
+    #if DEBUG
+    if
+      let rawURL = UserDefaults.standard.string(forKey: "nativite.dev.url"),
+      let devURL = URL(string: rawURL)
+    {
+      return devURL
+    }
+    #endif
+
+    return Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist")
+  }
+
+  private func bundleEntryURL(relativeTo baseURL: URL) -> URL? {
+    if let bundled = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist") {
+      return bundled
+    }
+    if baseURL.lastPathComponent.lowercased() == "index.html" {
+      return baseURL
+    }
+    return baseURL.deletingLastPathComponent().appendingPathComponent("index.html")
+  }
+
+  private func bundleRootURL(relativeTo baseURL: URL) -> URL? {
+    return bundleEntryURL(relativeTo: baseURL)?.deletingLastPathComponent()
+  }
+
+  private func fileReadAccessURL(for targetURL: URL, relativeTo baseURL: URL?) -> URL {
+    if let baseURL, baseURL.isFileURL {
+      return baseURL.deletingLastPathComponent()
+    }
+    return targetURL.deletingLastPathComponent()
+  }
+
+  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+    guard message.name == "nativiteSheet" else { return }
+    bridge?.sendEvent(name: "sheet.message", data: ["message": message.body])
+  }
+
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    guard let route = pendingSPARoute else { return }
+    pendingSPARoute = nil
+    applySPARoute(route)
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    didFail navigation: WKNavigation!,
+    withError error: Error
+  ) {
+    emitLoadFailed(error, currentURL: webView.url)
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    didFailProvisionalNavigation navigation: WKNavigation!,
+    withError error: Error
+  ) {
+    emitLoadFailed(error, currentURL: webView.url)
+  }
+
+  private func applySPARoute(_ route: String) {
+    let payload: [String: Any] = ["route": route]
+    guard
+      let data = try? JSONSerialization.data(withJSONObject: payload),
+      let json = String(data: data, encoding: .utf8)
+    else { return }
+
+    let js = """
+    (() => {
+      const payload = \\(json);
+      try {
+        window.history.replaceState(window.history.state ?? null, "", payload.route);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      } catch (_) {}
+    })();
+    """
+    webView.evaluateJavaScript(js, completionHandler: nil)
+  }
+
+  private func emitLoadFailed(_ error: Error, currentURL: URL?) {
+    let nsError = error as NSError
+    let failingURL =
+      (nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String) ??
+      currentURL?.absoluteString
+    var payload: [String: Any] = [
+      "message": nsError.localizedDescription,
+      "code": nsError.code,
+      "domain": nsError.domain,
+    ]
+    if let failingURL {
+      payload["url"] = failingURL
+    }
+    bridge?.sendEvent(name: "sheet.loadFailed", data: payload)
   }
 
   func sheetPresentationControllerDidChangeSelectedDetentIdentifier(
     _ controller: UISheetPresentationController
   ) {
     let detent: String
-    switch controller.selectedDetentIdentifier {
-    case .medium: detent = "medium"
-    case .large: detent = "large"
-    default: detent = "large"
+    if #available(iOS 16.0, *), controller.selectedDetentIdentifier == nativiteSmallDetentIdentifier {
+      detent = "small"
+    } else {
+      switch controller.selectedDetentIdentifier {
+      case .medium: detent = "medium"
+      case .large: detent = "large"
+      default: detent = "large"
+      }
     }
     bridge?.sendEvent(name: "sheet.detentChanged", data: ["detent": detent])
   }
@@ -503,6 +843,11 @@ class NativiteChrome: NSObject {
       // Silently ignore iOS-only keys: navigationBar, tabBar, toolbar,
       // statusBar, homeIndicator, sheet, keyboard, searchBar
     }
+  }
+
+  // iOS-only in this phase.
+  func postMessageToSheet(_ message: Any?) {
+    _ = message
   }
 ${applyInitialStateMethod}
   // ── Window ──────────────────────────────────────────────────────────────────

@@ -272,14 +272,37 @@ export const chrome = {
     setDetents: (detents: SheetDetent[]): void => sendSheet({ detents }),
     /** Set the currently selected detent. */
     setSelectedDetent: (detent: SheetDetent): void => sendSheet({ selectedDetent: detent }),
+    /**
+     * Set the sheet webview URL.
+     * Use `"/route"` to load the same app host route (dev server host in dev,
+     * bundled SPA entry in prod).
+     */
+    setURL: (url: string): void => sendSheet({ url }),
     /** Configure appearance properties (grabber, background colour, corner radius). */
     configure: (
       opts: Partial<Pick<SheetState, "grabberVisible" | "backgroundColor" | "cornerRadius">>,
     ): void => sendSheet(opts),
+    /** Send a message to JS running inside the sheet webview. */
+    postMessage: (message: unknown): void => {
+      // When called inside the sheet webview itself, route directly to the
+      // sheet->main bridge helper for ergonomics.
+      if (
+        typeof window !== "undefined" &&
+        typeof window.nativiteSheet?.postMessage === "function"
+      ) {
+        window.nativiteSheet.postMessage(message);
+        return;
+      }
+      _bridgeSend("__chrome__", "__chrome_sheet_post_message_to_sheet__", message);
+    },
     /** Subscribe to detent changes (user dragging). Returns an unsubscribe function. */
     onDetentChange: createListener("sheet.detentChanged"),
     /** Subscribe to the sheet being dismissed. Returns an unsubscribe function. */
     onDismiss: createListener("sheet.dismissed"),
+    /** Subscribe to messages posted from sheet webview JS. Returns an unsubscribe function. */
+    onMessage: createListener("sheet.message"),
+    /** Subscribe to sheet webview load failures. Returns an unsubscribe function. */
+    onLoadFailed: createListener("sheet.loadFailed"),
   },
 
   /** Keyboard input accessory bar. */

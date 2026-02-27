@@ -147,4 +147,109 @@ describe("nativiteChromeTemplate", () => {
       expect(body).not.toContain("tabBarController");
     });
   });
+
+  describe("sheet", () => {
+    it("mounts a WKWebView in sheet view controller for URL-driven content", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("import WebKit");
+      expect(output).toContain("private(set) var webView: NativiteWebView!");
+      expect(output).toContain(
+        'config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"',
+      );
+      expect(output).toContain(
+        "webView = NativiteWebView(frame: view.bounds, configuration: config)",
+      );
+      expect(output).toContain("webView.isOpaque = false");
+      expect(output).toContain("webView.backgroundColor = .clear");
+      expect(output).toContain("webView.scrollView.backgroundColor = .clear");
+      expect(output).toContain("webView.lockRootScroll = false");
+      expect(output).toContain("webView.scrollView.contentInsetAdjustmentBehavior = .never");
+      expect(output).toContain("webView.scrollView.isScrollEnabled = true");
+      expect(output).toContain("webView.scrollView.bounces = false");
+      expect(output).toContain("webView.scrollView.alwaysBounceVertical = false");
+      expect(output).toContain("webView.scrollView.alwaysBounceHorizontal = false");
+    });
+
+    it("resolves relative sheet URLs against the main webview URL and loads them", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("func loadURL(_ rawURL: String, relativeTo baseURL: URL?)");
+      expect(output).toContain("loadViewIfNeeded()");
+      expect(output).toContain("let effectiveBaseURL = baseURL ?? fallbackBaseURL()");
+      expect(output).toContain('if rawURL.hasPrefix("/") {');
+      expect(output).toContain("return resolveRootPath(rawURL, relativeTo: effectiveBaseURL)");
+      expect(output).toContain("URL(string: rawURL, relativeTo: effectiveBaseURL)");
+      expect(output).toContain('if let rawURL = state["url"] as? String');
+      expect(output).toContain("sheetVC.loadURL(rawURL, relativeTo: vc.webView.url)");
+    });
+
+    it("routes root-prefixed sheet URLs to the same host and supports bundled file fallback", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain('if baseScheme == "file" {');
+      expect(output).toContain("return bundleEntryURL(relativeTo: baseURL)");
+      expect(output).toContain(
+        "let nextSPARoute = pendingFileSPARoute(for: rawURL, resolvedURL: absoluteURL)",
+      );
+      expect(output).toContain("pendingSPARoute = nextSPARoute");
+      expect(output).toContain("if absoluteURL == lastLoadedURL {");
+      expect(output).toContain("applySPARoute(route)");
+      expect(output).toContain(
+        'window.history.replaceState(window.history.state ?? null, "", payload.route);',
+      );
+      expect(output).toContain('window.dispatchEvent(new PopStateEvent("popstate"));');
+      expect(output).toContain('UserDefaults.standard.string(forKey: "nativite.dev.url")');
+      expect(output).toContain(
+        'Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist")',
+      );
+      expect(output).toContain("sheet.prefersScrollingExpandsWhenScrolledToEdge = false");
+    });
+
+    it("bootstraps file-based root routes through index.html and applies SPA route updates", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      // In production file:// mode, `/sheet` should load index.html and then
+      // route internally via history API so SPA routers initialize normally.
+      expect(output).toContain("guard resolvedURL.isFileURL else { return nil }");
+      expect(output).toContain('guard rawPath.hasPrefix("/") else { return nil }');
+      expect(output).toContain("return bundleEntryURL(relativeTo: baseURL)");
+      expect(output).toContain("if absoluteURL == lastLoadedURL {");
+      expect(output).toContain("if let route = nextSPARoute {");
+      expect(output).toContain("applySPARoute(route)");
+      expect(output).toContain("guard let route = pendingSPARoute else { return }");
+      expect(output).toContain("pendingSPARoute = nil");
+      expect(output).toContain(
+        'window.history.replaceState(window.history.state ?? null, "", payload.route);',
+      );
+      expect(output).toContain('window.dispatchEvent(new PopStateEvent("popstate"));');
+    });
+
+    it("supports a small sheet detent mapping", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain('case "small": return smallDetent()');
+      expect(output).toContain('case "small": return smallDetentIdentifier()');
+      expect(output).toContain("UISheetPresentationController.Detent.custom");
+    });
+
+    it("bridges messages from sheet webview JS to main webview as sheet.message events", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain('config.userContentController.add(self, name: "nativiteSheet")');
+      expect(output).toContain("sheetVC.nativeBridge = vc.nativiteBridgeHandler()");
+      expect(output).toContain(
+        'config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")',
+      );
+      expect(output).toContain(
+        "const sheetHandler = window.webkit?.messageHandlers?.nativiteSheet;",
+      );
+      expect(output).toContain("const bridgeHandler = window.webkit?.messageHandlers?.nativite;");
+      expect(output).toContain('method: "__chrome_sheet_post_message_to_sheet__",');
+      expect(output).toContain('sendEvent(name: "sheet.message", data: ["message": message.body])');
+      expect(output).toContain('sendEvent(name: "sheet.loadFailed", data: payload)');
+      expect(output).toContain("didFailProvisionalNavigation");
+      expect(output).toContain("window.__nativiteSheetReceive");
+    });
+
+    it("provides a native entry point to push messages from main webview to sheet webview", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("func postMessageToSheet(_ message: Any?)");
+      expect(output).toContain("sheetVC.postMessage(message)");
+    });
+  });
 });

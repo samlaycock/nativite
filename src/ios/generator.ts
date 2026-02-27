@@ -27,6 +27,32 @@ export type GenerateResult = {
   hash: string;
 };
 
+function hasConfiguredPlatform(config: NativiteConfig, platformId: string): boolean {
+  return (config.platforms ?? []).some((platform) => platform.platform === platformId);
+}
+
+function requiresLegacyProjectRefresh(config: NativiteConfig, projectRoot: string): boolean {
+  const projectPath = join(projectRoot, `${config.app.name}.xcodeproj`, "project.pbxproj");
+  if (!existsSync(projectPath)) return true;
+
+  try {
+    const pbxproj = readFileSync(projectPath, "utf-8");
+    if (!pbxproj.includes('SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";')) return true;
+    if (!pbxproj.includes("SDKROOT = iphoneos;")) return true;
+    if (!pbxproj.includes("$SRCROOT/../../../dist-ios")) return true;
+    if (
+      hasConfiguredPlatform(config, "macos") &&
+      !pbxproj.includes("$SRCROOT/../../../dist-macos")
+    ) {
+      return true;
+    }
+  } catch {
+    return true;
+  }
+
+  return false;
+}
+
 export async function generateProject(
   config: NativiteConfig,
   cwd: string,
@@ -45,7 +71,7 @@ export async function generateProject(
   // Dirty check — skip if nothing has changed
   if (!force && existsSync(hashFile)) {
     const existingHash = readFileSync(hashFile, "utf-8").trim();
-    if (existingHash === hash) {
+    if (existingHash === hash && !requiresLegacyProjectRefresh(config, projectRoot)) {
       return {
         skipped: true,
         projectPath: join(projectRoot, `${appName}.xcodeproj`),

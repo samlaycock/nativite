@@ -7,17 +7,8 @@ import type {
   UserConfig,
 } from "vite";
 
-import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  watchFile,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, watchFile, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 
@@ -26,17 +17,13 @@ import {
   type BundlePlatform,
   type BuildManifest,
   type NativiteConfig,
-  type NativitePluginMode,
   type Platform,
 } from "../index.ts";
-import { hashConfigForGeneration } from "../ios/hash.ts";
-import { generateProject } from "../ios/index.ts";
 import {
   deserializePlatformRuntimeMetadata,
   resolveConfigForPlatform,
   resolveConfiguredPlatformRuntimes,
 } from "../platforms/registry.ts";
-import { resolveNativitePlugins } from "../plugins/resolve.ts";
 import { platformExtensionsPlugin } from "./platform-extensions-plugin.ts";
 import { shouldTransformNativeRequest } from "./request-routing.ts";
 
@@ -57,58 +44,6 @@ function getLanIp(): string | undefined {
     }
   }
   return undefined;
-}
-
-function formatExecSyncError(err: unknown): string {
-  if (!(err instanceof Error)) return String(err);
-
-  const execErr = err as Error & { stdout?: Buffer | string; stderr?: Buffer | string };
-  const stdout = execErr.stdout ? String(execErr.stdout).trim() : "";
-  const stderr = execErr.stderr ? String(execErr.stderr).trim() : "";
-  const details = [stderr, stdout].filter(Boolean).join("\n");
-
-  return details ? `${err.message}\n${details}` : err.message;
-}
-
-async function isStale(
-  config: NativiteConfig,
-  nativiteDir: string,
-  projectRoot: string,
-  mode: NativitePluginMode,
-): Promise<boolean> {
-  const hashFile = join(nativiteDir, ".hash");
-  if (!existsSync(hashFile)) return true;
-  const existing = readFileSync(hashFile, "utf-8").trim();
-  const resolvedPlugins = await resolveNativitePlugins(config, projectRoot, mode);
-  if (existing !== hashConfigForGeneration(config, resolvedPlugins)) return true;
-
-  // Regenerate older cached projects that predate required target platform
-  // settings in the pbxproj (fixes xcodebuild destination resolution issues).
-  const projectPath = join(nativiteDir, "ios", `${config.app.name}.xcodeproj`, "project.pbxproj");
-  if (!existsSync(projectPath)) return true;
-
-  try {
-    const pbxproj = readFileSync(projectPath, "utf-8");
-    if (!pbxproj.includes('SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";')) {
-      return true;
-    }
-    if (!pbxproj.includes("SDKROOT = iphoneos;")) {
-      return true;
-    }
-    if (!pbxproj.includes("$SRCROOT/../../../dist-ios")) {
-      return true;
-    }
-    if (
-      hasConfiguredPlatform(config, "macos") &&
-      !pbxproj.includes("$SRCROOT/../../../dist-macos")
-    ) {
-      return true;
-    }
-  } catch {
-    return true;
-  }
-
-  return false;
 }
 
 function collectAssets(dir: string, root: string): string[] {
@@ -162,14 +97,6 @@ function platformOutDir(baseOutDir: string, platform: BundlePlatform): string {
   return `${normalizedBase}-${platform}`;
 }
 
-function hasConfiguredPlatform(config: NativiteConfig, platformId: string): boolean {
-  return (config.platforms ?? []).some((platform) => platform.platform === platformId);
-}
-
-function hasBuiltInAppleTargets(config: NativiteConfig): boolean {
-  return hasConfiguredPlatform(config, "ios") || hasConfiguredPlatform(config, "macos");
-}
-
 // ─── Config loading ───────────────────────────────────────────────────────────
 
 /**
@@ -206,110 +133,6 @@ async function loadNativiteConfigFromDir(root: string): Promise<NativiteConfig> 
   }
 
   return NativiteConfigSchema.parse(result.config);
-}
-
-// ─── Simulator helpers ────────────────────────────────────────────────────────
-
-async function buildAndLaunchSimulator(
-  config: NativiteConfig,
-  cwd: string,
-  simulatorName: string,
-  devUrl: string,
-  logger: ResolvedConfig["logger"],
-  appIdOverride?: string,
-): Promise<void> {
-  const appName = config.app.name;
-  const appId = appIdOverride ?? config.app.bundleId;
-  const projectPath = join(cwd, ".nativite", "ios", `${appName}.xcodeproj`);
-  const buildDir = `/tmp/nativite-build-${appId}`;
-  const derivedDataPath = `/tmp/nativite-derived-${appId}`;
-
-  try {
-    logger.info(`[nativite] Booting simulator: ${simulatorName}`);
-    execSync(`xcrun simctl boot "${simulatorName}" 2>/dev/null || true`, {
-      stdio: "pipe",
-    });
-
-    logger.info("[nativite] Building with xcodebuild (this may take a moment)...");
-    execSync(
-      [
-        "xcodebuild",
-        `-project "${projectPath}"`,
-        `-scheme "${appName}"`,
-        `-configuration Debug`,
-        `-destination "platform=iOS Simulator,name=${simulatorName}"`,
-        `-derivedDataPath "${derivedDataPath}"`,
-        `CONFIGURATION_BUILD_DIR="${buildDir}"`,
-        "build",
-      ].join(" "),
-      { stdio: "pipe", cwd },
-    );
-
-    const appPath = `${buildDir}/${appName}.app`;
-    logger.info("[nativite] Installing on simulator...");
-    execSync(`xcrun simctl install "${simulatorName}" "${appPath}"`, {
-      stdio: "pipe",
-    });
-
-    logger.info(`[nativite] Launching ${appId}...`);
-    execSync(
-      `SIMCTL_CHILD_NATIVITE_DEV_URL="${devUrl}" xcrun simctl launch "${simulatorName}" "${appId}"`,
-      { stdio: "pipe" },
-    );
-
-    logger.info(`[nativite] App launched. WebView loading ${devUrl}`);
-  } catch (err) {
-    logger.error(`[nativite] Build/launch failed:\n${formatExecSyncError(err)}`);
-  }
-}
-
-// ─── macOS build helpers ──────────────────────────────────────────────────────
-
-async function buildAndLaunchMacOS(
-  config: NativiteConfig,
-  cwd: string,
-  devUrl: string,
-  logger: ResolvedConfig["logger"],
-  appIdOverride?: string,
-): Promise<void> {
-  const appName = config.app.name;
-  const appId = appIdOverride ?? config.app.bundleId;
-  const projectPath = join(cwd, ".nativite", "ios", `${appName}.xcodeproj`);
-  const buildDir = `/tmp/nativite-build-${appId}-macos`;
-  const derivedDataPath = `/tmp/nativite-derived-${appId}-macos`;
-
-  try {
-    logger.info("[nativite] Building macOS target with xcodebuild...");
-    execSync(
-      [
-        "xcodebuild",
-        `-project "${projectPath}"`,
-        `-scheme "${appName}-macOS"`,
-        `-configuration Debug`,
-        `-destination "platform=macOS"`,
-        `-derivedDataPath "${derivedDataPath}"`,
-        `CONFIGURATION_BUILD_DIR="${buildDir}"`,
-        "build",
-      ].join(" "),
-      { stdio: "pipe", cwd },
-    );
-
-    const appPath = `${buildDir}/${appName}.app/Contents/MacOS/${appName}`;
-    logger.info(`[nativite] Launching ${appName} (macOS)...`);
-    // Launch via the binary directly so environment variables are passed through.
-    // Detach the child process so it runs independently.
-    const { spawn } = await import("node:child_process");
-    const child = spawn(appPath, [], {
-      env: { ...process.env, NATIVITE_DEV_URL: devUrl },
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-
-    logger.info(`[nativite] macOS app launched. WebView loading ${devUrl}`);
-  } catch (err) {
-    logger.error(`[nativite] macOS build/launch failed:\n${formatExecSyncError(err)}`);
-  }
 }
 
 // ─── Environment options factory ──────────────────────────────────────────────
@@ -601,66 +424,12 @@ function nativiteCorePlugin(): Plugin {
         mkdirSync(nativiteDir, { recursive: true });
         writeFileSync(join(nativiteDir, "dev.json"), JSON.stringify({ devURL: devUrl }, null, 2));
 
-        const hasAppleTargets = hasBuiltInAppleTargets(config);
-        if (hasAppleTargets) {
-          if (await isStale(config, nativiteDir, viteConfig.root, "dev")) {
-            viteConfig.logger.info("[nativite] Generating native project...");
-            await generateProject(config, viteConfig.root, true, "dev");
-          } else {
-            viteConfig.logger.info("[nativite] Native project up to date.");
-          }
-        }
-
-        const launchIos =
-          hasConfiguredPlatform(config, "ios") &&
-          (!launchPlatform || launchPlatform === "ios" || launchPlatform === "ipad");
-        const launchMacOS =
-          hasConfiguredPlatform(config, "macos") && (!launchPlatform || launchPlatform === "macos");
-
-        if (launchIos) {
-          if (process.platform !== "darwin") {
-            viteConfig.logger.warn("[nativite] Skipping iOS launch — not running on macOS.");
-          } else {
-            if (target === "device") {
-              // Device deployment is not automated — the user must install the
-              // Xcode build on their device manually. The dev URL is written to
-              // .nativite/dev.json so the app picks it up on next launch.
-              viteConfig.logger.info(
-                `[nativite] Device target — open the Xcode project and run on your device. ` +
-                  `The app will load ${devUrl}`,
-              );
-            } else {
-              await buildAndLaunchSimulator(
-                config,
-                viteConfig.root,
-                simulatorName,
-                devUrl,
-                viteConfig.logger,
-                resolveConfigForPlatform(config, "ios").app.bundleId,
-              );
-            }
-          }
-        }
-
-        if (launchMacOS) {
-          if (process.platform !== "darwin") {
-            viteConfig.logger.warn("[nativite] Skipping macOS launch — not running on macOS.");
-          } else {
-            await buildAndLaunchMacOS(
-              config,
-              viteConfig.root,
-              devUrl,
-              viteConfig.logger,
-              resolveConfigForPlatform(config, "macos").app.bundleId,
-            );
-          }
-        }
-
         for (const runtime of configuredPlatformRuntimes) {
-          if (!runtime.plugin?.dev) continue;
+          if (typeof runtime.plugin.dev !== "function") continue;
           if (launchPlatform && runtime.id !== launchPlatform) continue;
           const runtimeConfig = resolveConfigForPlatform(config, runtime.id);
           await runtime.plugin.dev({
+            rootConfig: config,
             config: runtimeConfig,
             projectRoot: viteConfig.root,
             platform: runtime.config,
@@ -685,13 +454,21 @@ function nativiteCorePlugin(): Plugin {
             nativeVariantSuffixes = new Set(
               configuredPlatformRuntimes.flatMap((runtime) => runtime.extensions).concat(".native"),
             );
-            if (hasBuiltInAppleTargets(freshConfig)) {
-              if (await isStale(freshConfig, nativiteDir, viteConfig.root, "dev")) {
-                config = freshConfig;
-                viteConfig.logger.info("[nativite] Config changed. Regenerating native project...");
-                await generateProject(freshConfig, viteConfig.root, true, "dev");
-              }
+
+            for (const runtime of configuredPlatformRuntimes) {
+              if (typeof runtime.plugin.generate !== "function") continue;
+              const runtimeConfig = resolveConfigForPlatform(freshConfig, runtime.id);
+              await runtime.plugin.generate({
+                rootConfig: freshConfig,
+                config: runtimeConfig,
+                projectRoot: viteConfig.root,
+                platform: runtime.config,
+                logger: viteConfig.logger,
+                force: false,
+                mode: "dev",
+              });
             }
+
             config = freshConfig;
           } catch (err) {
             viteConfig.logger.error(
@@ -786,9 +563,10 @@ function nativiteCorePlugin(): Plugin {
           ? configuredPlatformRuntimes.find((runtime) => runtime.id === targetPlatform)
           : undefined;
 
-      if (targetRuntime?.plugin?.build) {
+      if (targetRuntime && typeof targetRuntime.plugin.build === "function") {
         const runtimeConfig = resolveConfigForPlatform(config, targetRuntime.id);
         await targetRuntime.plugin.build({
+          rootConfig: config,
           config: runtimeConfig,
           projectRoot: viteConfig.root,
           platform: targetRuntime.config,
@@ -796,12 +574,6 @@ function nativiteCorePlugin(): Plugin {
           outDir: distDir,
           manifest,
         });
-      }
-
-      if (hasBuiltInAppleTargets(config)) {
-        if (await isStale(config, nativiteDir, viteConfig.root, "build")) {
-          await generateProject(config, viteConfig.root, false, "build");
-        }
       }
     },
   } satisfies Plugin;

@@ -54,6 +54,14 @@ describe("viewControllerTemplate", () => {
     expect(output).toContain("if #available(macOS 13.3, *)");
   });
 
+  it("uses a dark-mode-aware blank state for the primary iOS webview", () => {
+    const output = viewControllerTemplate(baseConfig);
+    expect(output).toContain("view.backgroundColor = .systemBackground");
+    expect(output).toContain("webView.isOpaque = false");
+    expect(output).toContain("webView.backgroundColor = .clear");
+    expect(output).toContain("webView.scrollView.backgroundColor = .clear");
+  });
+
   it("opens external links in the system browser instead of silently no-oping", () => {
     const output = viewControllerTemplate(baseConfig);
     expect(output).toContain("webView.uiDelegate = self");
@@ -70,6 +78,17 @@ describe("viewControllerTemplate", () => {
     expect(output).toContain("runJavaScriptAlertPanelWithMessage");
     expect(output).toContain("runJavaScriptConfirmPanelWithMessage");
     expect(output).toContain("runJavaScriptTextInputPanelWithPrompt");
+  });
+
+  it("marks the main webview as the primary bridge source", () => {
+    const output = viewControllerTemplate(baseConfig);
+    expect(output).toContain("bridge.primaryWebView = webView");
+  });
+
+  it("exposes the iOS bridge handler for sibling native webview hosts", () => {
+    const output = viewControllerTemplate(baseConfig);
+    expect(output).toContain("func nativiteBridgeHandler() -> NativiteBridge");
+    expect(output).toContain("bridge");
   });
 
   it("shows a dark-mode-aware default iOS splash overlay with a centered spinner", () => {
