@@ -69,7 +69,7 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
       return
     }
 
-    // Chrome inter-webview messaging — native fallback (SharedWorker not available)
+    // Chrome inter-webview messaging — native message broker
     if namespace == "__chrome__" && method == "__chrome_messaging_post_to_parent__" {
       if !isMessageFromPrimaryWebView(message) {
         // Child webview → primary webview

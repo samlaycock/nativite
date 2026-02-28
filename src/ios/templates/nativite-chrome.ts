@@ -254,8 +254,8 @@ ${applyInitialStateMethod}
     let actionState: UIMenuElement.State = ((itemState["checked"] as? Bool) ?? false) ? .on : .off
     let eventName: String
     switch position {
-    case "toolbar": eventName = "toolbar.menuItemSelected"
-    default:        eventName = "titleBar.menuItemSelected"
+    case "toolbar": eventName = "toolbar.menuItemPressed"
+    default:        eventName = "titleBar.menuItemPressed"
     }
 
     return UIAction(
@@ -277,9 +277,9 @@ ${applyInitialStateMethod}
     let position = parts[0]
     let id = parts[1]
     switch position {
-    case "toolbar": sendEvent(name: "toolbar.itemTapped", data: ["id": id])
-    case "right":   sendEvent(name: "titleBar.trailingItemTapped", data: ["id": id])
-    default:        sendEvent(name: "titleBar.leadingItemTapped", data: ["id": id])
+    case "toolbar": sendEvent(name: "toolbar.itemPressed", data: ["id": id])
+    case "right":   sendEvent(name: "titleBar.trailingItemPressed", data: ["id": id])
+    default:        sendEvent(name: "titleBar.leadingItemPressed", data: ["id": id])
     }
   }
 
@@ -616,7 +616,7 @@ ${sendEventMethod}
 extension NativiteChrome: UITabBarDelegate {
   func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
     guard let id = item.accessibilityIdentifier else { return }
-    sendEvent(name: "navigation.itemSelected", data: ["id": id])
+    sendEvent(name: "navigation.itemPressed", data: ["id": id])
   }
 }
 
@@ -629,7 +629,7 @@ private class NativiteSheetViewController: UIViewController,
   weak var bridge: NativiteChrome?
   weak var nativeBridge: NativiteBridge?
   // The name given to sheet("name", ...) on the JS side. Injected as
-  // window.__nativekit_instance_name__ so the SharedWorker messaging bus
+  // window.__nativekit_instance_name__ so the native message broker
   // can correctly route postToParent/broadcast calls from this webview.
   var instanceName: String = "sheet"
   private(set) var webView: NativiteWebView!
@@ -642,21 +642,23 @@ private class NativiteSheetViewController: UIViewController,
 
     let config = WKWebViewConfiguration()
     // Using WKWebsiteDataStore.default() ensures this webview shares the same
-    // web process as the primary webview (iOS 15+), enabling SharedWorker and
-    // shared storage (localStorage, IndexedDB, cookies) across instances.
+    // web process as the primary webview (iOS 15+), enabling shared storage
+    // (localStorage, IndexedDB, cookies) across instances.
     config.websiteDataStore = WKWebsiteDataStore.default()
-    // Identify this webview by its configured name so the SharedWorker messaging
-    // bus can route postToParent/broadcast calls from this instance correctly.
+    let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+    config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"
+    // Identify this webview by its configured name so the native message broker
+    // can route postToParent/broadcast calls from this instance correctly.
+    // Also set data-nk-platform on the document element so CSS attribute selectors
+    // (e.g. [data-nk-platform="ios"]) work the same as in the primary webview.
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";",
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nk-platform','\\(nkPlatform)');",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))
     if let nativeBridge {
       config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")
     }
-    let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
-    config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"
 
     webView = NativiteWebView(frame: view.bounds, configuration: config)
     webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -1098,7 +1100,7 @@ ${applyInitialStateMethod}
 
   @objc private func menuItemClicked(_ sender: NSMenuItem) {
     guard let id = menuActions[String(sender.tag)] else { return }
-    sendEvent(name: "menuBar.itemSelected", data: ["id": id])
+    sendEvent(name: "menuBar.itemPressed", data: ["id": id])
   }
 
   // ── Sidebar Panel ────────────────────────────────────────────────────────────
@@ -1106,7 +1108,7 @@ ${applyInitialStateMethod}
   private func applySidebarPanel(_ state: [String: Any]) {
     guard let items = state["items"] as? [[String: Any]] else { return }
 
-    // Fire a sidebarPanel.itemSelected event with the full item list so the JS
+    // Fire a sidebarPanel.itemPressed event with the full item list so the JS
     // side can reconcile. The actual NSSplitViewController wiring is deferred to
     // a later phase — for now we emit the event so the bridge contract is honoured.
     var sidebarItems: [[String: Any]] = []
@@ -1121,7 +1123,7 @@ ${applyInitialStateMethod}
     }
 
     if let activeId = state["activeItem"] as? String {
-      sendEvent(name: "sidebarPanel.itemSelected", data: ["id": activeId, "items": sidebarItems])
+      sendEvent(name: "sidebarPanel.itemPressed", data: ["id": activeId, "items": sidebarItems])
     }
   }
 

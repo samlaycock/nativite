@@ -99,7 +99,7 @@ describe("viewControllerTemplate", () => {
     expect(output).not.toContain("WKProcessPool");
   });
 
-  it("injects instance name 'main' so the SharedWorker messaging bus can identify this webview", () => {
+  it("injects instance name 'main' so the native message broker can identify this webview", () => {
     const output = viewControllerTemplate(baseConfig);
     expect(output).toContain('window.__nativekit_instance_name__ = \\"main\\"');
     expect(output).toContain("injectionTime: .atDocumentStart");

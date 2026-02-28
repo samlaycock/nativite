@@ -232,19 +232,19 @@ export interface ChromeState {
 // ─── Chrome Events ────────────────────────────────────────────────────────────
 
 export type ChromeEvent =
-  | { readonly type: "titleBar.leadingItemTapped"; readonly id: string }
-  | { readonly type: "titleBar.trailingItemTapped"; readonly id: string }
-  | { readonly type: "titleBar.menuItemSelected"; readonly id: string }
-  | { readonly type: "titleBar.backTapped" }
-  | { readonly type: "titleBar.searchBar.changed"; readonly value: string }
-  | { readonly type: "titleBar.searchBar.submitted"; readonly value: string }
-  | { readonly type: "titleBar.searchBar.cancelled" }
-  | { readonly type: "navigation.itemSelected"; readonly id: string }
-  | { readonly type: "sidebarPanel.itemSelected"; readonly id: string }
-  | { readonly type: "toolbar.itemTapped"; readonly id: string }
-  | { readonly type: "toolbar.menuItemSelected"; readonly id: string }
-  | { readonly type: "keyboard.accessoryItemTapped"; readonly id: string }
-  | { readonly type: "menuBar.itemSelected"; readonly id: string }
+  | { readonly type: "titleBar.leadingItemPressed"; readonly id: string }
+  | { readonly type: "titleBar.trailingItemPressed"; readonly id: string }
+  | { readonly type: "titleBar.menuItemPressed"; readonly id: string }
+  | { readonly type: "titleBar.backPressed" }
+  | { readonly type: "titleBar.searchChanged"; readonly value: string }
+  | { readonly type: "titleBar.searchSubmitted"; readonly value: string }
+  | { readonly type: "titleBar.searchCancelled" }
+  | { readonly type: "navigation.itemPressed"; readonly id: string }
+  | { readonly type: "sidebarPanel.itemPressed"; readonly id: string }
+  | { readonly type: "toolbar.itemPressed"; readonly id: string }
+  | { readonly type: "toolbar.menuItemPressed"; readonly id: string }
+  | { readonly type: "keyboard.itemPressed"; readonly id: string }
+  | { readonly type: "menuBar.itemPressed"; readonly id: string }
   | { readonly type: "sheet.presented"; readonly name: string }
   | { readonly type: "sheet.dismissed"; readonly name: string }
   | { readonly type: "sheet.detentChanged"; readonly name: string; readonly detent: string }

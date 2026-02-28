@@ -9,7 +9,7 @@ describe("nativiteChromeTemplate", () => {
       const output = nativiteChromeTemplate(baseConfig);
       const barButtonTappedStart = output.indexOf("func barButtonTapped");
       expect(barButtonTappedStart).toBeGreaterThan(-1);
-      const toolbarEventInHandler = output.indexOf('"toolbar.itemTapped"', barButtonTappedStart);
+      const toolbarEventInHandler = output.indexOf('"toolbar.itemPressed"', barButtonTappedStart);
       expect(toolbarEventInHandler).toBeGreaterThan(barButtonTappedStart);
     });
 
@@ -22,9 +22,9 @@ describe("nativiteChromeTemplate", () => {
           ? output.slice(barButtonTappedStart, nextMethodStart)
           : output.slice(barButtonTappedStart);
 
-      expect(handlerBody).toContain('"titleBar.leadingItemTapped"');
-      expect(handlerBody).toContain('"titleBar.trailingItemTapped"');
-      expect(handlerBody).toContain('"toolbar.itemTapped"');
+      expect(handlerBody).toContain('"titleBar.leadingItemPressed"');
+      expect(handlerBody).toContain('"titleBar.trailingItemPressed"');
+      expect(handlerBody).toContain('"toolbar.itemPressed"');
     });
 
     it("removes the unreachable toolbarButtonTapped dead-code method", () => {
@@ -175,7 +175,7 @@ describe("nativiteChromeTemplate", () => {
 
     it("fires toolbar.menuItemSelected for toolbar menu items", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('"toolbar.menuItemSelected"');
+      expect(output).toContain('"toolbar.menuItemPressed"');
     });
   });
 
@@ -281,7 +281,7 @@ describe("nativiteChromeTemplate", () => {
 
     it("dispatches navigation.itemSelected when the user selects a tab", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('"navigation.itemSelected"');
+      expect(output).toContain('"navigation.itemPressed"');
     });
 
     it("uses label key instead of title for tab items", () => {
@@ -440,7 +440,7 @@ describe("nativiteChromeTemplate", () => {
       expect(output).toContain("sheetVC.instanceName = name");
     });
 
-    it("injects the instance name user script so the SharedWorker can identify this webview", () => {
+    it("injects the instance name user script so the native message broker can identify this webview", () => {
       const output = nativiteChromeTemplate(baseConfig);
       expect(output).toContain("window.__nativekit_instance_name__ = ");
       expect(output).toContain("\\(instanceName)");

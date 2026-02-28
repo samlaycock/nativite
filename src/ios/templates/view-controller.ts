@@ -190,15 +190,15 @@ class ViewController: UIViewController {
 
     let config = WKWebViewConfiguration()
     // Using WKWebsiteDataStore.default() ensures this webview shares the same
-    // web process as any other webview using the default store (iOS 15+).
-    // This is what enables SharedWorker to function across webview instances.
+    // web process as any other webview using the default store (iOS 15+),
+    // enabling shared storage (localStorage, IndexedDB, cookies) across instances.
     config.websiteDataStore = WKWebsiteDataStore.default()
     // Appended to every request's User-Agent so the Vite dev server can route
     // this WKWebView to the correct named platform environment. iPad is
     // detected at runtime so a single binary serves both form factors.
     let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
     config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"
-    // Identify this webview as "main" so the SharedWorker messaging bus can
+    // Identify this webview as "main" so the native message broker can
     // route postToParent/postToChild/broadcast calls to the correct instance.
     config.userContentController.addUserScript(WKUserScript(
       source: "window.__nativekit_instance_name__ = \\"main\\";",
@@ -445,15 +445,15 @@ extension ViewController: WKUIDelegate {
 extension ViewController: UISearchResultsUpdating, UISearchBarDelegate {
   func updateSearchResults(for searchController: UISearchController) {
     let value = searchController.searchBar.text ?? ""
-    bridge.chrome.sendEvent(name: "titleBar.searchBar.changed", data: ["value": value])
+    bridge.chrome.sendEvent(name: "titleBar.searchChanged", data: ["value": value])
   }
 
   func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-    bridge.chrome.sendEvent(name: "titleBar.searchBar.submitted", data: ["value": searchBar.text ?? ""])
+    bridge.chrome.sendEvent(name: "titleBar.searchSubmitted", data: ["value": searchBar.text ?? ""])
   }
 
   func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
-    bridge.chrome.sendEvent(name: "titleBar.searchBar.cancelled", data: [:])
+    bridge.chrome.sendEvent(name: "titleBar.searchCancelled", data: [:])
   }
 }`;
 

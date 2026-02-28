@@ -111,11 +111,11 @@ class NativiteKeyboard: NSObject {
 
   // ── Event helper ──────────────────────────────────────────────────────────
 
-  func sendItemTapped(id: String) {
+  func sendItemPressed(id: String) {
     viewController?.sendToWebView([
       "id": NSNull(),
       "type": "event",
-      "event": "keyboard.accessoryItemTapped",
+      "event": "keyboard.itemPressed",
       "data": ["id": id],
     ])
   }
@@ -226,7 +226,7 @@ private extension UIColor {
 extension NativiteKeyboard {
   @objc fileprivate func accessoryButtonTapped(_ sender: UIBarButtonItem) {
     guard let id = sender.accessibilityIdentifier else { return }
-    sendItemTapped(id: id)
+    sendItemPressed(id: id)
   }
 }
 #endif
