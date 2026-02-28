@@ -46,30 +46,27 @@ the JS side, which complicates testing and framework integration.
 ### 1.3 Only one child webview
 
 The `sheet` namespace is the sole concept for mounting the app at a child route.
-There is no way to describe a sidebar child webview, a drawer, or (on macOS) a
-second window, all of which are common patterns. And the sheet's messaging API
-(`sheet.postMessage` / `sheet.onMessage`) is one-to-one with the sheet; there
-is no broadcast or peer-to-peer model.
+There is no way to describe a drawer, or (on macOS) a second window, all of
+which are common patterns. The sheet's messaging API (`sheet.postMessage` /
+`sheet.onMessage`) is one-to-one; there is no broadcast or peer-to-peer model.
 
-The `sheet.postMessage` implementation also has a quirk: inside the sheet webview
-itself it routes through `window.nativiteSheet.postMessage`, exposing an
-implementation detail as a semi-public global.
+The `sheet.postMessage` implementation also routes through
+`window.nativiteSheet.postMessage` inside the sheet, exposing an internal global
+as a semi-public API.
 
 ### 1.4 `searchBar` is not part of `navigationBar`
 
 On every native platform a search bar lives inside (or immediately adjacent to)
 the navigation/title bar. Having `chrome.searchBar` as a sibling of
-`chrome.navigationBar` implies they are independent, but in practice the native
-implementation ties them together. The separation also means you need two
-separate state senders and two separate `ChromeState` keys for what is a single
-component.
+`chrome.navigationBar` implies they are independent, but the native
+implementation ties them together.
 
 ### 1.5 `window` conflicts with the global `window`
 
 `chrome.window` is a namespace for macOS window chrome. Having `.window` on a
-singleton is a collision risk with reader expectations and autocomplete noise
-(`chrome.window.set...` looks like it could be a DOM op). The concept also
-needs a richer equivalent on non-macOS platforms rather than simply being absent.
+singleton is a collision risk with reader expectations and autocomplete noise.
+The concept also needs a richer equivalent on non-macOS platforms rather than
+simply being absent.
 
 ### 1.6 `sidebar` is ambiguous
 
@@ -82,9 +79,14 @@ both makes the design harder to extend.
 
 Some chrome areas only make sense on some platforms (e.g. `homeIndicator` is
 iOS-only, `menuBar` is macOS/Electron-only) but this is not modelled in the
-type system at all. A user calling `chrome.window.setTitle()` from an iOS app
-gets nothing, with no feedback. Platform support should be declared in types,
-not discovered at runtime.
+type system at all. Calls to unsupported APIs silently do nothing.
+
+### 1.8 No ergonomic lifecycle integration
+
+The existing setters are global mutations with no ownership or cleanup story.
+In a component-based app, when a screen sets `chrome.tabBar.hide()` and then
+unmounts, there is no principled way to restore the tab bar — the developer must
+track what was previously set and manually undo it.
 
 ---
 
@@ -92,15 +94,20 @@ not discovered at runtime.
 
 1. **A single, unified set of primitive item types** used everywhere that buttons
    and menus appear.
-2. **Declarative state** — describe the whole chrome as a plain object; the
-   library reconciles it. One call, one bridge message.
-3. **Named child webviews** as a first-class concept, supporting sheets, drawers,
-   popovers, and (on desktop) windows, all with a consistent messaging interface.
-4. **Platform-neutral naming** that maps naturally to each platform's idioms
+2. **JSX-like declarative API in plain JavaScript** — factory functions construct
+   chrome area descriptors, and `chrome()` applies them. This mirrors how
+   `React.createElement` underlies JSX, giving the same composability and
+   readability without requiring a framework or transform.
+3. **`chrome()` returns a cleanup function** that restores only the areas it
+   touched, making React `useEffect` cleanup trivial (`return chrome(...)`) and
+   giving vanilla JS a clear ownership and teardown contract. The stacking
+   mechanism is an internal implementation detail.
+4. **Named child webviews** as a first-class concept, supporting sheets, drawers,
+   popovers, and (on desktop) windows, with a consistent messaging interface.
+5. **Platform-neutral naming** that maps naturally to each platform's idioms
    without exposing UIKit/AppKit vocabulary in the public API.
-5. **Composable event system** — a single typed `chrome.on()` for all events,
+6. **Composable event system** — a single typed `chrome.on()` for all events,
    no per-method listeners.
-6. **Observable state** — `chrome.getState()` returns the current snapshot.
 7. **Graceful, documented unavailability** — platform-specific chrome areas are
    typed as optional; the platform layer ignores unknown areas silently but the
    type system and docs say why.
@@ -114,8 +121,8 @@ items. Unifying them is the single highest-leverage change in this redesign.
 
 ### 3.1 ButtonItem
 
-Used anywhere a tappable button or icon can appear: navigation bar, toolbar,
-keyboard accessory.
+Used anywhere a tappable button or icon can appear: title bar, toolbar, keyboard
+accessory. All bar contexts accept the same type.
 
 ```ts
 interface ButtonItem {
@@ -127,7 +134,7 @@ interface ButtonItem {
    * Platform icon identifier.
    * On iOS/macOS this is an SF Symbol name ("plus", "square.and.arrow.up").
    * On Android this will be a Material Symbol name.
-   * On Electron this will be a path or named icon.
+   * On Electron this will be a named icon or asset path.
    * The platform layer resolves the value; the JS layer is agnostic.
    */
   readonly icon?: string;
@@ -146,7 +153,7 @@ interface ButtonItem {
    * On iOS/macOS renders as a UIMenu / NSMenu.
    * On other platforms the platform layer chooses an appropriate control.
    * When a menu is present, tapping the button opens the menu rather than
-   * firing a "buttonTapped" event.
+   * firing an itemTapped event.
    */
   readonly menu?: MenuConfig;
 }
@@ -154,8 +161,7 @@ interface ButtonItem {
 
 ### 3.2 MenuConfig and MenuItem
 
-Used wherever a hierarchical menu appears: button menus, macOS menu bar, sidebar
-context menus.
+Used wherever a hierarchical menu appears: button menus, macOS menu bar.
 
 ```ts
 interface MenuConfig {
@@ -173,7 +179,7 @@ interface MenuItem {
   readonly checked?: boolean;
   /**
    * Semantic style.
-   * "destructive" — rendered in red; platform may show confirmation.
+   * "destructive" — rendered in red.
    */
   readonly style?: "plain" | "destructive";
   /** Key shortcut, e.g. "s" for Cmd+S (macOS/Electron only). */
@@ -198,7 +204,7 @@ type BarItem = ButtonItem | FlexibleSpace | FixedSpace;
 
 ### 3.4 NavigationItem
 
-Used in `navigation.items` (primary nav — tabs / sidebar):
+Used in the primary navigation (tab bar / sidebar):
 
 ```ts
 interface NavigationItem {
@@ -229,6 +235,8 @@ interface SidebarItem {
 ---
 
 ## 4. Chrome Areas
+
+Each area has a config interface and a corresponding factory function (see §7).
 
 ### 4.1 Title Bar
 
@@ -302,7 +310,7 @@ it is silently ignored.
 
 ### 4.2 Navigation (Primary)
 
-**Replaces:** `TabBarState` (partially) and `SidebarState` (partially)
+**Replaces:** `TabBarState` and `SidebarState` (primary navigation role only)
 
 Primary navigation is the mechanism by which the user switches between top-level
 sections of the app. Its visual representation adapts to the platform:
@@ -333,13 +341,10 @@ interface NavigationConfig {
 **Why a single `navigation` instead of `tabBar` + `sidebar`?**
 
 The iOS tab bar and the iPad/macOS sidebar are the same concept: choose the
-active section of the app. Apple's own SwiftUI API (`TabView`) uses one type
-that adapts to both representations. Nativite should do the same. A developer
-should not need to understand the underlying UIKit implementation (tab bar
-controller vs split view controller) to achieve adaptive navigation.
-
-The `style: "auto"` default means iPhone gets a tab bar, iPad/macOS get a
-sidebar — all from the same config.
+active section of the app. Apple's own SwiftUI `TabView` adapts to both
+representations from a single declaration. Nativite should do the same. The
+`style: "auto"` default means iPhone gets a tab bar, iPad/macOS get a sidebar
+— all from the same config.
 
 ---
 
@@ -347,9 +352,9 @@ sidebar — all from the same config.
 
 **Replaces:** `ToolbarState`
 
-The toolbar is a secondary row of actions that is contextual to what is
-currently visible. On iOS it sits at the bottom; on macOS it is `NSToolbar`
-(typically at the top, integrated with the window chrome).
+The toolbar is a secondary row of actions that is contextual to the current
+content. On iOS it sits at the bottom; on macOS it is `NSToolbar` (typically at
+the top, integrated with the window chrome).
 
 ```ts
 interface ToolbarConfig {
@@ -358,19 +363,18 @@ interface ToolbarConfig {
 }
 ```
 
-The simplification here is intentional: `BarItem` is reused, so a toolbar
-button looks identical to a navigation bar button. The `menu` field on
-`ButtonItem` gives inline menus where needed.
+`BarItem` is reused here, so a toolbar button and a title bar button are the
+same type. The `menu` field on `ButtonItem` provides inline menus where needed.
 
 ---
 
 ### 4.4 Sidebar Panel (Secondary)
 
-**New concept** (partially overlaps with old `SidebarState`)
+**New concept** (partially overlaps with the secondary role of old `SidebarState`)
 
-A secondary sidebar panel for supplementary navigation, such as a file tree,
-filter list, or outline view. Unlike primary navigation, this is an always-
-visible panel that does not replace the main content area.
+A persistent side panel for supplementary navigation: file trees, filter lists,
+outline views. Unlike primary navigation, this panel does not replace the main
+content area.
 
 On iOS phone this degrades to a modal or drawer presentation since there is not
 enough screen space for a persistent side panel.
@@ -433,12 +437,11 @@ interface KeyboardConfig {
 }
 ```
 
-Note that `accessory.items` uses `BarItem[]` — the same unified type — so a
-keyboard accessory button and a nav bar button are the same shape. Code is
+`accessory.items` uses `BarItem[]` — the same unified type — so a keyboard
+accessory button and a title bar button are structurally identical. Code is
 shareable across all bar contexts.
 
-Platform support: iOS, iPadOS. Silently ignored on macOS (hardware keyboard
-normal) and Electron.
+Platform support: iOS, iPadOS. Silently ignored on macOS and Electron.
 
 ---
 
@@ -450,7 +453,7 @@ normal) and Electron.
 interface MenuBarConfig {
   /**
    * Extra menus appended after the OS built-in menus (Apple, File, Edit...).
-   * Each menu corresponds to one top-level menu bar entry.
+   * Each entry corresponds to one top-level menu bar item.
    */
   readonly menus: readonly {
     readonly id: string;
@@ -460,9 +463,9 @@ interface MenuBarConfig {
 }
 ```
 
-`MenuItem` is now the same unified type used in button menus, so macOS menu bar
-items and button dropdown items are structurally identical. Platform support:
-macOS, Electron. Silently ignored elsewhere.
+`MenuItem` is the same unified type used in button menus. macOS menu bar items
+and button dropdown items are structurally identical. Platform support: macOS,
+Electron. Silently ignored elsewhere.
 
 ---
 
@@ -471,27 +474,26 @@ macOS, Electron. Silently ignored elsewhere.
 **Replaces and generalises:** `SheetState`
 
 Every app has one "main" webview. A child webview mounts the same app at a
-specific URL/route, presented within a platform chrome container (sheet, drawer,
-window, popover). Multiple child webviews can coexist.
+specific URL/route inside a platform chrome container (sheet, drawer, window,
+popover). Multiple child webviews can coexist.
 
-Child webviews are identified by a **developer-chosen name** (a plain string
-key). The name is the address used by the messaging API.
+Child webviews are identified by a **developer-chosen name** (a plain string).
+The name is the address used by the messaging API and in events.
 
-All child webview config types share a common base:
+All child webview configs share a common base:
 
 ```ts
 interface ChildWebviewBase {
   /**
    * The URL to load in this child webview.
    * "/route" keeps the same host (dev server in dev, SPA entry in prod).
-   * Relative paths resolve against the main webview URL.
    */
   readonly url: string;
   /** Whether the child webview is currently presented. */
   readonly presented?: boolean;
   /**
-   * Background colour of the container (hex string, e.g. "#FFFFFF").
-   * Useful for matching the app's background to avoid flash-of-white.
+   * Background colour of the container (hex string, e.g. "#1C1C1E").
+   * Match the app background to avoid a flash-of-white on load.
    */
   readonly backgroundColor?: string;
 }
@@ -502,7 +504,7 @@ interface ChildWebviewBase {
 ```ts
 interface SheetConfig extends ChildWebviewBase {
   /**
-   * Available stop positions for the sheet.
+   * Available stop positions.
    * "small"  — ~25% of screen height
    * "medium" — ~50% of screen height
    * "large"  — ~90% of screen height
@@ -512,8 +514,8 @@ interface SheetConfig extends ChildWebviewBase {
   readonly activeDetent?: "small" | "medium" | "large" | "full";
   readonly grabberVisible?: boolean;
   /**
-   * Whether the user can dismiss the sheet by swiping down.
-   * When false, the app must dismiss it programmatically.
+   * Whether the user can dismiss by swiping down.
+   * When false, the app must dismiss programmatically.
    */
   readonly dismissible?: boolean;
   readonly cornerRadius?: number;
@@ -532,40 +534,40 @@ Platform mapping:
 interface DrawerConfig extends ChildWebviewBase {
   /**
    * Which edge the drawer slides in from.
-   * "leading" — left on LTR, right on RTL
+   * "leading"  — left on LTR, right on RTL
    * "trailing" — right on LTR, left on RTL
    */
   readonly side?: "leading" | "trailing";
   /**
    * Width of the drawer.
    * Semantic sizes: "small" (~280pt), "medium" (~360pt), "large" (~440pt).
-   * Numeric value is interpreted as points/dp.
+   * Numeric values are interpreted as points/dp.
    */
   readonly width?: "small" | "medium" | "large" | number;
-  /** Whether the user can dismiss by tapping the scrim behind the drawer. */
+  /** Whether the user can dismiss by tapping the scrim. */
   readonly dismissible?: boolean;
 }
 ```
 
 Platform mapping:
-- iOS: Slide-in panel over content
+- iOS: Slide-in overlay panel
 - iPadOS: Overlay panel on the leading/trailing edge
 - macOS: Overlay side panel
 - Android: `DrawerLayout`
 - Electron: Overlay panel
 
-### 5.3 Windows
+### 5.3 App Windows
 
-Windows open the app in a separate native window. Only supported on platforms
-where the windowing model allows it.
+App windows open the same app at a route in a separate native window. Only
+supported on platforms with a windowing model.
 
 ```ts
-interface WindowConfig extends ChildWebviewBase {
+interface AppWindowConfig extends ChildWebviewBase {
   readonly title?: string;
   readonly size?: { readonly width: number; readonly height: number };
   readonly minSize?: { readonly width: number; readonly height: number };
   readonly resizable?: boolean;
-  /** Blocks interaction with the parent window while open. */
+  /** Blocks interaction with the opener window while open. */
   readonly modal?: boolean;
 }
 ```
@@ -573,20 +575,20 @@ interface WindowConfig extends ChildWebviewBase {
 Platform mapping:
 - macOS: `NSWindow`
 - Electron: `BrowserWindow`
-- iOS/Android: **Not supported.** The platform layer will log a warning and
-  ignore the config. Use a sheet or drawer instead.
+- iOS/Android: **Not supported.** The platform layer logs a warning and ignores
+  the config. Use a sheet or drawer instead.
 
 ### 5.4 Popovers
 
-Small floating panels anchored to a UI element. On small screens they fall back
-to sheets.
+Small floating panels anchored to a UI element. Fall back to sheets on small
+screens.
 
 ```ts
 interface PopoverConfig extends ChildWebviewBase {
   readonly size?: { readonly width: number; readonly height: number };
   /**
-   * DOM element ID (in the main webview) that the popover anchors to.
-   * The platform uses the element's bounding box as the anchor point.
+   * ID of a DOM element in the main webview that the popover anchors to.
+   * The platform uses the element's bounding box as the source rect.
    */
   readonly anchorElementId?: string;
 }
@@ -601,7 +603,10 @@ Platform mapping:
 
 ---
 
-## 6. Full ChromeState
+## 6. ChromeState
+
+The `ChromeState` type is the complete description of all chrome. It is used
+in `nativite.config.ts` (`defaultChrome`) and internally by the runtime.
 
 ```ts
 interface ChromeState {
@@ -622,87 +627,94 @@ interface ChromeState {
   /** macOS/Electron menu bar. */
   readonly menuBar?: MenuBarConfig;
 
-  // ── Child webviews ──────────────────────────────────────────────────────────
-  // All are records keyed by a developer-chosen name.
+  // ── Child webviews — keyed by developer-chosen name ─────────────────────────
   readonly sheets?: Readonly<Record<string, SheetConfig>>;
   readonly drawers?: Readonly<Record<string, DrawerConfig>>;
-  readonly windows?: Readonly<Record<string, WindowConfig>>;
+  readonly appWindows?: Readonly<Record<string, AppWindowConfig>>;
   readonly popovers?: Readonly<Record<string, PopoverConfig>>;
 }
 ```
-
-The same `ChromeState` type is used in:
-- `nativite.config.ts` (`defaultChrome`) — static initial state
-- `nativite/chrome` runtime API — dynamic state updates
 
 ---
 
 ## 7. Runtime API
 
-### 7.1 The `chrome` singleton
+### 7.1 `chrome()` — declaration and cleanup
+
+`chrome` is a callable function. Each call declares a set of chrome area
+descriptors and returns a cleanup function. When the cleanup function is called,
+only the areas declared in that call are restored to what they were before the
+call — all other areas are untouched.
 
 ```ts
-export declare const chrome: {
-  /**
-   * Deep-merge a partial state patch into the current chrome state.
-   * Only the keys present in `patch` are applied; all other keys are
-   * left unchanged.
-   *
-   * @example
-   * // Update only the title — other titleBar fields are preserved.
-   * chrome.update({ titleBar: { title: "Settings" } });
-   */
-  update(patch: DeepPartial<ChromeState>): void;
+declare function chrome(...elements: ChromeElement[]): () => void;
+```
 
-  /**
-   * Fully replace the chrome state. All chrome areas are reset to
-   * the values given (or to their defaults for any omitted keys).
-   */
-  set(state: ChromeState): void;
+Calls stack: if two calls both declare `titleBar`, the most recent wins. When
+the more recent call's cleanup runs, the earlier call's `titleBar` value is
+restored. This makes React `useEffect` cleanup trivial — just `return chrome(...)`.
 
-  /**
-   * Return a deep-frozen snapshot of the current chrome state.
-   */
-  getState(): Readonly<ChromeState>;
+`chrome` also carries the event and messaging APIs as properties:
 
-  /**
-   * Subscribe to a specific chrome event type (type-safe).
-   * Returns an unsubscribe function.
-   *
-   * @example
-   * const off = chrome.on("titleBar.trailingItemTapped", ({ id }) => { ... });
-   * off(); // unsubscribe
-   */
-  on<T extends ChromeEventType>(
+```ts
+declare namespace chrome {
+  /** Subscribe to a specific event type. Returns an unsubscribe function. */
+  function on<T extends ChromeEventType>(
     type: T,
     handler: (event: Extract<ChromeEvent, { readonly type: T }>) => void,
   ): () => void;
 
-  /**
-   * Subscribe to all chrome events.
-   * Returns an unsubscribe function.
-   */
-  on(handler: (event: ChromeEvent) => void): () => void;
+  /** Subscribe to all chrome events. Returns an unsubscribe function. */
+  function on(handler: (event: ChromeEvent) => void): () => void;
 
   /** Inter-webview messaging. */
-  readonly messaging: ChromeMessaging;
-};
+  const messaging: ChromeMessaging;
+}
 ```
 
-**Key changes from current API:**
+### 7.2 Factory functions
 
-- `update()` replaces the per-element setters (`setTitle`, `show`, `hide`,
-  `configure`...). One method, one call, one bridge message per update.
-- `set()` fully replaces state (was `chrome.set()` — same semantics, but now
-  that `update()` handles merging, `set()` is a clear reset/replace operation).
-- `getState()` is new — the current API is write-only.
-- `on()` is overloaded: typed event name → typed handler, or handler for all
-  events. The per-namespace `on*` methods (e.g. `onButtonTap`, `onSelect`) are
-  removed; they added API surface without adding capability.
-- `off()` is removed. The `on()` return value (an unsubscribe function) is
-  sufficient and follows the established pattern in the codebase.
+Each chrome area has a corresponding factory function that constructs a
+`ChromeElement` descriptor for use in `chrome()`. These are named exports from
+`nativite/chrome`.
 
-### 7.2 Messaging
+```ts
+// Chrome area factories
+declare function titleBar(config: TitleBarConfig): ChromeElement;
+declare function navigation(config: NavigationConfig): ChromeElement;
+declare function toolbar(config: ToolbarConfig): ChromeElement;
+declare function sidebarPanel(config: SidebarPanelConfig): ChromeElement;
+declare function keyboard(config: KeyboardConfig): ChromeElement;
+declare function statusBar(config: StatusBarConfig): ChromeElement;
+declare function homeIndicator(config: HomeIndicatorConfig): ChromeElement;
+declare function menuBar(config: MenuBarConfig): ChromeElement;
+
+// Child webview factories — take a name and a config
+declare function sheet(name: string, config: SheetConfig): ChromeElement;
+declare function drawer(name: string, config: DrawerConfig): ChromeElement;
+declare function appWindow(name: string, config: AppWindowConfig): ChromeElement;
+declare function popover(name: string, config: PopoverConfig): ChromeElement;
+
+// Item constructors — convenience wrappers with full type inference
+declare function button(config: ButtonItem): ButtonItem;
+declare function navItem(config: NavigationItem): NavigationItem;
+declare function menuItem(config: MenuItem): MenuItem;
+```
+
+**Why factory functions rather than plain object literals?**
+
+Plain object literals work and are always accepted by the config interfaces.
+Factory functions add three things:
+1. Each factory is a named unit — `titleBar({ ... })` reads like a JSX element
+   (`<TitleBar ... />`), making chrome declarations scan visually the same way
+   a component tree does.
+2. They serve as natural composition boundaries — you can extract
+   `const myNav = navigation({ ... })` into a shared module with clear intent.
+3. `button()`, `navItem()`, `menuItem()` provide inference sites — TypeScript
+   infers the narrowest type from the literal, which plain object literals in
+   arrays sometimes fail to do.
+
+### 7.3 Messaging
 
 ```ts
 interface ChromeMessaging {
@@ -714,7 +726,6 @@ interface ChromeMessaging {
 
   /**
    * Send a message to a named child webview.
-   * `name` must match a key in sheets/drawers/windows/popovers.
    * No-op if the named child webview is not currently presented.
    */
   postToChild(name: string, payload: unknown): void;
@@ -726,8 +737,7 @@ interface ChromeMessaging {
 
   /**
    * Subscribe to incoming messages.
-   * `from` is the name of the sender: the string key of the child webview,
-   * or "main" if the message came from the main webview.
+   * `from` is the child webview name, or "main" for the main webview.
    * Returns an unsubscribe function.
    */
   onMessage(handler: (from: string | "main", payload: unknown) => void): () => void;
@@ -736,20 +746,18 @@ interface ChromeMessaging {
 
 **Why a first-class messaging API?**
 
-The current API only allows the sheet to send a message to the main webview and
-vice versa, via `sheet.postMessage` / `sheet.onMessage`. This routing is
-asymmetric, one-to-one, and relies on a `window.nativiteSheet` global inside the
-child — an implementation detail leaking into the public API.
-
-With named child webviews and a unified messaging interface, any webview can
-address any other by name. The payload is always JSON-encoded. The API is
-symmetric from every webview's perspective.
+The current API routes messages through `sheet.postMessage` / `sheet.onMessage`
+— a one-to-one, asymmetric channel that relies on `window.nativiteSheet` inside
+the child. The new API is symmetric: any webview can address any other by name.
+The payload is always JSON-encoded. `postToParent` works regardless of what kind
+of container the child webview is (sheet, drawer, window, popover).
 
 ---
 
 ## 8. Events
 
-All events use a discriminated union on `type`:
+All events use a discriminated union on `type`, so TypeScript narrows the event
+object automatically inside `chrome.on()` handlers.
 
 ```ts
 type ChromeEvent =
@@ -785,8 +793,8 @@ type ChromeEvent =
   | { readonly type: "sheet.loadFailed";    readonly name: string; readonly message: string; readonly code: number }
   | { readonly type: "drawer.presented";    readonly name: string }
   | { readonly type: "drawer.dismissed";    readonly name: string }
-  | { readonly type: "window.presented";    readonly name: string }
-  | { readonly type: "window.dismissed";    readonly name: string }
+  | { readonly type: "appWindow.presented"; readonly name: string }
+  | { readonly type: "appWindow.dismissed"; readonly name: string }
   | { readonly type: "popover.presented";   readonly name: string }
   | { readonly type: "popover.dismissed";   readonly name: string }
 
@@ -801,20 +809,16 @@ type ChromeEventType = ChromeEvent["type"];
 
 **Changes from current `ChromeEventMap`:**
 
-- Migrated from a `Record<string, DataType>` map to a discriminated union. This
-  gives proper exhaustiveness checking and narrows the event object type inside
-  `on()` handlers automatically.
+- Migrated from a `Record<string, DataType>` map to a discriminated union,
+  enabling exhaustiveness checking and automatic narrowing in handlers.
 - `navigationBar.buttonTapped` split into `titleBar.leadingItemTapped` and
-  `titleBar.trailingItemTapped` — the existing event does not distinguish which
-  side of the bar the button was on.
-- `tabBar.tabSelected` → `navigation.itemSelected` to match the renamed area.
+  `titleBar.trailingItemTapped` — the old event did not indicate which side.
+- `tabBar.tabSelected` → `navigation.itemSelected`.
 - `sidebar.itemSelected` → `sidebarPanel.itemSelected`.
-- `sheet.detentChanged`, `sheet.dismissed`, `sheet.loadFailed` now carry `name`
-  so that multiple named sheets can be disambiguated from a single handler.
-- `sheet.message` removed; replaced by the unified `message` event via
-  `chrome.messaging`.
-- `toolbar.menuItemSelected` is new — the current API fires `toolbar.buttonTapped`
-  even for menu item selections, conflating two different interactions.
+- Child webview events now carry `name` to disambiguate multiple instances.
+- `sheet.message` removed; replaced by the unified `message` event.
+- `toolbar.menuItemSelected` is new — the old API conflated menu selections with
+  button taps.
 
 ---
 
@@ -831,254 +835,273 @@ type ChromeEventType = ChromeEvent["type"];
 | `keyboard.accessory` | Input accessory view | Input accessory view | ❌ Not applicable | ❌ Not applicable | ❌ Not applicable |
 | `menuBar` | ❌ Not applicable | ❌ Not applicable | `NSMenuBar` | ❌ Not applicable | `Menu` |
 | `sheets.*` | `UISheetPresentationController` | `UISheetPresentationController` | `NSPanel` | `BottomSheetDialogFragment` | Custom panel |
-| `drawers.*` | Custom overlay | Overlay or `UISplitViewController` | Overlay side panel | `DrawerLayout` | Side panel |
-| `windows.*` | ❌ Not supported | ❌ Not supported | `NSWindow` | ❌ Not supported | `BrowserWindow` |
+| `drawers.*` | Custom overlay | Overlay or split view | Overlay side panel | `DrawerLayout` | Side panel |
+| `appWindows.*` | ❌ Not supported | ❌ Not supported | `NSWindow` | ❌ Not supported | `BrowserWindow` |
 | `popovers.*` | Falls back to sheet | `UIPopoverPresentationController` | `NSPopover` | Falls back to sheet | Custom window |
 
 When a platform does not support a chrome area, the platform layer logs a
-development-mode warning and ignores the config silently in production. The
-reason for non-support is always one of three categories:
-- **Not applicable** — the concept simply does not exist on this platform
-  (e.g. home indicator on macOS)
-- **Not supported** — the platform has the concept but Nativite has not yet
-  implemented it
-- **Falls back** — a reasonable approximation is used instead
+development-mode warning and ignores the config silently in production:
+- **Not applicable** — the concept does not exist on this platform
+- **Not supported** — the platform has the concept but it is not yet implemented
+- **Falls back** — a platform-appropriate approximation is used instead
 
 ---
 
 ## 10. Usage Examples
 
-### 10.1 Basic navigation setup
+### 10.1 App-level chrome (entry point)
 
 ```ts
-import { chrome } from "nativite/chrome";
+import { chrome, navigation, statusBar, navItem } from "nativite/chrome";
 
-chrome.set({
-  titleBar: {
-    title: "Inbox",
-    largeTitleMode: "large",
-    trailingItems: [
-      { id: "compose", icon: "square.and.pencil", style: "primary" },
-    ],
-  },
-  navigation: {
+// Set up the persistent foundation once at app boot.
+// No cleanup needed — this lives for the lifetime of the app.
+chrome(
+  navigation({
     items: [
-      { id: "inbox",   label: "Inbox",   icon: "tray" },
-      { id: "sent",    label: "Sent",    icon: "paperplane" },
-      { id: "archive", label: "Archive", icon: "archivebox" },
+      navItem({ id: "home",    label: "Home",    icon: "house" }),
+      navItem({ id: "inbox",   label: "Inbox",   icon: "tray" }),
+      navItem({ id: "profile", label: "Profile", icon: "person.circle" }),
     ],
-    activeItem: "inbox",
-  },
-});
-
-chrome.on("titleBar.trailingItemTapped", ({ id }) => {
-  if (id === "compose") openComposer();
-});
+    activeItem: "home",
+  }),
+  statusBar({ style: "auto" }),
+);
 
 chrome.on("navigation.itemSelected", ({ id }) => {
   router.navigate(`/${id}`);
 });
 ```
 
-### 10.2 Contextual toolbar update
+### 10.2 Per-screen chrome
+
+Each screen declares only the areas it owns. Calling `chrome()` returns a
+cleanup that restores exactly those areas when the screen unmounts.
 
 ```ts
-// When a list item is selected, show contextual actions
-function onItemSelected() {
-  chrome.update({
-    toolbar: {
+import { chrome, titleBar, navigation, toolbar, button } from "nativite/chrome";
+
+// ── Inbox screen ─────────────────────────────────────────────────────────────
+function mountInbox() {
+  return chrome(
+    titleBar({ title: "Inbox", largeTitleMode: "large" }),
+    navigation({ activeItem: "inbox" }),
+    // toolbar not declared — no toolbar on this screen
+  );
+}
+
+// ── Thread screen ─────────────────────────────────────────────────────────────
+function mountThread(thread: Thread) {
+  return chrome(
+    titleBar({ title: thread.subject }),
+    // navigation not declared — tab bar from app-level chrome shows through
+    toolbar({
       items: [
-        { id: "delete", label: "Delete", icon: "trash", style: "destructive" },
+        button({ id: "reply",   icon: "arrowshape.turn.up.left" }),
         { type: "flexible-space" },
-        { id: "share", label: "Share", icon: "square.and.arrow.up" },
+        button({ id: "archive", icon: "archivebox" }),
       ],
-    },
+    }),
+  );
+}
+
+// Router wires lifecycle:
+let cleanup: (() => void) | null = null;
+
+router.on("enter:inbox",  ()       => { cleanup = mountInbox(); });
+router.on("enter:thread", (thread) => { cleanup = mountThread(thread); });
+router.on("leave",        ()       => { cleanup?.(); cleanup = null; });
+```
+
+### 10.3 React `useEffect` integration
+
+`chrome()` returning a cleanup function makes React integration a single line:
+
+```tsx
+import { chrome, titleBar, toolbar, button } from "nativite/chrome";
+
+function ThreadScreen({ thread }: { thread: Thread }) {
+  useEffect(() => {
+    return chrome(
+      titleBar({ title: thread.subject }),
+      toolbar({
+        items: [
+          button({ id: "reply",   icon: "arrowshape.turn.up.left" }),
+          button({ id: "archive", icon: "archivebox" }),
+        ],
+      }),
+    );
+  }, [thread.subject]);
+
+  // ...
+}
+```
+
+When `thread.subject` changes, React calls the cleanup (restoring the previous
+title and removing the toolbar) then re-runs the effect with the new values.
+When the component unmounts, the same cleanup runs automatically.
+
+Events compose cleanly alongside chrome declarations:
+
+```tsx
+useEffect(() => {
+  const offChrome = chrome(
+    titleBar({ title: thread.subject }),
+    toolbar({ items: [button({ id: "reply", icon: "arrowshape.turn.up.left" })] }),
+  );
+
+  const offEvents = chrome.on("toolbar.itemTapped", ({ id }) => {
+    if (id === "reply") openReply();
   });
-}
 
-// When selection is cleared, hide the toolbar
-function onSelectionCleared() {
-  chrome.update({ toolbar: { hidden: true } });
-}
-
-chrome.on("toolbar.itemTapped", ({ id }) => {
-  if (id === "delete") deleteSelectedItem();
-  if (id === "share") shareSelectedItem();
-});
+  return () => {
+    offChrome();
+    offEvents();
+  };
+}, [thread.subject]);
 ```
 
-### 10.3 Presenting a named sheet
+### 10.4 Shared chrome as plain variables
+
+Because factory calls return plain values, reusable chrome pieces are just
+variables or functions — no special API required:
 
 ```ts
-// Present a settings sheet
-chrome.update({
-  sheets: {
-    settings: {
-      url: "/settings",
-      presented: true,
-      detents: ["medium", "large"],
-      activeDetent: "medium",
-      grabberVisible: true,
-    },
-  },
-});
+import { navigation, navItem, button } from "nativite/chrome";
 
-// Dismiss when the platform swipes it down
-chrome.on("sheet.dismissed", ({ name }) => {
-  if (name === "settings") {
-    chrome.update({ sheets: { settings: { presented: false } } });
-  }
-});
+// Shared across all screens that show primary navigation:
+const mainNav = (activeItem: string) =>
+  navigation({
+    items: [
+      navItem({ id: "home",  label: "Home",  icon: "house" }),
+      navItem({ id: "inbox", label: "Inbox", icon: "tray" }),
+    ],
+    activeItem,
+  });
+
+// Reused without duplication:
+chrome(titleBar({ title: "Home" }),  mainNav("home"));
+chrome(titleBar({ title: "Inbox" }), mainNav("inbox"));
 ```
 
-### 10.4 Messaging between webviews
+### 10.5 Unified button menus
 
-```ts
-// ── In the main webview ──────────────────────────────────────────────────────
-chrome.messaging.onMessage((from, payload) => {
-  if (from === "settings") {
-    const data = payload as { type: string; value: unknown };
-    if (data.type === "saved") {
-      applySettings(data.value);
-      chrome.update({ sheets: { settings: { presented: false } } });
-    }
-  }
-});
-
-// ── In the settings sheet webview (/settings) ────────────────────────────────
-async function handleSave() {
-  const formData = gatherForm();
-  await saveToServer(formData);
-  chrome.messaging.postToParent({ type: "saved", value: formData });
-}
-```
-
-### 10.5 Multiple simultaneous child webviews
-
-```ts
-// Main webview manages a sheet and a drawer at the same time
-chrome.update({
-  sheets: {
-    filters: {
-      url: "/filters",
-      presented: true,
-      detents: ["medium"],
-    },
-  },
-  drawers: {
-    nav: {
-      url: "/nav",
-      presented: false,
-      side: "leading",
-    },
-  },
-});
-
-// Broadcast to all currently-presented child webviews when theme changes
-function applyTheme(theme: "light" | "dark") {
-  chrome.messaging.broadcast({ type: "theme-changed", theme });
-}
-```
-
-### 10.6 Unified button menus
-
-The same `ButtonItem` with `menu` works in the nav bar, toolbar, and keyboard
+The same `ButtonItem` with `menu` works in the title bar, toolbar, and keyboard
 accessory — no special types required:
 
 ```ts
-const sortButton: ButtonItem = {
+import { button, menuItem } from "nativite/chrome";
+
+const sortButton = button({
   id: "sort",
   icon: "arrow.up.arrow.down",
   menu: {
     title: "Sort by",
     items: [
-      { id: "sort-name", label: "Name", checked: true },
-      { id: "sort-date", label: "Date" },
-      { id: "sort-size", label: "Size" },
+      menuItem({ id: "sort-name", label: "Name", checked: true }),
+      menuItem({ id: "sort-date", label: "Date" }),
+      menuItem({ id: "sort-size", label: "Size" }),
     ],
   },
-};
+});
 
-// In the nav bar
-chrome.update({ titleBar: { trailingItems: [sortButton] } });
+// In the title bar trailing area:
+chrome(titleBar({ trailingItems: [sortButton] }));
 
-// Or in the toolbar — same type, no changes
-chrome.update({ toolbar: { items: [sortButton] } });
+// Or in the toolbar — same object, no changes:
+chrome(toolbar({ items: [sortButton] }));
 ```
 
-### 10.7 macOS window and menu bar
+### 10.6 Presenting a named sheet
 
 ```ts
-chrome.update({
-  titleBar: {
+import { chrome, sheet } from "nativite/chrome";
+
+// Present:
+chrome(
+  sheet("settings", {
+    url: "/settings",
+    presented: true,
+    detents: ["medium", "large"],
+    activeDetent: "medium",
+    grabberVisible: true,
+  }),
+);
+
+// Dismiss when the user swipes it down:
+chrome.on("sheet.dismissed", ({ name }) => {
+  if (name === "settings") {
+    chrome(sheet("settings", { url: "/settings", presented: false }));
+  }
+});
+```
+
+### 10.7 Messaging between webviews
+
+```ts
+// ── Main webview ──────────────────────────────────────────────────────────────
+chrome.messaging.onMessage((from, payload) => {
+  if (from === "settings") {
+    const msg = payload as { type: string };
+    if (msg.type === "saved") {
+      chrome(sheet("settings", { url: "/settings", presented: false }));
+    }
+  }
+});
+
+// ── Settings sheet webview (/settings) ───────────────────────────────────────
+async function handleSave() {
+  await saveToServer(gatherForm());
+  chrome.messaging.postToParent({ type: "saved" });
+}
+```
+
+### 10.8 macOS window and menu bar
+
+```ts
+import { chrome, titleBar, menuBar, appWindow, menuItem } from "nativite/chrome";
+
+chrome(
+  titleBar({
     title: "My App",
     subtitle: "Document.md",
     fullSizeContent: true,
     separatorStyle: "none",
-  },
-  menuBar: {
+  }),
+  menuBar({
     menus: [
       {
         id: "view",
         label: "View",
         items: [
-          { id: "zoom-in",  label: "Zoom In",  keyEquivalent: "+" },
-          { id: "zoom-out", label: "Zoom Out", keyEquivalent: "-" },
-          { id: "reset",    label: "Reset Zoom" },
+          menuItem({ id: "zoom-in",  label: "Zoom In",  keyEquivalent: "+" }),
+          menuItem({ id: "zoom-out", label: "Zoom Out", keyEquivalent: "-" }),
+          menuItem({ id: "reset",    label: "Reset Zoom" }),
         ],
       },
     ],
-  },
-  windows: {
-    preferences: {
-      url: "/preferences",
-      presented: false,
-      title: "Preferences",
-      size: { width: 640, height: 480 },
-      resizable: false,
-    },
-  },
-});
+  }),
+  appWindow("preferences", {
+    url: "/preferences",
+    presented: false,
+    title: "Preferences",
+    size: { width: 640, height: 480 },
+    resizable: false,
+  }),
+);
 
 chrome.on("menuBar.itemSelected", ({ id }) => {
   if (id === "zoom-in") zoomIn();
 });
 ```
 
-### 10.8 React integration pattern
-
-The core API is framework-agnostic. A thin React wrapper follows naturally:
-
-```tsx
-// Hypothetical nativite/react hook (not designed here, shown for illustration)
-function useChromeUpdate(state: DeepPartial<ChromeState>, deps: unknown[]) {
-  useEffect(() => {
-    chrome.update(state);
-  }, deps);
-}
-
-function InboxScreen() {
-  const [selectedCount, setSelectedCount] = useState(0);
-
-  useChromeUpdate(
-    {
-      titleBar: { title: "Inbox" },
-      toolbar: selectedCount > 0
-        ? { hidden: false, items: [{ id: "delete", label: `Delete ${selectedCount}`, style: "destructive" }] }
-        : { hidden: true },
-    },
-    [selectedCount],
-  );
-}
-```
-
 ---
 
 ## 11. Static Config Integration
 
-The `ChromeState` type is also used in `nativite.config.ts` as `defaultChrome`.
-The defaults describe the initial chrome visible when the app first loads, before
-any runtime `chrome.update()` calls have been made.
+`ChromeState` is used in `nativite.config.ts` as `defaultChrome`. This
+describes the initial chrome before any runtime `chrome()` calls have been made.
+It is a plain object (no factory functions required here).
 
 ```ts
 // nativite.config.ts
@@ -1089,7 +1112,6 @@ export default defineConfig({
   platforms: [ios({ minimumVersion: "17.0" }), macos({ minimumVersion: "14.0" })],
 
   defaultChrome: {
-    titleBar: { title: "My App", largeTitleMode: "automatic" },
     navigation: {
       items: [
         { id: "home",    label: "Home",    icon: "house" },
@@ -1112,11 +1134,11 @@ export default defineConfig({
 | Current | New | Notes |
 |---|---|---|
 | `navigationBar` | `titleBar` | Covers window title bar too |
-| `searchBar` (top-level in ChromeState) | `titleBar.searchBar` | Nested where it belongs |
+| `searchBar` (top-level) | `titleBar.searchBar` | Nested where it belongs |
 | `tabBar` | `navigation` | Adapts to sidebar automatically |
-| `sidebar` | `sidebarPanel` | Secondary panel; `navigation` is the primary |
-| `window` (macOS) | `titleBar` + `windows.*` | Title bar config is in titleBar; new windows in `windows.*` |
-| `sheet` (single) | `sheets.*` (named record) | Multiple sheets supported |
+| `sidebar` | `sidebarPanel` | Secondary panel; `navigation` is primary |
+| `window` (macOS) | `titleBar` + `appWindows.*` | Title bar config in titleBar; new windows in appWindows |
+| `sheet` (single) | `sheets.*` (named) | Multiple sheets supported |
 
 ### Renamed event names
 
@@ -1135,18 +1157,19 @@ export default defineConfig({
 | `sidebar.itemSelected` | `sidebarPanel.itemSelected` |
 | `keyboard.accessory.itemTapped` | `keyboard.accessoryItemTapped` |
 
-### Renamed API methods
+### API changes
 
 | Current | New |
 |---|---|
-| `chrome.navigationBar.setTitle("x")` | `chrome.update({ titleBar: { title: "x" } })` |
-| `chrome.navigationBar.show()` | `chrome.update({ titleBar: { hidden: false } })` |
-| `chrome.navigationBar.setToolbarRight([...])` | `chrome.update({ titleBar: { trailingItems: [...] } })` |
-| `chrome.tabBar.setTabs([...])` | `chrome.update({ navigation: { items: [...] } })` |
-| `chrome.sheet.present()` | `chrome.update({ sheets: { mySheet: { presented: true } } })` |
-| `chrome.sheet.postMessage(x)` | `chrome.messaging.postToParent(x)` (inside child) or `chrome.messaging.postToChild("mySheet", x)` (from main) |
-| `chrome.on("event", h)` → `unsub` | `chrome.on("event", h)` → `unsub` (unchanged) |
-| `chrome.off("event", h)` | Use the returned unsubscribe function instead |
+| `chrome.navigationBar.setTitle("x")` | `chrome(titleBar({ title: "x" }))` |
+| `chrome.navigationBar.show()` | `chrome(titleBar({ hidden: false }))` |
+| `chrome.navigationBar.setToolbarRight([...])` | `chrome(titleBar({ trailingItems: [...] }))` |
+| `chrome.tabBar.setTabs([...])` | `chrome(navigation({ items: [...] }))` |
+| `chrome.sheet.present()` | `chrome(sheet("name", { url, presented: true }))` |
+| `chrome.sheet.postMessage(x)` | `chrome.messaging.postToParent(x)` (in child) or `chrome.messaging.postToChild("name", x)` (from main) |
+| `chrome.set({ ... })` | `chrome(titleBar(...), navigation(...), ...)` |
+| `chrome.on("event", h)` → unsub | `chrome.on("event", h)` → unsub (unchanged) |
+| `chrome.off("event", h)` | Use the returned unsubscribe function |
 
 ### Renamed types
 
