@@ -1,26 +1,17 @@
 import { execSync, spawn } from "node:child_process";
 import { join } from "node:path";
 
-import type { NativiteConfig, NativitePlatformPlugin } from "../index.ts";
+import type { NativiteConfig, NativitePlatformLogger, NativitePlatformPlugin } from "../index.ts";
 
+import { runXcodebuild } from "../cli/xcodebuild.ts";
 import { generateProject } from "../ios/index.ts";
-
-function formatExecSyncError(err: unknown): string {
-  if (!(err instanceof Error)) return String(err);
-
-  const execErr = err as Error & { stdout?: Buffer | string; stderr?: Buffer | string };
-  const stdout = execErr.stdout ? String(execErr.stdout).trim() : "";
-  const stderr = execErr.stderr ? String(execErr.stderr).trim() : "";
-  const details = [stderr, stdout].filter(Boolean).join("\n");
-
-  return details ? `${err.message}\n${details}` : err.message;
-}
 
 async function buildAndLaunchSimulator(
   config: NativiteConfig,
   projectRoot: string,
   simulatorName: string,
   devUrl: string,
+  logger: NativitePlatformLogger,
   appIdOverride?: string,
 ): Promise<void> {
   const appName = config.app.name;
@@ -33,19 +24,24 @@ async function buildAndLaunchSimulator(
     stdio: "pipe",
   });
 
-  execSync(
-    [
-      "xcodebuild",
-      `-project "${projectPath}"`,
-      `-scheme "${appName}"`,
-      "-configuration Debug",
-      `-destination "platform=iOS Simulator,name=${simulatorName}"`,
-      `-derivedDataPath "${derivedDataPath}"`,
-      `CONFIGURATION_BUILD_DIR="${buildDir}"`,
+  await runXcodebuild({
+    args: [
+      "-project",
+      projectPath,
+      "-scheme",
+      appName,
+      "-configuration",
+      "Debug",
+      "-destination",
+      `platform=iOS Simulator,name=${simulatorName}`,
+      "-derivedDataPath",
+      derivedDataPath,
+      `CONFIGURATION_BUILD_DIR=${buildDir}`,
       "build",
-    ].join(" "),
-    { stdio: "pipe", cwd: projectRoot },
-  );
+    ],
+    cwd: projectRoot,
+    logger,
+  });
 
   const appPath = `${buildDir}/${appName}.app`;
   execSync(`xcrun simctl install "${simulatorName}" "${appPath}"`, {
@@ -62,6 +58,7 @@ async function buildAndLaunchMacOS(
   config: NativiteConfig,
   projectRoot: string,
   devUrl: string,
+  logger: NativitePlatformLogger,
   appIdOverride?: string,
 ): Promise<void> {
   const appName = config.app.name;
@@ -70,19 +67,24 @@ async function buildAndLaunchMacOS(
   const buildDir = `/tmp/nativite-build-${appId}-macos`;
   const derivedDataPath = `/tmp/nativite-derived-${appId}-macos`;
 
-  execSync(
-    [
-      "xcodebuild",
-      `-project "${projectPath}"`,
-      `-scheme "${appName}-macOS"`,
-      "-configuration Debug",
-      '-destination "platform=macOS"',
-      `-derivedDataPath "${derivedDataPath}"`,
-      `CONFIGURATION_BUILD_DIR="${buildDir}"`,
+  await runXcodebuild({
+    args: [
+      "-project",
+      projectPath,
+      "-scheme",
+      `${appName}-macOS`,
+      "-configuration",
+      "Debug",
+      "-destination",
+      "platform=macOS",
+      "-derivedDataPath",
+      derivedDataPath,
+      `CONFIGURATION_BUILD_DIR=${buildDir}`,
       "build",
-    ].join(" "),
-    { stdio: "pipe", cwd: projectRoot },
-  );
+    ],
+    cwd: projectRoot,
+    logger,
+  });
 
   const appPath = `${buildDir}/${appName}.app/Contents/MacOS/${appName}`;
   const child = spawn(appPath, [], {
@@ -104,9 +106,9 @@ async function generateAppleProject(
     ctx.mode ?? "generate",
   );
   if (result.skipped) {
-    ctx.logger.info(`[nativite:${pluginName}] Project is up to date. Use --force to regenerate.`);
+    ctx.logger.info(`Project is up to date. Use --force to regenerate.`);
   } else {
-    ctx.logger.info(`[nativite:${pluginName}] Generated: ${result.projectPath}`);
+    ctx.logger.info(`Generated: ${result.projectPath}`);
   }
 }
 
@@ -122,31 +124,31 @@ const iosPlatformPlugin: NativitePlatformPlugin = {
     await generateProject(ctx.rootConfig, ctx.projectRoot, false, "dev");
 
     if (process.platform !== "darwin") {
-      ctx.logger.warn("[nativite:ios] Skipping iOS launch; this host is not macOS.");
+      ctx.logger.warn("Skipping iOS launch; this host is not macOS.");
       return;
     }
 
     if (ctx.launchTarget === "device") {
       ctx.logger.info(
-        "[nativite:ios] Device target; open the Xcode project and run on your device. " +
+        "Device target; open the Xcode project and run on your device. " +
           `The app will load ${ctx.devUrl}`,
       );
       return;
     }
 
     try {
-      ctx.logger.info(`[nativite:ios] Booting simulator: ${ctx.simulatorName}`);
-      ctx.logger.info("[nativite:ios] Building with xcodebuild (this may take a moment)...");
+      ctx.logger.info(`Booting simulator: ${ctx.simulatorName}`);
       await buildAndLaunchSimulator(
         ctx.rootConfig,
         ctx.projectRoot,
         ctx.simulatorName,
         ctx.devUrl,
+        ctx.logger,
         ctx.config.app.bundleId,
       );
-      ctx.logger.info(`[nativite:ios] App launched. WebView loading ${ctx.devUrl}`);
+      ctx.logger.info(`App launched. WebView loading ${ctx.devUrl}`);
     } catch (err) {
-      ctx.logger.error(`[nativite:ios] Build/launch failed:\n${formatExecSyncError(err)}`);
+      ctx.logger.error(`Build/launch failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
   async build(ctx) {
@@ -166,21 +168,22 @@ const macosPlatformPlugin: NativitePlatformPlugin = {
     await generateProject(ctx.rootConfig, ctx.projectRoot, false, "dev");
 
     if (process.platform !== "darwin") {
-      ctx.logger.warn("[nativite:macos] Skipping macOS launch; this host is not macOS.");
+      ctx.logger.warn("Skipping macOS launch; this host is not macOS.");
       return;
     }
 
     try {
-      ctx.logger.info("[nativite:macos] Building macOS target with xcodebuild...");
+      ctx.logger.info("Building macOS target...");
       await buildAndLaunchMacOS(
         ctx.rootConfig,
         ctx.projectRoot,
         ctx.devUrl,
+        ctx.logger,
         ctx.config.app.bundleId,
       );
-      ctx.logger.info(`[nativite:macos] macOS app launched. WebView loading ${ctx.devUrl}`);
+      ctx.logger.info(`macOS app launched. WebView loading ${ctx.devUrl}`);
     } catch (err) {
-      ctx.logger.error(`[nativite:macos] Build/launch failed:\n${formatExecSyncError(err)}`);
+      ctx.logger.error(`Build/launch failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
   async build(ctx) {

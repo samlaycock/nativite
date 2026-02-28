@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
-import type { LogLevel, Logger } from "vite";
+import type { Logger } from "vite";
 
 import { Command } from "commander";
-import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
@@ -13,6 +12,8 @@ import {
   resolveConfiguredPlatformRuntimes,
   serializePlatformRuntimeMetadata,
 } from "../platforms/registry.ts";
+import { createNativiteLogger, printBanner, printServerUrls } from "./logger.ts";
+import { createNativiteShortcuts } from "./shortcuts.ts";
 
 // Read the version from package.json at runtime so the CLI always reports the
 // version that was actually published, with no manual sync required.
@@ -20,12 +21,28 @@ const _require = createRequire(import.meta.url);
 const { version } = _require("../../package.json") as { version: string };
 
 type ViteApi = {
-  createLogger(level?: LogLevel, options?: { prefix?: string }): Logger;
+  createServer(inlineConfig?: Record<string, unknown>): Promise<{
+    listen(port?: number): Promise<unknown>;
+    printUrls(): void;
+    bindCLIShortcuts(options?: {
+      print?: boolean;
+      customShortcuts?: Array<{
+        key: string;
+        description: string;
+        action?(server: unknown): void | Promise<void>;
+      }>;
+    }): void;
+    close(): Promise<void>;
+    config: { root: string; logger: Logger };
+    resolvedUrls: { local: string[]; network: string[] } | null;
+    openBrowser(): void;
+  }>;
+  build(inlineConfig?: Record<string, unknown>): Promise<unknown>;
   loadConfigFromFile(
     env: { command: "build" | "serve"; mode: string },
     configFile?: string,
     configRoot?: string,
-    logLevel?: LogLevel,
+    logLevel?: string,
     customLogger?: Logger,
   ): Promise<{ config: unknown } | null>;
 };
@@ -33,25 +50,15 @@ type ViteApi = {
 let viteApiPromise: Promise<ViteApi> | undefined;
 
 function loadViteApi(): Promise<ViteApi> {
-  viteApiPromise ??= import("vite").then((vite) => ({
-    createLogger: vite.createLogger,
-    loadConfigFromFile: vite.loadConfigFromFile,
-  }));
+  viteApiPromise ??= import("vite") as unknown as Promise<ViteApi>;
   return viteApiPromise;
 }
 
-async function createNativiteLogger(logLevel: LogLevel = "info"): Promise<Logger> {
-  const vite = await loadViteApi();
-  return vite.createLogger(logLevel, { prefix: "[nativite]" });
-}
-
-async function createNativiteLoggerOrExit(): Promise<Logger> {
-  try {
-    return await createNativiteLogger();
-  } catch {
-    console.error("[nativite] Could not import vite. Make sure vite is installed in your project.");
+function ensureViteOrExit(logger: Logger): Promise<ViteApi> {
+  return loadViteApi().catch(() => {
+    logger.error("Could not import vite. Make sure vite is installed in your project.");
     process.exit(1);
-  }
+  });
 }
 
 const program = new Command();
@@ -82,17 +89,15 @@ function resolveRequestedPlatform(
   return requested;
 }
 
-function createPlatformEnv(config: NativiteConfig, selectedPlatform: string): NodeJS.ProcessEnv {
+function setPlatformEnv(config: NativiteConfig, selectedPlatform: string): void {
   const runtimes = resolveConfiguredPlatformRuntimes(config);
   const platformConfig = resolveConfigForPlatform(config, selectedPlatform);
   const errorOverlay = platformConfig.dev?.errorOverlay === true ? "true" : "false";
-  return {
-    ...process.env,
-    NATIVITE_PLATFORM: selectedPlatform,
-    NATIVITE_PLATFORMS: runtimes.map((runtime) => runtime.id).join(","),
-    NATIVITE_PLATFORM_METADATA: serializePlatformRuntimeMetadata(runtimes),
-    NATIVITE_DEV_ERROR_OVERLAY: errorOverlay,
-  };
+
+  process.env["NATIVITE_PLATFORM"] = selectedPlatform;
+  process.env["NATIVITE_PLATFORMS"] = runtimes.map((runtime) => runtime.id).join(",");
+  process.env["NATIVITE_PLATFORM_METADATA"] = serializePlatformRuntimeMetadata(runtimes);
+  process.env["NATIVITE_DEV_ERROR_OVERLAY"] = errorOverlay;
 }
 
 // ─── nativite generate ───────────────────────────────────────────────────────
@@ -103,7 +108,8 @@ program
   .option("--platform <platform>", "Target platform")
   .option("--force", "Force regeneration even if the config has not changed")
   .action(async (options: { platform?: string; force?: boolean }) => {
-    const logger = await createNativiteLoggerOrExit();
+    const logger = createNativiteLogger("nativite");
+    await ensureViteOrExit(logger);
     const cwd = process.cwd();
     const config = await loadNativiteConfig(cwd, logger);
     const platform = resolveRequestedPlatform(options.platform, config, logger);
@@ -115,7 +121,7 @@ program
 
     logger.info(`Generating ${platform} project...`);
     if (typeof runtime.plugin.generate !== "function") {
-      logger.warn(`[nativite] Platform "${platform}" has no generate hook. Nothing to generate.`);
+      logger.warn(`Platform "${platform}" has no generate hook. Nothing to generate.`);
     } else {
       const platformConfig = resolveConfigForPlatform(config, platform);
       await runtime.plugin.generate({
@@ -139,25 +145,61 @@ program
   .option("--target <target>", "Launch target: simulator or device")
   .option("--simulator <name>", "Simulator name (overrides nativite.config.ts)")
   .action(async (options: { platform?: string; target?: string; simulator?: string }) => {
-    const logger = await createNativiteLoggerOrExit();
+    const logger = createNativiteLogger("nativite");
+    const vite = await ensureViteOrExit(logger);
     const cwd = process.cwd();
     const config = await loadNativiteConfig(cwd, logger);
     const platform = resolveRequestedPlatform(options.platform, config, logger);
+    const runtimes = resolveConfiguredPlatformRuntimes(config);
+    const platformConfig = resolveConfigForPlatform(config, platform);
 
-    // Only forward --target / --simulator when they were explicitly provided.
-    // If omitted, the Vite plugin falls back to nativite.config.ts values
-    // (including iOS per-platform dev settings from platforms: [ios({...})]).
-    const env = createPlatformEnv(config, platform);
-    if (options.target !== undefined) env["NATIVITE_TARGET"] = options.target;
-    if (options.simulator !== undefined) env["NATIVITE_SIMULATOR"] = options.simulator;
+    // Set env vars directly — no subprocess needed.
+    setPlatformEnv(config, platform);
+    if (options.target !== undefined) process.env["NATIVITE_TARGET"] = options.target;
+    if (options.simulator !== undefined) process.env["NATIVITE_SIMULATOR"] = options.simulator;
 
-    const child = spawn("npx", ["vite"], {
-      stdio: "inherit",
-      env,
+    const viteLogger = createNativiteLogger("vite");
+
+    let server: Awaited<ReturnType<ViteApi["createServer"]>>;
+    try {
+      server = await vite.createServer({ customLogger: viteLogger } as Record<string, unknown>);
+    } catch (err) {
+      logger.error(
+        `Failed to create dev server: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+
+    // Graceful shutdown
+    const shutdown = async () => {
+      await server.close();
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+
+    await server.listen();
+
+    printBanner(version);
+    const simulatorName = options.simulator ?? platformConfig.dev?.simulator ?? "iPhone 16 Pro";
+    const launchTarget =
+      (options.target as "simulator" | "device" | undefined) ??
+      platformConfig.dev?.target ??
+      "simulator";
+    printServerUrls(server.resolvedUrls, platform, simulatorName);
+
+    const shortcuts = createNativiteShortcuts({
+      config,
+      platform,
+      runtimes,
+      simulatorName,
+      devUrl: server.resolvedUrls?.local[0] ?? "http://localhost:5173",
+      launchTarget,
     });
 
-    child.on("exit", (code) => {
-      process.exit(code ?? 0);
+    server.bindCLIShortcuts({
+      print: true,
+      customShortcuts: shortcuts,
     });
   });
 
@@ -168,19 +210,25 @@ program
   .description("Production build (wraps vite build)")
   .option("--platform <platform>", "Target platform")
   .action(async (options: { platform?: string }) => {
-    const logger = await createNativiteLoggerOrExit();
+    const logger = createNativiteLogger("nativite");
+    const vite = await ensureViteOrExit(logger);
     const cwd = process.cwd();
     const config = await loadNativiteConfig(cwd, logger);
     const platform = resolveRequestedPlatform(options.platform, config, logger);
 
-    const child = spawn("npx", ["vite", "build"], {
-      stdio: "inherit",
-      env: createPlatformEnv(config, platform),
-    });
+    setPlatformEnv(config, platform);
 
-    child.on("exit", (code) => {
-      process.exit(code ?? 0);
-    });
+    printBanner(version);
+    logger.info(`Building for ${platform}...`);
+
+    const viteLogger = createNativiteLogger("build");
+
+    try {
+      await vite.build({ customLogger: viteLogger } as Record<string, unknown>);
+    } catch (err) {
+      logger.error(`Build failed: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
   });
 
 // ─── Config loading ───────────────────────────────────────────────────────────
