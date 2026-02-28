@@ -708,6 +708,37 @@ describe("chrome.messaging", () => {
   });
 });
 
+// ─── nativiteReceive integration ────────────────────────────────────────────
+
+describe("nativiteReceive", () => {
+  it("is registered on window so native can deliver events", () => {
+    // Trigger lazy initialisation that chrome.on() performs.
+    const handler = mock(() => {});
+    const unsub = chrome.on(handler);
+
+    const receive = (globalThis as unknown as Record<string, unknown>)["nativiteReceive"] as
+      | ((msg: unknown) => void)
+      | undefined;
+    expect(typeof receive).toBe("function");
+    unsub();
+  });
+
+  it("events delivered via nativiteReceive reach chrome.on() handlers", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("toolbar.itemPressed", handler);
+
+    const receive = (globalThis as unknown as Record<string, unknown>)["nativiteReceive"] as (
+      msg: unknown,
+    ) => void;
+
+    receive({ event: "toolbar.itemPressed", data: { id: "share" } });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith({ type: "toolbar.itemPressed", id: "share" });
+    unsub();
+  });
+});
+
 // ─── Unified ButtonItem across areas ────────────────────────────────────────
 
 describe("unified ButtonItem across chrome areas", () => {

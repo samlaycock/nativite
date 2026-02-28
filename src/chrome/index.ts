@@ -137,17 +137,37 @@ function handleIncoming(event: ChromeEvent): void {
 // Lazy + idempotent: deferred until first use so test mocks are ready.
 
 let eventListenerBound = false;
+let boundEventHandler: ((e: Event) => void) | undefined;
+
+function onNativiteEvent(e: Event): void {
+  const detail = (e as CustomEvent).detail as { event: string; data: unknown };
+  const event = { type: detail.event, ...(detail.data as object) } as ChromeEvent;
+  handleIncoming(event);
+}
 
 function ensureEventListener(): void {
   if (eventListenerBound) return;
   eventListenerBound = true;
 
   if (typeof window !== "undefined") {
-    window.addEventListener("__nativite_event__", (e: Event) => {
-      const detail = (e as CustomEvent).detail as { event: string; data: unknown };
-      const event = { type: detail.event, ...(detail.data as object) } as ChromeEvent;
-      handleIncoming(event);
-    });
+    boundEventHandler = onNativiteEvent;
+    window.addEventListener("__nativite_event__", boundEventHandler);
+
+    // Ensure `window.nativiteReceive` exists so native can deliver events even
+    // when the client module (`nativite/client`) has not been imported. If the
+    // client module loads later it will overwrite this with its own version that
+    // also dispatches to bridge.subscribe listeners — that is fine because it
+    // emits the same CustomEvent.
+    const w = window as unknown as Record<string, unknown>;
+    if (typeof w["nativiteReceive"] !== "function") {
+      w["nativiteReceive"] = (message: { event: string; data: unknown }): void => {
+        window.dispatchEvent(
+          new CustomEvent("__nativite_event__", {
+            detail: { event: message.event, data: message.data },
+          }),
+        );
+      };
+    }
   }
 }
 
@@ -346,6 +366,10 @@ export function _resetChromeState(): void {
   wildcardListeners.clear();
   _pendingFlush = false;
   _flushGeneration++;
+  if (boundEventHandler && typeof window !== "undefined") {
+    window.removeEventListener("__nativite_event__", boundEventHandler);
+    boundEventHandler = undefined;
+  }
   eventListenerBound = false;
 }
 
