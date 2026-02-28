@@ -50,6 +50,26 @@ import WebKit
 // Registered as a bridge handler under "__chrome_set_state__".
 private let nativiteSmallDetentIdentifier = UISheetPresentationController.Detent.Identifier("nativite.small")
 
+/// A view that only intercepts touches on the UITabBar, passing all others
+/// through to sibling views below (the WKWebView).
+private class PassThroughView: UIView {
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    let result = super.hitTest(point, with: event)
+    guard let result else { return nil }
+    // Pass through if the hit landed on this wrapper itself (empty space).
+    if result === self { return nil }
+    // Intercept if the hit target or any of its ancestors is a UIControl
+    // (buttons, text fields, tab bar items, search fields, etc.).
+    var current: UIView? = result
+    while let v = current, v !== self {
+      if v is UIControl { return result }
+      current = v.superview
+    }
+    // Not a control — pass through to the web view below.
+    return nil
+  }
+}
+
 class NativiteChrome: NSObject {
 
   weak var viewController: ViewController?
@@ -58,9 +78,18 @@ class NativiteChrome: NSObject {
   weak var vars: NativiteVars?
   // NativiteKeyboard handles the input accessory bar and keyboard dismiss mode.
   weak var keyboard: NativiteKeyboard?
-  // Self-managed tab bar — not backed by a UITabBarController. Installed lazily
-  // into vc.view on the first applyTabBar(_:) call.
+  // Self-managed tab bar — used on < iOS 18. Installed lazily into vc.view.
   private lazy var tabBar = UITabBar()
+  /// iOS 18+ tab bar controller — used for UITab/UISearchTab support.
+  /// Lazily created on the first applyNavigationModern call.
+  private var tabBarController: UITabBarController?
+  /// Pass-through wrapper installed into vc.view on the iOS 18+ path.
+  private var tabBarWrapperView: PassThroughView?
+  /// Stored search bar config applied when UISearchTab search activates.
+  private var pendingSearchBarConfig: [String: Any]?
+  /// True while the UISearchTab search session is active. Prevents
+  /// applyNavigationModern from rebuilding tabs mid-search.
+  private var isNavigationSearchActive = false
   private var lastAppliedAreas: Set<String> = []
   /// Cache of bar button items keyed by "{position}:{id}" for identity-based
   /// reuse. Preserving the same UIBarButtonItem object reference lets UIKit
@@ -125,8 +154,15 @@ class NativiteChrome: NSObject {
 
     let navH  = navController.map  { $0.navigationBar.frame.height } ?? 0
     let navV  = navController.map  { !$0.isNavigationBarHidden       } ?? false
-    let tabH  = tabBar.superview != nil ? tabBar.frame.height : 0
-    let tabV  = tabBar.superview != nil && !tabBar.isHidden
+    let tabH: CGFloat
+    let tabV: Bool
+    if #available(iOS 18.0, *), let tbc = tabBarController {
+      tabH = tbc.tabBar.frame.height
+      tabV = !tbc.tabBar.isHidden
+    } else {
+      tabH = tabBar.superview != nil ? tabBar.frame.height : 0
+      tabV = tabBar.superview != nil && !tabBar.isHidden
+    }
     let toolH = navController.map  { $0.toolbar.frame.height          } ?? 0
     let toolV = navController.map  { !$0.isToolbarHidden              } ?? false
 
@@ -337,9 +373,28 @@ ${applyInitialStateMethod}
 
   // ── Navigation (Tab Bar) ───────────────────────────────────────────────────
 
+  /// The ID of the navigation item with role "search", if any.
+  private var navigationSearchItemId: String?
+  /// Lazily created search controller for navigation search-role items.
+  /// Attached to the ViewController's navigationItem when the search tab is tapped.
+  /// Used only on the legacy (< iOS 18) path.
+  private var navigationSearchController: UISearchController?
+  /// Tracks the last non-search tab that was selected, so it can be
+  /// restored when the user cancels the search.
+  private var lastNonSearchTabId: String?
+
   private func applyNavigation(_ state: [String: Any]) {
     guard let vc = viewController else { return }
+    if #available(iOS 18.0, *) {
+      applyNavigationModern(state, vc: vc)
+    } else {
+      applyNavigationLegacy(state, vc: vc)
+    }
+  }
 
+  // ── Navigation: Legacy Path (< iOS 18) ──────────────────────────────────
+
+  private func applyNavigationLegacy(_ state: [String: Any], vc: ViewController) {
     // Lazily install the owned tab bar into vc.view on first use.
     if tabBar.superview == nil {
       tabBar.delegate = self
@@ -352,12 +407,24 @@ ${applyInitialStateMethod}
       ])
     }
 
+    navigationSearchItemId = nil
+
     if let items = state["items"] as? [[String: Any]] {
       tabBar.items = items.enumerated().compactMap { (index, itemState) -> UITabBarItem? in
         guard let label = itemState["label"] as? String else { return nil }
-        let image = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
+        let role = itemState["role"] as? String
+        let id = itemState["id"] as? String
+
+        // Track the search item ID for event routing.
+        if role == "search", let id {
+          self.navigationSearchItemId = id
+        }
+
+        let icon = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
+        // Default to magnifying glass for search-role items when no icon is provided.
+        let image = icon ?? (role == "search" ? UIImage(systemName: "magnifyingglass") : nil)
         let item = UITabBarItem(title: label, image: image, tag: index)
-        item.accessibilityIdentifier = itemState["id"] as? String
+        item.accessibilityIdentifier = id
         if let badge = itemState["badge"] as? String {
           item.badgeValue = badge
         } else if let badge = itemState["badge"] as? Int {
@@ -372,8 +439,194 @@ ${applyInitialStateMethod}
     if let activeId = state["activeItem"] as? String,
        let item = tabBar.items?.first(where: { $0.accessibilityIdentifier == activeId }) {
       tabBar.selectedItem = item
+      if activeId != navigationSearchItemId {
+        lastNonSearchTabId = activeId
+      }
     }
     tabBar.isHidden = (state["hidden"] as? Bool) ?? false
+
+    // Configure search controller for the search-role tab.
+    if navigationSearchItemId != nil {
+      if navigationSearchController == nil {
+        let sc = UISearchController(searchResultsController: nil)
+        sc.obscuresBackgroundDuringPresentation = false
+        sc.searchBar.delegate = self
+        navigationSearchController = sc
+      }
+      if let searchBarState = state["searchBar"] as? [String: Any] {
+        let searchBar = navigationSearchController!.searchBar
+        if let placeholder = searchBarState["placeholder"] as? String {
+          searchBar.placeholder = placeholder
+        }
+        if let value = searchBarState["value"] as? String {
+          searchBar.text = value
+        }
+        if let shows = searchBarState["cancelButtonVisible"] as? Bool {
+          searchBar.showsCancelButton = shows
+        }
+      }
+    } else {
+      // No search-role item — tear down search controller if it was previously set.
+      if navigationSearchController != nil {
+        vc.navigationItem.searchController = nil
+        navigationSearchController = nil
+      }
+    }
+  }
+
+  // ── Navigation: Modern Path (iOS 18+) ───────────────────────────────────
+  // Uses UITabBarController with UITab/UISearchTab for native tab bar
+  // behaviour, floating design on iOS 26+, and automatic sidebar adaptation.
+
+  @available(iOS 18.0, *)
+  private func applyNavigationModern(_ state: [String: Any], vc: ViewController) {
+    // Lazily create UITabBarController and install into vc.view.
+    if tabBarController == nil {
+      let tbc = UITabBarController()
+      tbc.delegate = self
+      tbc.view.backgroundColor = .clear
+
+      let wrapper = PassThroughView()
+      wrapper.translatesAutoresizingMaskIntoConstraints = false
+      wrapper.backgroundColor = .clear
+
+      tbc.view.translatesAutoresizingMaskIntoConstraints = false
+      wrapper.addSubview(tbc.view)
+      NSLayoutConstraint.activate([
+        tbc.view.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+        tbc.view.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+        tbc.view.topAnchor.constraint(equalTo: wrapper.topAnchor),
+        tbc.view.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+      ])
+
+      vc.addChild(tbc)
+      vc.view.addSubview(wrapper)
+      NSLayoutConstraint.activate([
+        wrapper.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
+        wrapper.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor),
+        wrapper.topAnchor.constraint(equalTo: vc.view.topAnchor),
+        wrapper.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor),
+      ])
+      tbc.didMove(toParent: vc)
+
+      tabBarController = tbc
+      tabBarWrapperView = wrapper
+    }
+
+    guard let tbc = tabBarController else { return }
+
+    // Don't rebuild tabs or change selection while the search session is
+    // active — doing so cancels the search and causes focus loss.
+    if isNavigationSearchActive {
+      tbc.tabBar.isHidden = (state["hidden"] as? Bool) ?? false
+      pendingSearchBarConfig = state["searchBar"] as? [String: Any]
+      return
+    }
+
+    // Map NavigationConfig.style to UITabBarController.Mode.
+    if let styleStr = state["style"] as? String {
+      switch styleStr {
+      case "tabs":    tbc.mode = .tabBar
+      case "sidebar": tbc.mode = .tabSidebar
+      default:        tbc.mode = .automatic
+      }
+    } else {
+      tbc.mode = .automatic
+    }
+
+    // Build UITab/UISearchTab array from items.
+    navigationSearchItemId = nil
+
+    if let items = state["items"] as? [[String: Any]] {
+      var tabs: [UITab] = []
+
+      for itemState in items {
+        guard let id = itemState["id"] as? String,
+              let label = itemState["label"] as? String else { continue }
+
+        let role = itemState["role"] as? String
+        let icon = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
+        let subtitle = itemState["subtitle"] as? String
+
+        if role == "search" {
+          navigationSearchItemId = id
+          let searchImage = icon ?? UIImage(systemName: "magnifyingglass")
+          let hasSearchBar = state["searchBar"] is [String: Any]
+          let searchTab = UISearchTab(viewControllerProvider: { [weak self] _ in
+            let placeholder = UIViewController()
+            placeholder.view.backgroundColor = .clear
+            if hasSearchBar {
+              let sc = UISearchController(searchResultsController: nil)
+              sc.obscuresBackgroundDuringPresentation = false
+              sc.searchResultsUpdater = self
+              sc.searchBar.delegate = self
+              placeholder.navigationItem.searchController = sc
+              let nav = UINavigationController(rootViewController: placeholder)
+              nav.isNavigationBarHidden = true
+              nav.view.backgroundColor = .clear
+              return nav
+            }
+            return placeholder
+          })
+          searchTab.title = label
+          searchTab.image = searchImage
+          if let subtitle { searchTab.subtitle = subtitle }
+          if #available(iOS 26.0, *), hasSearchBar {
+            searchTab.automaticallyActivatesSearch = true
+          }
+          tabs.append(searchTab)
+        } else {
+          let tab = UITab(title: label, image: icon, identifier: id) { _ in
+            let placeholder = UIViewController()
+            placeholder.view.backgroundColor = .clear
+            return placeholder
+          }
+          if let subtitle { tab.subtitle = subtitle }
+
+          if let badge = itemState["badge"] as? String {
+            tab.badgeValue = badge
+          } else if let badge = itemState["badge"] as? Int {
+            tab.badgeValue = String(badge)
+          } else if itemState["badge"] is NSNull {
+            tab.badgeValue = nil
+          }
+
+          tabs.append(tab)
+        }
+      }
+
+      tbc.tabs = tabs
+    }
+
+    // Active item selection.
+    if let activeId = state["activeItem"] as? String {
+      let tab: UITab?
+      if activeId == navigationSearchItemId {
+        tab = tbc.tabs.first(where: { $0 is UISearchTab })
+      } else {
+        tab = tbc.tabs.first(where: { $0.identifier == activeId })
+      }
+      if let tab {
+        tbc.selectedTab = tab
+        if activeId != navigationSearchItemId {
+          lastNonSearchTabId = activeId
+        }
+      }
+    }
+
+    // Hidden state.
+    tbc.tabBar.isHidden = (state["hidden"] as? Bool) ?? false
+
+    // Store search bar config for application when UISearchTab activates.
+    pendingSearchBarConfig = state["searchBar"] as? [String: Any]
+  }
+
+  /// Returns true when the given search bar belongs to the navigation search
+  /// controller (legacy path) or the UITabBarController's search (modern path).
+  private func isNavigationSearchBar(_ searchBar: UISearchBar) -> Bool {
+    if searchBar === navigationSearchController?.searchBar { return true }
+    if #available(iOS 18.0, *), tabBarController != nil { return true }
+    return false
   }
 
   // ── Toolbar ────────────────────────────────────────────────────────────────
@@ -639,7 +892,22 @@ ${applyInitialStateMethod}
   }
 
   private func resetNavigation() {
+    if #available(iOS 18.0, *) {
+      if let tbc = tabBarController {
+        tbc.willMove(toParent: nil)
+        tbc.view.removeFromSuperview()
+        tbc.removeFromParent()
+        tabBarController = nil
+      }
+      tabBarWrapperView?.removeFromSuperview()
+      tabBarWrapperView = nil
+      pendingSearchBarConfig = nil
+      isNavigationSearchActive = false
+    }
     tabBar.isHidden = true
+    navigationSearchItemId = nil
+    navigationSearchController = nil
+    lastNonSearchTabId = nil
   }
 
   private func resetToolbar() {
@@ -677,7 +945,116 @@ ${sendEventMethod}
 extension NativiteChrome: UITabBarDelegate {
   func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
     guard let id = item.accessibilityIdentifier else { return }
+
+    if id == navigationSearchItemId {
+      // Search-role tab tapped — attach the search controller to the
+      // navigation item and activate it, mimicking UISearchTab behaviour.
+      if let vc = viewController, let sc = navigationSearchController {
+        vc.navigationItem.searchController = sc
+        DispatchQueue.main.async { sc.isActive = true }
+      }
+    } else {
+      // Track the last non-search tab for restoring on cancel.
+      lastNonSearchTabId = id
+    }
+
     sendEvent(name: "navigation.itemPressed", data: ["id": id])
+  }
+}
+
+// ─── UITabBarControllerDelegate (iOS 18+) ─────────────────────────────────────
+
+@available(iOS 18.0, *)
+extension NativiteChrome: UITabBarControllerDelegate {
+  func tabBarController(
+    _ tabBarController: UITabBarController,
+    didSelectTab selectedTab: UITab,
+    previousTab: UITab?
+  ) {
+    let id: String
+    if selectedTab is UISearchTab, let searchId = navigationSearchItemId {
+      id = searchId
+    } else {
+      id = selectedTab.identifier
+    }
+    if id != navigationSearchItemId {
+      lastNonSearchTabId = id
+    }
+    sendEvent(name: "navigation.itemPressed", data: ["id": id])
+  }
+
+  func tabBarController(
+    _ tabBarController: UITabBarController,
+    willBeginSearch searchController: UISearchController
+  ) {
+    isNavigationSearchActive = true
+    searchController.searchResultsUpdater = self
+    searchController.searchBar.delegate = self
+    if let config = pendingSearchBarConfig {
+      if let p = config["placeholder"] as? String {
+        searchController.searchBar.placeholder = p
+      }
+      if let v = config["value"] as? String {
+        searchController.searchBar.text = v
+      }
+      if let c = config["cancelButtonVisible"] as? Bool {
+        searchController.searchBar.showsCancelButton = c
+      }
+    }
+  }
+
+  func tabBarController(
+    _ tabBarController: UITabBarController,
+    willEndSearch searchController: UISearchController
+  ) {
+    sendEvent(name: "navigation.searchCancelled", data: [:])
+    // Defer state changes until after UIKit finishes its end-of-search
+    // transition. Clearing isNavigationSearchActive or setting selectedTab
+    // synchronously here conflicts with the in-progress transition.
+    let prevId = lastNonSearchTabId
+    DispatchQueue.main.async { [weak self, weak tabBarController] in
+      self?.isNavigationSearchActive = false
+      if let prevId,
+         let tbc = tabBarController,
+         let tab = tbc.tabs.first(where: { $0.identifier == prevId }) {
+        tbc.selectedTab = tab
+      }
+    }
+  }
+}
+
+// ─── UISearchBarDelegate (navigation search) ─────────────────────────────────
+
+extension NativiteChrome: UISearchBarDelegate {
+  func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+    guard isNavigationSearchBar(searchBar) else { return }
+    sendEvent(name: "navigation.searchChanged", data: ["value": searchText])
+  }
+
+  func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+    guard isNavigationSearchBar(searchBar) else { return }
+    sendEvent(name: "navigation.searchSubmitted", data: ["value": searchBar.text ?? ""])
+  }
+
+  func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+    guard isNavigationSearchBar(searchBar) else { return }
+    // Legacy path: deactivate the search controller and restore the previous tab.
+    navigationSearchController?.isActive = false
+    viewController?.navigationItem.searchController = nil
+    if let prevId = lastNonSearchTabId,
+       let item = tabBar.items?.first(where: { $0.accessibilityIdentifier == prevId }) {
+      tabBar.selectedItem = item
+    }
+    sendEvent(name: "navigation.searchCancelled", data: [:])
+  }
+}
+
+// ─── UISearchResultsUpdating (iOS 18+ navigation search) ──────────────────────
+
+extension NativiteChrome: UISearchResultsUpdating {
+  func updateSearchResults(for searchController: UISearchController) {
+    let text = searchController.searchBar.text ?? ""
+    sendEvent(name: "navigation.searchChanged", data: ["value": text])
   }
 }
 

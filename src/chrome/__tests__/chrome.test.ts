@@ -94,6 +94,41 @@ describe("factory functions", () => {
     expect(el._config).toMatchObject({ items: [{ id: "home" }] });
   });
 
+  it("navigation() accepts items with role 'search'", () => {
+    const el = navigation({
+      items: [
+        { id: "home", label: "Home", icon: "house" },
+        { id: "search", label: "Search", icon: "magnifyingglass", role: "search" },
+      ],
+    });
+    expect(el._area).toBe("navigation");
+    expect(el._config).toMatchObject({
+      items: [{ id: "home" }, { id: "search", role: "search" }],
+    });
+  });
+
+  it("navigation() accepts items with subtitle", () => {
+    const el = navigation({
+      items: [{ id: "home", label: "Home", icon: "house", subtitle: "Welcome" }],
+    });
+    expect(el._config).toMatchObject({
+      items: [{ id: "home", subtitle: "Welcome" }],
+    });
+  });
+
+  it("navigation() accepts searchBar config", () => {
+    const el = navigation({
+      items: [
+        { id: "home", label: "Home", icon: "house" },
+        { id: "search", label: "Search", icon: "magnifyingglass", role: "search" },
+      ],
+      searchBar: { placeholder: "Search...", value: "" },
+    });
+    expect(el._config).toMatchObject({
+      searchBar: { placeholder: "Search..." },
+    });
+  });
+
   it("toolbar() returns a ChromeElement with _area 'toolbar'", () => {
     const el = toolbar({ items: [] });
     expect(el._area).toBe("toolbar");
@@ -166,6 +201,26 @@ describe("item constructors", () => {
 
   it("navItem() returns the NavigationItem config unchanged", () => {
     const config = { id: "home", label: "Home", icon: "house" };
+    expect(navItem(config)).toBe(config);
+  });
+
+  it("navItem() returns a search-role NavigationItem unchanged", () => {
+    const config = {
+      id: "search",
+      label: "Search",
+      icon: "magnifyingglass",
+      role: "search" as const,
+    };
+    expect(navItem(config)).toBe(config);
+  });
+
+  it("navItem() returns a NavigationItem with subtitle unchanged", () => {
+    const config = {
+      id: "home",
+      label: "Home",
+      icon: "house",
+      subtitle: "Welcome",
+    };
     expect(navItem(config)).toBe(config);
   });
 
@@ -354,6 +409,35 @@ describe("chrome()", () => {
     const state = lastState() as Record<string, unknown>;
     const sheets = state["sheets"] as Record<string, { presented: boolean }>;
     expect(sheets["settings"]!.presented).toBe(true);
+  });
+
+  it("sends navigation with searchBar to native", () => {
+    chrome(
+      navigation({
+        items: [
+          { id: "home", label: "Home", icon: "house" },
+          { id: "search", label: "Search", icon: "magnifyingglass", role: "search" },
+        ],
+        searchBar: { placeholder: "Search items...", value: "query" },
+      }),
+    );
+    _drainFlush();
+    const state = lastState() as Record<string, unknown>;
+    const nav = state["navigation"] as { items: unknown[]; searchBar: unknown };
+    expect(nav.items[1]).toMatchObject({ id: "search", role: "search" });
+    expect(nav.searchBar).toEqual({ placeholder: "Search items...", value: "query" });
+  });
+
+  it("sends navigation with subtitle to native", () => {
+    chrome(
+      navigation({
+        items: [{ id: "home", label: "Home", icon: "house", subtitle: "Main page" }],
+      }),
+    );
+    _drainFlush();
+    const state = lastState() as Record<string, unknown>;
+    const nav = state["navigation"] as { items: { subtitle: string }[] };
+    expect(nav.items[0]!.subtitle).toBe("Main page");
   });
 
   // ─── Flush coalescing ────────────────────────────────────────────────────
@@ -597,6 +681,37 @@ describe("sheet events", () => {
       message: "Not found",
       code: 404,
     });
+    unsub();
+  });
+});
+
+// ─── Navigation search events ────────────────────────────────────────────────
+
+describe("navigation search events", () => {
+  it("navigation.searchChanged fires with value", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("navigation.searchChanged", handler);
+    simulateEvent("navigation.searchChanged", { value: "hello" });
+    expect(handler).toHaveBeenCalledWith({ type: "navigation.searchChanged", value: "hello" });
+    unsub();
+  });
+
+  it("navigation.searchSubmitted fires with value", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("navigation.searchSubmitted", handler);
+    simulateEvent("navigation.searchSubmitted", { value: "final query" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "navigation.searchSubmitted",
+      value: "final query",
+    });
+    unsub();
+  });
+
+  it("navigation.searchCancelled fires with no extra fields", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("navigation.searchCancelled", handler);
+    simulateEvent("navigation.searchCancelled", {});
+    expect(handler).toHaveBeenCalledWith({ type: "navigation.searchCancelled" });
     unsub();
   });
 });

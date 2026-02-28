@@ -266,63 +266,230 @@ describe("nativiteChromeTemplate", () => {
     });
   });
 
-  describe("navigation (tab bar)", () => {
-    it("applyNavigation does not guard on tabBarController (always nil in single-WebView architecture)", () => {
+  describe("navigation (tab bar) — legacy path", () => {
+    it("applyNavigationLegacy does not reference tabBarController", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyNavigation");
+      const start = output.indexOf("func applyNavigationLegacy");
       expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
+      const end = output.indexOf("\n  // ── Navigation: Modern", start + 1);
       const body = end !== -1 ? output.slice(start, end) : output.slice(start);
       expect(body).not.toContain("tabBarController");
     });
 
-    it("NativiteChrome conforms to UITabBarDelegate to receive tab-selection callbacks", () => {
+    it("NativiteChrome conforms to UITabBarDelegate for the legacy tab-selection path", () => {
       const output = nativiteChromeTemplate(baseConfig);
       expect(output).toContain("UITabBarDelegate");
     });
 
-    it("dispatches navigation.itemSelected when the user selects a tab", () => {
+    it("dispatches navigation.itemPressed when the user selects a tab", () => {
       const output = nativiteChromeTemplate(baseConfig);
       expect(output).toContain('"navigation.itemPressed"');
     });
 
-    it("uses label key instead of title for tab items", () => {
+    it("uses label key instead of title for tab items in legacy path", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyNavigation");
+      const start = output.indexOf("func applyNavigationLegacy");
       expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
+      const end = output.indexOf("\n  // ── Navigation: Modern", start + 1);
       const body = end !== -1 ? output.slice(start, end) : output.slice(start);
       expect(body).toContain('itemState["label"]');
       expect(body).not.toContain('itemState["title"]');
     });
 
-    it("uses icon key instead of systemImage for tab icons", () => {
+    it("uses icon key instead of systemImage for tab icons in legacy path", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyNavigation");
+      const start = output.indexOf("func applyNavigationLegacy");
       expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
+      const end = output.indexOf("\n  // ── Navigation: Modern", start + 1);
       const body = end !== -1 ? output.slice(start, end) : output.slice(start);
       expect(body).toContain('itemState["icon"]');
       expect(body).not.toContain('itemState["systemImage"]');
     });
 
-    it("uses activeItem key instead of selectedTabId", () => {
+    it("uses activeItem key instead of selectedTabId in legacy path", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyNavigation");
+      const start = output.indexOf("func applyNavigationLegacy");
       expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
+      const end = output.indexOf("\n  // ── Navigation: Modern", start + 1);
       const body = end !== -1 ? output.slice(start, end) : output.slice(start);
       expect(body).toContain('state["activeItem"]');
       expect(body).not.toContain('state["selectedTabId"]');
     });
+  });
 
-    it("pushVarUpdates reads tab geometry from the owned UITabBar, not tabBarController", () => {
+  describe("navigation (tab bar) — modern path (iOS 18+)", () => {
+    it("branches on #available(iOS 18.0, *) in applyNavigation", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigation(");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  // ── Navigation: Legacy", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("#available(iOS 18.0, *)");
+      expect(body).toContain("applyNavigationModern");
+      expect(body).toContain("applyNavigationLegacy");
+    });
+
+    it("creates UITabBarController as child VC with PassThroughView wrapper", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigationModern");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Returns true", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("UITabBarController()");
+      expect(body).toContain("PassThroughView()");
+      expect(body).toContain("addChild(tbc)");
+      expect(body).toContain("didMove(toParent: vc)");
+    });
+
+    it("uses UITab for regular items and UISearchTab for search-role items", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigationModern");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Returns true", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("UITab(title:");
+      expect(body).toContain("UISearchTab(viewControllerProvider:");
+    });
+
+    it("enables automaticallyActivatesSearch on iOS 26+ when searchBar is configured", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigationModern");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Returns true", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("#available(iOS 26.0, *), hasSearchBar");
+      expect(body).toContain("automaticallyActivatesSearch = true");
+    });
+
+    it("maps style property to UITabBarController.Mode", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigationModern");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Returns true", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("tbc.mode = .tabBar");
+      expect(body).toContain("tbc.mode = .tabSidebar");
+      expect(body).toContain("tbc.mode = .automatic");
+    });
+
+    it("reads subtitle from item state and maps to UITab.subtitle", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigationModern");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Returns true", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain('itemState["subtitle"]');
+    });
+
+    it("uses selectedTab for active item instead of selectedItem", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigationModern");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Returns true", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("tbc.selectedTab = tab");
+    });
+
+    it("conforms to UITabBarControllerDelegate with @available(iOS 18.0, *)", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("@available(iOS 18.0, *)");
+      expect(output).toContain("UITabBarControllerDelegate");
+      expect(output).toContain("didSelectTab selectedTab: UITab");
+    });
+
+    it("handles UISearchTab search events through willBeginSearch and willEndSearch", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("willBeginSearch searchController: UISearchController");
+      expect(output).toContain("willEndSearch searchController: UISearchController");
+    });
+
+    it("uses UISearchResultsUpdating for search text change events", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("UISearchResultsUpdating");
+      expect(output).toContain("updateSearchResults(for searchController:");
+      expect(output).toContain("searchController.searchResultsUpdater = self");
+    });
+
+    it("sets isNavigationSearchActive flag in willBeginSearch and clears in willEndSearch", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const beginStart = output.indexOf("willBeginSearch");
+      expect(beginStart).toBeGreaterThan(-1);
+      const beginEnd = output.indexOf("\n  func tabBarController", beginStart + 1);
+      const beginBody =
+        beginEnd !== -1 ? output.slice(beginStart, beginEnd) : output.slice(beginStart);
+      expect(beginBody).toContain("isNavigationSearchActive = true");
+
+      const endStart = output.indexOf("willEndSearch");
+      expect(endStart).toBeGreaterThan(-1);
+      const endEnd = output.indexOf("\n}", endStart + 1);
+      const endBody = endEnd !== -1 ? output.slice(endStart, endEnd) : output.slice(endStart);
+      expect(endBody).toContain("isNavigationSearchActive = false");
+    });
+
+    it("skips tab rebuild in applyNavigationModern when search is active", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigationModern");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Returns true", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("if isNavigationSearchActive");
+    });
+
+    it("applies pending search bar config in willBeginSearch", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("willBeginSearch");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  func tabBarController", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("pendingSearchBarConfig");
+      expect(body).toContain("searchController.searchBar.delegate = self");
+    });
+
+    it("restores previous tab and fires searchCancelled in willEndSearch", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("willEndSearch");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n}", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("lastNonSearchTabId");
+      expect(body).toContain("tbc.selectedTab = tab");
+      expect(body).toContain('"navigation.searchCancelled"');
+    });
+
+    it("PassThroughView intercepts touches on UIControl descendants", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("class PassThroughView: UIView");
+      expect(output).toContain("override func hitTest");
+      expect(output).toContain("v is UIControl");
+    });
+
+    it("resetNavigation tears down UITabBarController child VC containment", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func resetNavigation");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  private func resetToolbar", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("willMove(toParent: nil)");
+      expect(body).toContain("removeFromParent()");
+      expect(body).toContain("tabBarController = nil");
+      expect(body).toContain("tabBarWrapperView = nil");
+    });
+
+    it("pushVarUpdates reads tab height from UITabBarController when available", () => {
       const output = nativiteChromeTemplate(baseConfig);
       const start = output.indexOf("func pushVarUpdates");
       expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).not.toContain("tabBarController");
+      const end = output.indexOf("\n${" + "applyInitialStateMethod}");
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start, start + 500);
+      expect(body).toContain("tabBarController");
+      expect(body).toContain("tbc.tabBar.frame.height");
+    });
+
+    it("isNavigationSearchBar recognises both legacy and modern search bars", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("func isNavigationSearchBar");
+      expect(output).toContain("navigationSearchController?.searchBar");
+      expect(output).toContain("tabBarController != nil");
     });
   });
 

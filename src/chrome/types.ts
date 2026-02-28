@@ -66,11 +66,13 @@ export interface NavigationItem {
   readonly label: string;
   /** Required: an icon is mandatory for primary navigation items. */
   readonly icon: string;
+  /** Secondary text below the label. Shown in the iOS 18+ floating tab bar. */
+  readonly subtitle?: string;
   readonly badge?: string | number | null;
   readonly disabled?: boolean;
   /**
    * Special role for this navigation item.
-   * "search" — iOS 26+ search tab that expands into a search field when tapped.
+   * "search" — iOS 18+ search tab that expands into a search field when tapped.
    * The search field is configured via NavigationConfig.searchBar.
    */
   readonly role?: "search";
@@ -140,6 +142,11 @@ export interface NavigationConfig {
    */
   readonly style?: "tabs" | "sidebar" | "auto";
   readonly hidden?: boolean;
+  /**
+   * Search field configuration for the search-role tab.
+   * Only meaningful when one of the items has role: "search".
+   */
+  readonly searchBar?: SearchBarConfig;
 }
 
 export interface ToolbarConfig {
@@ -251,6 +258,9 @@ export type ChromeEvent =
   | { readonly type: "titleBar.searchSubmitted"; readonly value: string }
   | { readonly type: "titleBar.searchCancelled" }
   | { readonly type: "navigation.itemPressed"; readonly id: string }
+  | { readonly type: "navigation.searchChanged"; readonly value: string }
+  | { readonly type: "navigation.searchSubmitted"; readonly value: string }
+  | { readonly type: "navigation.searchCancelled" }
   | { readonly type: "sidebarPanel.itemPressed"; readonly id: string }
   | { readonly type: "toolbar.itemPressed"; readonly id: string }
   | { readonly type: "toolbar.menuItemPressed"; readonly id: string }
