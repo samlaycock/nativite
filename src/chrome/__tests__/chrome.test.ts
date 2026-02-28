@@ -159,6 +159,11 @@ describe("item constructors", () => {
     expect(button(config)).toBe(config);
   });
 
+  it("button() passes through the tint property", () => {
+    const config = { id: "flag", icon: "flag", tint: "#FF6600" };
+    expect(button(config)).toBe(config);
+  });
+
   it("navItem() returns the NavigationItem config unchanged", () => {
     const config = { id: "home", label: "Home", icon: "house" };
     expect(navItem(config)).toBe(config);

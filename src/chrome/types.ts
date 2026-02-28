@@ -21,6 +21,11 @@ export interface ButtonItem {
    */
   readonly style?: "plain" | "primary" | "destructive";
   readonly disabled?: boolean;
+  /**
+   * Custom foreground colour applied to the icon and label.
+   * Accepts any platform colour string (e.g. "#FF6600").
+   */
+  readonly tint?: string;
   /** Badge overlaid on the item. Pass null to remove. */
   readonly badge?: string | number | null;
   /**
@@ -63,6 +68,12 @@ export interface NavigationItem {
   readonly icon: string;
   readonly badge?: string | number | null;
   readonly disabled?: boolean;
+  /**
+   * Special role for this navigation item.
+   * "search" — iOS 26+ search tab that expands into a search field when tapped.
+   * The search field is configured via NavigationConfig.searchBar.
+   */
+  readonly role?: "search";
 }
 
 export interface SidebarItem {
