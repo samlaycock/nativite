@@ -62,6 +62,13 @@ class NativiteChrome: NSObject {
   // into vc.view on the first applyTabBar(_:) call.
   private lazy var tabBar = UITabBar()
   private var lastAppliedAreas: Set<String> = []
+  /// Cache of bar button items keyed by "{position}:{id}" for identity-based
+  /// reuse. Preserving the same UIBarButtonItem object reference lets UIKit
+  /// animate transitions (and morph liquid-glass capsules on iOS 26+).
+  private var barItemCache: [String: UIBarButtonItem] = [:]
+  /// Suppresses animation on the very first applyState() call so
+  /// defaultChrome renders instantly before the WebView has loaded.
+  private var isInitialApply = true
 
   // ── Entry point ────────────────────────────────────────────────────────────
 
@@ -106,6 +113,7 @@ class NativiteChrome: NSObject {
 
       // Push updated chrome geometry to CSS variables after all state is applied.
       self.pushVarUpdates()
+      self.isInitialApply = false
     }
   }
 
@@ -138,13 +146,25 @@ ${applyInitialStateMethod}
     let navItem = vc.navigationItem
 
     if let title = state["title"] as? String {
-      navItem.title = title
+      if #available(iOS 26.0, *), !isInitialApply {
+        UIView.animate(withDuration: 0.35) { navItem.title = title }
+      } else {
+        navItem.title = title
+      }
     }
     if let subtitle = state["subtitle"] as? String {
-      navItem.prompt = subtitle
+      if #available(iOS 26.0, *), !isInitialApply {
+        UIView.animate(withDuration: 0.35) { navItem.prompt = subtitle }
+      } else {
+        navItem.prompt = subtitle
+      }
     }
     if let mode = state["largeTitleMode"] as? String {
+      navController.navigationBar.prefersLargeTitles = true
       navItem.largeTitleDisplayMode = largeTitleDisplayMode(from: mode)
+    } else {
+      navController.navigationBar.prefersLargeTitles = false
+      navItem.largeTitleDisplayMode = .automatic
     }
     if let backLabel = state["backLabel"] as? String {
       navItem.backButtonTitle = backLabel
@@ -156,10 +176,12 @@ ${applyInitialStateMethod}
       navController.setNavigationBarHidden(navHidden, animated: true)
     }
     if let leadingItems = state["leadingItems"] as? [[String: Any]] {
-      navItem.leftBarButtonItems = leadingItems.compactMap { toolbarItem($0, position: "left") }
+      let items = leadingItems.compactMap { toolbarItem($0, position: "left") }
+      navItem.setLeftBarButtonItems(items, animated: !isInitialApply)
     }
     if let trailingItems = state["trailingItems"] as? [[String: Any]] {
-      navItem.rightBarButtonItems = trailingItems.compactMap { toolbarItem($0, position: "right") }
+      let items = trailingItems.compactMap { toolbarItem($0, position: "right") }
+      navItem.setRightBarButtonItems(items, animated: !isInitialApply)
     }
     if let searchBarState = state["searchBar"] as? [String: Any] {
       applySearchBar(searchBarState, to: vc)
@@ -176,12 +198,19 @@ ${applyInitialStateMethod}
 
   private func barButtonItem(_ state: [String: Any], position: String) -> UIBarButtonItem? {
     guard let id = state["id"] as? String else { return nil }
+    let cacheKey = "\\(position):\\(id)"
 
     let style: UIBarButtonItem.Style
     switch state["style"] as? String {
     case "primary": style = .done
     default: style = .plain
     }
+    let isDestructive = (state["style"] as? String) == "destructive"
+    let isEnabled = !((state["disabled"] as? Bool) ?? false)
+    let image = (state["icon"] as? String).flatMap { UIImage(systemName: $0) }
+    let label = state["label"] as? String
+
+    guard image != nil || label != nil else { return nil }
 
     let menu: UIMenu?
     if #available(iOS 14.0, *) {
@@ -194,15 +223,39 @@ ${applyInitialStateMethod}
       menu = nil
     }
 
+    let hasMenu = menu != nil
+
+    // ── Reuse cached item ──────────────────────────────────────────────────
+    // Preserving the same UIBarButtonItem object reference lets UIKit animate
+    // transitions and morph liquid-glass capsules on iOS 26+. We only reuse
+    // when the menu-presence hasn't changed, because menu vs non-menu items
+    // use different init paths with incompatible event handling.
+    if let cached = barItemCache[cacheKey] {
+      let cachedHasMenu: Bool
+      if #available(iOS 14.0, *) { cachedHasMenu = cached.menu != nil }
+      else { cachedHasMenu = false }
+
+      if cachedHasMenu == hasMenu {
+        cached.image = image
+        cached.title = label
+        cached.style = style
+        cached.tintColor = isDestructive ? .systemRed : nil
+        cached.isEnabled = isEnabled
+        if #available(iOS 14.0, *) { cached.menu = menu }
+        return cached
+      }
+      // Menu presence changed — fall through to create a new item.
+    }
+
+    // ── Create new item ────────────────────────────────────────────────────
     let item: UIBarButtonItem
-    if let symbolName = state["icon"] as? String,
-       let image = UIImage(systemName: symbolName) {
+    if let image {
       if #available(iOS 14.0, *), let menu {
-        item = UIBarButtonItem(title: nil, image: image, primaryAction: nil, menu: menu)
+        item = UIBarButtonItem(title: label, image: image, primaryAction: nil, menu: menu)
       } else {
         item = UIBarButtonItem(image: image, style: style, target: self, action: #selector(barButtonTapped(_:)))
       }
-    } else if let label = state["label"] as? String {
+    } else if let label {
       if #available(iOS 14.0, *), let menu {
         item = UIBarButtonItem(title: label, image: nil, primaryAction: nil, menu: menu)
       } else {
@@ -213,11 +266,10 @@ ${applyInitialStateMethod}
     }
 
     item.style = style
-    if (state["style"] as? String) == "destructive" {
-      item.tintColor = .systemRed
-    }
-    item.accessibilityIdentifier = "\\(position):\\(id)"
-    item.isEnabled = !((state["disabled"] as? Bool) ?? false)
+    if isDestructive { item.tintColor = .systemRed }
+    item.accessibilityIdentifier = cacheKey
+    item.isEnabled = isEnabled
+    barItemCache[cacheKey] = item
     return item
   }
 
@@ -335,7 +387,8 @@ ${applyInitialStateMethod}
       navController.setToolbarHidden(toolbarHidden, animated: true)
     }
     if let items = state["items"] as? [[String: Any]] {
-      vc.toolbarItems = items.compactMap { toolbarItem($0) }
+      let barItems = items.compactMap { toolbarItem($0) }
+      vc.setToolbarItems(barItems, animated: !isInitialApply)
     }
   }
 
@@ -573,10 +626,16 @@ ${applyInitialStateMethod}
     navItem.title = nil
     navItem.prompt = nil
     navItem.backButtonTitle = nil
-    navItem.leftBarButtonItems = nil
-    navItem.rightBarButtonItems = nil
+    navItem.largeTitleDisplayMode = .automatic
+    navController.navigationBar.prefersLargeTitles = false
+    navItem.setLeftBarButtonItems(nil, animated: true)
+    navItem.setRightBarButtonItems(nil, animated: true)
     navItem.searchController = nil
     navController.setNavigationBarHidden(true, animated: true)
+    // Purge title-bar cache entries (left/right positions).
+    barItemCache = barItemCache.filter { key, _ in
+      !key.hasPrefix("left:") && !key.hasPrefix("right:")
+    }
   }
 
   private func resetNavigation() {
@@ -586,8 +645,10 @@ ${applyInitialStateMethod}
   private func resetToolbar() {
     guard let vc = viewController,
           let navController = vc.navigationController else { return }
-    vc.toolbarItems = nil
+    vc.setToolbarItems(nil, animated: true)
     navController.setToolbarHidden(true, animated: true)
+    // Purge toolbar cache entries.
+    barItemCache = barItemCache.filter { key, _ in !key.hasPrefix("toolbar:") }
   }
 
   private func resetStatusBar() {

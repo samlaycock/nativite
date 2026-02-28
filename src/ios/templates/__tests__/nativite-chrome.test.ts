@@ -150,7 +150,9 @@ describe("nativiteChromeTemplate", () => {
       expect(start).toBeGreaterThan(-1);
       const end = output.indexOf("\n  @objc private func barButtonTapped", start + 1);
       const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain('accessibilityIdentifier = "\\(position):\\(id)"');
+      // The cache key uses the same position:id format and is assigned as the accessibilityIdentifier.
+      expect(body).toContain('cacheKey = "\\(position):\\(id)"');
+      expect(body).toContain("accessibilityIdentifier = cacheKey");
     });
 
     it("applies 'left' position for leading items and 'right' for trailing so barButtonTapped routes correctly", () => {
@@ -212,8 +214,8 @@ describe("nativiteChromeTemplate", () => {
       expect(start).toBeGreaterThan(-1);
       const end = output.indexOf("\n  private func ", start + 1);
       const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain("leftBarButtonItems = nil");
-      expect(body).toContain("rightBarButtonItems = nil");
+      expect(body).toContain("setLeftBarButtonItems(nil, animated: true)");
+      expect(body).toContain("setRightBarButtonItems(nil, animated: true)");
       expect(body).toContain("searchController = nil");
     });
   });

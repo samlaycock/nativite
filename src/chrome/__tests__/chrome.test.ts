@@ -183,6 +183,14 @@ describe("chrome()", () => {
     });
   });
 
+  it("titleBar largeTitleMode is sent to native", () => {
+    chrome(titleBar({ title: "App", largeTitleMode: "large" }));
+    _drainFlush();
+    const state = lastState() as Record<string, unknown>;
+    const tb = state["titleBar"] as { title: string; largeTitleMode: string };
+    expect(tb.largeTitleMode).toBe("large");
+  });
+
   it("returns a cleanup function", () => {
     const cleanup = chrome(titleBar({ title: "Settings" }));
     expect(typeof cleanup).toBe("function");
