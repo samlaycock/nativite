@@ -252,6 +252,14 @@ class ViewController: UIViewController {
     bridge.chrome.keyboard = keyboard
     keyboard.install(on: webView)
 
+    // Use the modern trait change registration API (iOS 17+) instead of the
+    // deprecated traitCollectionDidChange override.
+    registerForTraitChanges(
+      [UITraitUserInterfaceStyle.self, UITraitPreferredContentSizeCategory.self, UITraitAccessibilityContrast.self]
+    ) { (vc: ViewController, _: UITraitCollection) in
+      vc.vars.updateTraits(vc.traitCollection)
+    }
+
     ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()\n    " : ""}showSplashOverlay()
     loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
   }
@@ -268,11 +276,6 @@ class ViewController: UIViewController {
       "bottom": insets.bottom,
       "right": insets.right,
     ])
-  }
-
-  override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-    super.traitCollectionDidChange(previousTraitCollection)
-    vars.updateTraits(traitCollection)
   }
 
   private func showSplashOverlay() {

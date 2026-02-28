@@ -184,8 +184,8 @@ import WebKit
 //
 // Sources of truth:
 //   safe area    → viewDidLayoutSubviews (forwarded by ViewController)
-//   dark mode    → traitCollectionDidChange (UIUserInterfaceStyle)
-//   dynamic type → traitCollectionDidChange (UIContentSizeCategory)
+//   dark mode    → registerForTraitChanges (UITraitUserInterfaceStyle)
+//   dynamic type → registerForTraitChanges (UITraitPreferredContentSizeCategory)
 //   keyboard     → UIKeyboard* notifications
 //   orientation  → viewDidLayoutSubviews (bounds + userInterfaceIdiom)
 //   chrome geom  → NativiteChrome calls updateChrome(_:) after each setState
