@@ -34,6 +34,19 @@ describe("nativiteKeyboardTemplate", () => {
     expect(output).toContain("toolbar.topAnchor.constraint(equalTo: topAnchor).isActive = true");
   });
 
+  it("computes initial frame height from stored properties before super.init to avoid the pre-super.init self error", () => {
+    const output = nativiteKeyboardTemplate(baseConfig);
+    // The height must be derived from stored properties (not via the computed
+    // accessoryHeight getter) because Swift forbids accessing computed properties
+    // via self before super.init completes.
+    expect(output).toContain("let height = toolbarHeight + keyboardTopGap");
+    expect(output).toContain("super.init(frame: CGRect(x: 0, y: 0, width: 0, height: height)");
+    // The super.init call must not pass accessoryHeight directly.
+    expect(output).not.toContain(
+      "super.init(frame: CGRect(x: 0, y: 0, width: 0, height: accessoryHeight)",
+    );
+  });
+
   it("supports toggling root scroll lock per webview host", () => {
     const output = nativiteKeyboardTemplate(baseConfig);
 

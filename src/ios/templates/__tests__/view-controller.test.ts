@@ -91,6 +91,20 @@ describe("viewControllerTemplate", () => {
     expect(output).toContain("bridge");
   });
 
+  it("uses WKWebsiteDataStore.default() so the primary webview shares a process with child webviews (iOS 15+)", () => {
+    const output = viewControllerTemplate(baseConfig);
+    expect(output).toContain("config.websiteDataStore = WKWebsiteDataStore.default()");
+    // WKProcessPool is deprecated in iOS 15 and no longer needed — process
+    // sharing is automatic when webviews share the same WKWebsiteDataStore.
+    expect(output).not.toContain("WKProcessPool");
+  });
+
+  it("injects instance name 'main' so the SharedWorker messaging bus can identify this webview", () => {
+    const output = viewControllerTemplate(baseConfig);
+    expect(output).toContain('window.__nativekit_instance_name__ = \\"main\\"');
+    expect(output).toContain("injectionTime: .atDocumentStart");
+  });
+
   it("shows a dark-mode-aware default iOS splash overlay with a centered spinner", () => {
     const output = viewControllerTemplate(baseConfig);
     expect(output).toContain("private var splashOverlayView: UIView?");

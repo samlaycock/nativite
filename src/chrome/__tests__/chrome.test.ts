@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
 import type { BridgeEventMessage } from "../../index.ts";
 
@@ -21,7 +21,6 @@ void mock.module("../../client/index.ts", () => ({
     },
     call: mock(() => Promise.resolve(undefined)),
     subscribe: mock(() => () => {}),
-    callBinary: mock(() => Promise.reject(new Error("not implemented"))),
   },
   _bridgeSend: sendSpy,
   _registerReceiveHandler: () => {},
@@ -29,7 +28,28 @@ void mock.module("../../client/index.ts", () => ({
 
 // ─── Import SUT ──────────────────────────────────────────────────────────────
 
-import { _handleIncoming, _resetChromeState, chrome } from "../index.ts";
+import {
+  _drainFlush,
+  _handleIncoming,
+  _resetChromeState,
+  _setWorkerPort,
+  appWindow,
+  button,
+  chrome,
+  drawer,
+  homeIndicator,
+  keyboard,
+  menuBar,
+  menuItem,
+  navigation,
+  navItem,
+  popover,
+  sheet,
+  sidebarPanel,
+  statusBar,
+  titleBar,
+  toolbar,
+} from "../index.ts";
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -37,636 +57,757 @@ beforeEach(() => {
   sendSpy.mockClear();
   sendCalls = [];
   _resetChromeState();
-  if (typeof window !== "undefined") {
-    delete (window as Window & { nativiteSheet?: unknown }).nativiteSheet;
-  }
 });
 
 // ─── Helper: simulate an incoming native event ────────────────────────────────
 
 function simulateEvent(event: string, data: unknown): void {
-  const msg: BridgeEventMessage = {
-    id: null,
-    type: "event",
-    event,
-    data,
-  };
+  const msg: BridgeEventMessage = { id: null, type: "event", event, data };
   _handleIncoming(msg);
 }
 
-// ─── navigationBar ───────────────────────────────────────────────────────────
+// ─── Factory functions ────────────────────────────────────────────────────────
 
-describe("chrome.navigationBar", () => {
-  it("show() sends hidden: false", () => {
-    chrome.navigationBar.show();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      navigationBar: { hidden: false },
-    });
+describe("factory functions", () => {
+  it("titleBar() returns a ChromeElement with _area 'titleBar'", () => {
+    const el = titleBar({ title: "Settings" });
+    expect(el._area).toBe("titleBar");
+    expect(el._config).toEqual({ title: "Settings" });
   });
 
-  it("hide() sends hidden: true", () => {
-    chrome.navigationBar.hide();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      navigationBar: { hidden: true },
-    });
+  it("navigation() returns a ChromeElement with _area 'navigation'", () => {
+    const el = navigation({ items: [{ id: "home", label: "Home", icon: "house" }] });
+    expect(el._area).toBe("navigation");
+    expect(el._config).toMatchObject({ items: [{ id: "home" }] });
   });
 
-  it("setTitle() sends title key", () => {
-    chrome.navigationBar.setTitle("Settings");
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      navigationBar: { title: "Settings" },
-    });
+  it("toolbar() returns a ChromeElement with _area 'toolbar'", () => {
+    const el = toolbar({ items: [] });
+    expect(el._area).toBe("toolbar");
   });
 
-  it("setToolbarLeft() sends toolbarLeft key", () => {
-    const items: Parameters<typeof chrome.navigationBar.setToolbarLeft>[0] = [
-      { type: "button", id: "back", title: "Back" },
-    ];
-    chrome.navigationBar.setToolbarLeft(items);
-    expect(sendCalls[0]![2]).toMatchObject({ navigationBar: { toolbarLeft: items } });
+  it("sidebarPanel() returns a ChromeElement with _area 'sidebarPanel'", () => {
+    const el = sidebarPanel({ items: [] });
+    expect(el._area).toBe("sidebarPanel");
   });
 
-  it("setToolbarRight() sends toolbarRight key", () => {
-    const items: Parameters<typeof chrome.navigationBar.setToolbarRight>[0] = [
-      { type: "button", id: "save", title: "Save", style: "done" },
-    ];
-    chrome.navigationBar.setToolbarRight(items);
-    expect(sendCalls[0]![2]).toMatchObject({ navigationBar: { toolbarRight: items } });
+  it("statusBar() returns a ChromeElement with _area 'statusBar'", () => {
+    const el = statusBar({ style: "light" });
+    expect(el._area).toBe("statusBar");
+    expect(el._config).toEqual({ style: "light" });
   });
 
-  it("configure() sends only the provided appearance keys", () => {
-    chrome.navigationBar.configure({ tintColor: "#FF0000", translucent: false });
-    expect(sendCalls[0]![2]).toMatchObject({
-      navigationBar: { tintColor: "#FF0000", translucent: false },
-    });
+  it("homeIndicator() returns a ChromeElement with _area 'homeIndicator'", () => {
+    const el = homeIndicator({ hidden: true });
+    expect(el._area).toBe("homeIndicator");
   });
 
-  it("merges state across multiple calls", () => {
-    chrome.navigationBar.setTitle("Hello");
-    chrome.navigationBar.setToolbarRight([{ type: "button", id: "save", title: "Save" }]);
-    const lastArgs = sendCalls[1]![2] as Record<string, unknown>;
-    const navBar = lastArgs["navigationBar"] as Record<string, unknown>;
-    expect(navBar).toHaveProperty("title", "Hello");
-    expect(navBar).toHaveProperty("toolbarRight");
+  it("keyboard() returns a ChromeElement with _area 'keyboard'", () => {
+    const el = keyboard({ dismissMode: "interactive" });
+    expect(el._area).toBe("keyboard");
   });
 
-  it("onButtonTap fires handler when event arrives", () => {
-    const handler = mock(() => {});
-    chrome.navigationBar.onButtonTap(handler);
-    simulateEvent("navigationBar.buttonTapped", { id: "save" });
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({ id: "save" });
+  it("menuBar() returns a ChromeElement with _area 'menuBar'", () => {
+    const el = menuBar({ menus: [] });
+    expect(el._area).toBe("menuBar");
   });
 
-  it("onBackTap fires handler when event arrives", () => {
-    const handler = mock(() => {});
-    chrome.navigationBar.onBackTap(handler);
-    simulateEvent("navigationBar.backTapped", {});
-    expect(handler).toHaveBeenCalledTimes(1);
+  it("sheet() returns a ChromeElement with _area 'sheet' and _name", () => {
+    const el = sheet("settings", { url: "/settings", presented: true });
+    expect(el._area).toBe("sheet");
+    expect((el as { _name: string })._name).toBe("settings");
+    expect(el._config).toEqual({ url: "/settings", presented: true });
   });
 
-  it("onButtonTap returns an unsubscribe function that stops the handler", () => {
-    const handler = mock(() => {});
-    const unsub = chrome.navigationBar.onButtonTap(handler);
-    simulateEvent("navigationBar.buttonTapped", { id: "save" });
-    expect(handler).toHaveBeenCalledTimes(1);
-
-    unsub();
-    simulateEvent("navigationBar.buttonTapped", { id: "save" });
-    expect(handler).toHaveBeenCalledTimes(1); // not called again
+  it("drawer() returns a ChromeElement with _area 'drawer' and _name", () => {
+    const el = drawer("sidebar", { url: "/sidebar" });
+    expect(el._area).toBe("drawer");
+    expect((el as { _name: string })._name).toBe("sidebar");
   });
 
-  it("multiple onButtonTap subscribers all fire", () => {
-    const handler1 = mock(() => {});
-    const handler2 = mock(() => {});
-    const unsub1 = chrome.navigationBar.onButtonTap(handler1);
-    const unsub2 = chrome.navigationBar.onButtonTap(handler2);
+  it("appWindow() returns a ChromeElement with _area 'appWindow' and _name", () => {
+    const el = appWindow("prefs", { url: "/preferences" });
+    expect(el._area).toBe("appWindow");
+    expect((el as { _name: string })._name).toBe("prefs");
+  });
 
-    simulateEvent("navigationBar.buttonTapped", { id: "save" });
-
-    expect(handler1).toHaveBeenCalledTimes(1);
-    expect(handler2).toHaveBeenCalledTimes(1);
-
-    unsub1();
-    unsub2();
+  it("popover() returns a ChromeElement with _area 'popover' and _name", () => {
+    const el = popover("menu", { url: "/menu" });
+    expect(el._area).toBe("popover");
+    expect((el as { _name: string })._name).toBe("menu");
   });
 });
 
-// ─── tabBar ───────────────────────────────────────────────────────────────────
+// ─── Item constructors ────────────────────────────────────────────────────────
 
-describe("chrome.tabBar", () => {
-  it("show() sends hidden: false", () => {
-    chrome.tabBar.show();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      tabBar: { hidden: false },
-    });
+describe("item constructors", () => {
+  it("button() returns the ButtonItem config unchanged", () => {
+    const config = { id: "save", label: "Save", style: "primary" as const };
+    expect(button(config)).toBe(config);
   });
 
-  it("hide() sends hidden: true", () => {
-    chrome.tabBar.hide();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      tabBar: { hidden: true },
-    });
+  it("navItem() returns the NavigationItem config unchanged", () => {
+    const config = { id: "home", label: "Home", icon: "house" };
+    expect(navItem(config)).toBe(config);
   });
 
-  it("setTabs() sends items key", () => {
-    const tabs = [
-      { id: "home", title: "Home" },
-      { id: "profile", title: "Profile" },
-    ];
-    chrome.tabBar.setTabs(tabs);
-    expect(sendCalls[0]![2]).toMatchObject({ tabBar: { items: tabs } });
-  });
-
-  it("setActiveTab() sends selectedTabId key", () => {
-    chrome.tabBar.setActiveTab("profile");
-    expect(sendCalls[0]![2]).toMatchObject({ tabBar: { selectedTabId: "profile" } });
-  });
-
-  it("configure() sends appearance keys", () => {
-    chrome.tabBar.configure({ tintColor: "#0066CC", translucent: true });
-    expect(sendCalls[0]![2]).toMatchObject({
-      tabBar: { tintColor: "#0066CC", translucent: true },
-    });
-  });
-
-  it("onSelect fires handler and unsubscribe stops it", () => {
-    const handler = mock(() => {});
-    const unsub = chrome.tabBar.onSelect(handler);
-
-    simulateEvent("tabBar.tabSelected", { id: "home" });
-    expect(handler).toHaveBeenCalledWith({ id: "home" });
-
-    unsub();
-    simulateEvent("tabBar.tabSelected", { id: "profile" });
-    expect(handler).toHaveBeenCalledTimes(1);
+  it("menuItem() returns the MenuItem config unchanged", () => {
+    const config = { id: "sort", label: "Sort" };
+    expect(menuItem(config)).toBe(config);
   });
 });
 
-// ─── toolbar ─────────────────────────────────────────────────────────────────
+// ─── chrome() callable ───────────────────────────────────────────────────────
 
-describe("chrome.toolbar", () => {
-  it("show() sends hidden: false", () => {
-    chrome.toolbar.show();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      toolbar: { hidden: false },
+describe("chrome()", () => {
+  it("sends the declared chrome areas over the bridge", () => {
+    chrome(titleBar({ title: "Inbox" }), statusBar({ style: "auto" }));
+    _drainFlush();
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendCalls[0]![2]).toEqual({
+      titleBar: { title: "Inbox" },
+      statusBar: { style: "auto" },
     });
   });
 
-  it("setItems() sends items key", () => {
-    const items: Parameters<typeof chrome.toolbar.setItems>[0] = [
-      { type: "flexibleSpace" },
-      { type: "button", id: "share", title: "Share" },
-    ];
-    chrome.toolbar.setItems(items);
-    expect(sendCalls[0]![2]).toMatchObject({ toolbar: { items } });
+  it("returns a cleanup function", () => {
+    const cleanup = chrome(titleBar({ title: "Settings" }));
+    expect(typeof cleanup).toBe("function");
+    cleanup();
   });
 
-  it("setItems() accepts native menu/submenu payloads on button items", () => {
-    const items: Parameters<typeof chrome.toolbar.setItems>[0] = [
-      {
-        type: "button",
-        id: "more",
-        systemImage: "ellipsis.circle",
-        menu: {
-          items: [
-            { id: "refresh", title: "Refresh" },
-            {
-              id: "sort",
-              title: "Sort",
-              submenu: [
-                { id: "sort.date", title: "Date" },
-                { id: "sort.name", title: "Name" },
-              ],
-            },
-          ],
-        },
+  it("cleanup sends bridge state without the cleaned-up areas", () => {
+    chrome(statusBar({ style: "auto" }));
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    const cleanup = chrome(titleBar({ title: "Settings" }));
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    cleanup();
+    _drainFlush();
+    expect(sendCalls[0]![2]).toEqual({ statusBar: { style: "auto" } });
+  });
+
+  it("later layer wins for the same area", () => {
+    chrome(titleBar({ title: "First" }));
+    chrome(titleBar({ title: "Second" }));
+    _drainFlush();
+    const lastState = sendCalls[sendCalls.length - 1]![2] as Record<string, unknown>;
+    expect((lastState["titleBar"] as { title: string }).title).toBe("Second");
+  });
+
+  it("cleanup of inner layer restores outer layer value", () => {
+    chrome(titleBar({ title: "Outer" }));
+    const cleanup = chrome(titleBar({ title: "Inner" }));
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    cleanup();
+    _drainFlush();
+    expect((sendCalls[0]![2] as Record<string, unknown>)["titleBar"]).toEqual({
+      title: "Outer",
+    });
+  });
+
+  it("cleanup only restores areas declared in that call", () => {
+    chrome(titleBar({ title: "Base" }), navigation({ items: [] }));
+    const cleanup = chrome(titleBar({ title: "Override" }));
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    cleanup();
+    _drainFlush();
+    const state = sendCalls[0]![2] as Record<string, unknown>;
+    expect((state["titleBar"] as { title: string }).title).toBe("Base");
+    expect(state["navigation"]).toEqual({ items: [] });
+  });
+
+  it("multiple calls accumulate non-overlapping areas", () => {
+    chrome(titleBar({ title: "App" }));
+    chrome(statusBar({ style: "light" }));
+    _drainFlush();
+    const state = sendCalls[sendCalls.length - 1]![2] as Record<string, unknown>;
+    expect(state["titleBar"]).toEqual({ title: "App" });
+    expect(state["statusBar"]).toEqual({ style: "light" });
+  });
+
+  it("sends empty state when all layers are cleaned up", () => {
+    const cleanup = chrome(titleBar({ title: "Temp" }));
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    cleanup();
+    _drainFlush();
+    expect(sendCalls[0]![2]).toEqual({});
+  });
+
+  it("cleanup is a no-op when called a second time", () => {
+    const cleanup = chrome(titleBar({ title: "Once" }));
+    cleanup();
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    cleanup();
+    _drainFlush();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("sends named sheets under 'sheets' key", () => {
+    chrome(sheet("settings", { url: "/settings", presented: true }));
+    _drainFlush();
+    expect(sendCalls[0]![2]).toEqual({
+      sheets: { settings: { url: "/settings", presented: true } },
+    });
+  });
+
+  it("two sheets with different names coexist", () => {
+    chrome(
+      sheet("settings", { url: "/settings", presented: true }),
+      sheet("help", { url: "/help", presented: false }),
+    );
+    _drainFlush();
+    expect(sendCalls[0]![2]).toEqual({
+      sheets: {
+        settings: { url: "/settings", presented: true },
+        help: { url: "/help", presented: false },
       },
-    ];
-    chrome.toolbar.setItems(items);
-    expect(sendCalls[0]![2]).toMatchObject({ toolbar: { items } });
-  });
-
-  it("configure() sends appearance keys", () => {
-    chrome.toolbar.configure({ barTintColor: "#F0F0F0" });
-    expect(sendCalls[0]![2]).toMatchObject({ toolbar: { barTintColor: "#F0F0F0" } });
-  });
-
-  it("onButtonTap fires handler and unsubscribe stops it", () => {
-    const handler = mock(() => {});
-    const unsub = chrome.toolbar.onButtonTap(handler);
-
-    simulateEvent("toolbar.buttonTapped", { id: "share" });
-    expect(handler).toHaveBeenCalledWith({ id: "share" });
-
-    unsub();
-    simulateEvent("toolbar.buttonTapped", { id: "share" });
-    expect(handler).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ─── statusBar ────────────────────────────────────────────────────────────────
-
-describe("chrome.statusBar", () => {
-  it("show() sends hidden: false", () => {
-    chrome.statusBar.show();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      statusBar: { hidden: false },
     });
   });
 
-  it("hide() sends hidden: true", () => {
-    chrome.statusBar.hide();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      statusBar: { hidden: true },
+  it("sends named drawers under 'drawers' key", () => {
+    chrome(drawer("sidebar", { url: "/sidebar", presented: true }));
+    _drainFlush();
+    expect(sendCalls[0]![2]).toEqual({
+      drawers: { sidebar: { url: "/sidebar", presented: true } },
     });
   });
 
-  it("setStyle() sends style key", () => {
-    chrome.statusBar.setStyle("light");
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
+  it("sends named appWindows under 'appWindows' key", () => {
+    chrome(appWindow("prefs", { url: "/preferences", presented: false }));
+    _drainFlush();
+    expect(sendCalls[0]![2]).toEqual({
+      appWindows: { prefs: { url: "/preferences", presented: false } },
+    });
+  });
+
+  it("sends named popovers under 'popovers' key", () => {
+    chrome(popover("ctx", { url: "/context-menu", presented: true }));
+    _drainFlush();
+    expect(sendCalls[0]![2]).toEqual({
+      popovers: { ctx: { url: "/context-menu", presented: true } },
+    });
+  });
+
+  it("cleanup of a named sheet removes it while other sheets remain", () => {
+    chrome(sheet("help", { url: "/help", presented: true }));
+    const cleanup = chrome(sheet("settings", { url: "/settings", presented: true }));
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    cleanup();
+    _drainFlush();
+    const state = sendCalls[0]![2] as Record<string, unknown>;
+    const sheets = state["sheets"] as Record<string, unknown>;
+    expect(sheets["settings"]).toBeUndefined();
+    expect(sheets["help"]).toEqual({ url: "/help", presented: true });
+  });
+
+  it("later layer for the same named sheet wins", () => {
+    chrome(sheet("settings", { url: "/settings", presented: false }));
+    chrome(sheet("settings", { url: "/settings", presented: true }));
+    _drainFlush();
+    const state = sendCalls[sendCalls.length - 1]![2] as Record<string, unknown>;
+    const sheets = state["sheets"] as Record<string, { presented: boolean }>;
+    expect(sheets["settings"]!.presented).toBe(true);
+  });
+
+  // ─── Flush coalescing ──────────────────────────────────────────────────────
+  // Verifies that synchronous cleanup+re-apply cycles (the React useEffect
+  // pattern) produce exactly one native message with the final state, not two
+  // messages with an intermediate empty/partial state in between.
+
+  it("coalesces synchronous cleanup+re-apply into one bridge call with the final state", () => {
+    const cleanup = chrome(titleBar({ title: "Old" }));
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    // Simulate React useEffect dependency change: cleanup fires synchronously,
+    // immediately followed by the new effect — both in the same JS tick.
+    cleanup();
+    chrome(titleBar({ title: "New" }));
+
+    // No bridge call should have been made yet (both flushes coalesced).
+    expect(sendSpy).not.toHaveBeenCalled();
+
+    _drainFlush();
+
+    // Exactly one call, carrying only the final state — never the intermediate
+    // empty state that would trigger a native reset+re-apply cycle.
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendCalls[0]![2]).toEqual({ titleBar: { title: "New" } });
+  });
+
+  it("coalescing works across all chrome areas simultaneously", () => {
+    const cleanup = chrome(
+      titleBar({ title: "Old" }),
+      toolbar({ items: [] }),
+      statusBar({ style: "auto" }),
+    );
+    _drainFlush();
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    cleanup();
+    chrome(titleBar({ title: "New" }), toolbar({ items: [] }), statusBar({ style: "light" }));
+    _drainFlush();
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendCalls[0]![2]).toEqual({
+      titleBar: { title: "New" },
+      toolbar: { items: [] },
       statusBar: { style: "light" },
     });
   });
 });
 
-// ─── homeIndicator ────────────────────────────────────────────────────────────
+// ─── chrome.on — specific event type ─────────────────────────────────────────
 
-describe("chrome.homeIndicator", () => {
-  it("show() sends hidden: false", () => {
-    chrome.homeIndicator.show();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      homeIndicator: { hidden: false },
-    });
+describe("chrome.on(type, handler)", () => {
+  it("fires handler when the matching event arrives", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("titleBar.trailingItemTapped", handler);
+    simulateEvent("titleBar.trailingItemTapped", { id: "save" });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith({ type: "titleBar.trailingItemTapped", id: "save" });
+    unsub();
   });
 
-  it("hide() sends hidden: true", () => {
-    chrome.homeIndicator.hide();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      homeIndicator: { hidden: true },
-    });
+  it("does not fire for a different event type", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("titleBar.trailingItemTapped", handler);
+    simulateEvent("titleBar.leadingItemTapped", { id: "back" });
+    expect(handler).not.toHaveBeenCalled();
+    unsub();
+  });
+
+  it("returns an unsubscribe that stops the handler", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("navigation.itemSelected", handler);
+    simulateEvent("navigation.itemSelected", { id: "home" });
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    unsub();
+    simulateEvent("navigation.itemSelected", { id: "home" });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("multiple handlers for the same event all fire", () => {
+    const h1 = mock(() => {});
+    const h2 = mock(() => {});
+    const unsub1 = chrome.on("toolbar.itemTapped", h1);
+    const unsub2 = chrome.on("toolbar.itemTapped", h2);
+    simulateEvent("toolbar.itemTapped", { id: "share" });
+    expect(h1).toHaveBeenCalledTimes(1);
+    expect(h2).toHaveBeenCalledTimes(1);
+    unsub1();
+    unsub2();
+  });
+
+  it("fires with the full ChromeEvent including type field", () => {
+    const handler = mock((event: unknown) => event);
+    const unsub = chrome.on("navigation.itemSelected", handler);
+    simulateEvent("navigation.itemSelected", { id: "inbox" });
+    expect(handler).toHaveBeenCalledWith({ type: "navigation.itemSelected", id: "inbox" });
+    unsub();
+  });
+
+  it("titleBar.backTapped fires with no extra fields", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("titleBar.backTapped", handler);
+    simulateEvent("titleBar.backTapped", {});
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith({ type: "titleBar.backTapped" });
+    unsub();
+  });
+
+  it("titleBar.searchBar.changed fires with value field", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("titleBar.searchBar.changed", handler);
+    simulateEvent("titleBar.searchBar.changed", { value: "query" });
+    expect(handler).toHaveBeenCalledWith({ type: "titleBar.searchBar.changed", value: "query" });
+    unsub();
+  });
+
+  it("keyboard.accessoryItemTapped fires with id field", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("keyboard.accessoryItemTapped", handler);
+    simulateEvent("keyboard.accessoryItemTapped", { id: "done" });
+    expect(handler).toHaveBeenCalledWith({ type: "keyboard.accessoryItemTapped", id: "done" });
+    unsub();
+  });
+
+  it("toolbar.menuItemSelected fires with id field", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("toolbar.menuItemSelected", handler);
+    simulateEvent("toolbar.menuItemSelected", { id: "sort-name" });
+    expect(handler).toHaveBeenCalledWith({ type: "toolbar.menuItemSelected", id: "sort-name" });
+    unsub();
+  });
+
+  it("sidebarPanel.itemSelected fires with id field", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("sidebarPanel.itemSelected", handler);
+    simulateEvent("sidebarPanel.itemSelected", { id: "nav" });
+    expect(handler).toHaveBeenCalledWith({ type: "sidebarPanel.itemSelected", id: "nav" });
+    unsub();
+  });
+
+  it("menuBar.itemSelected fires with id field", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("menuBar.itemSelected", handler);
+    simulateEvent("menuBar.itemSelected", { id: "zoom-in" });
+    expect(handler).toHaveBeenCalledWith({ type: "menuBar.itemSelected", id: "zoom-in" });
+    unsub();
   });
 });
 
-// ─── searchBar ────────────────────────────────────────────────────────────────
+// ─── chrome.on — wildcard ────────────────────────────────────────────────────
 
-describe("chrome.searchBar", () => {
-  it("setText() sends text key", () => {
-    chrome.searchBar.setText("query");
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      searchBar: { text: "query" },
-    });
-  });
-
-  it("setPlaceholder() sends placeholder key", () => {
-    chrome.searchBar.setPlaceholder("Search...");
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      searchBar: { placeholder: "Search..." },
-    });
-  });
-
-  it("configure() sends appearance keys", () => {
-    chrome.searchBar.configure({ showsCancelButton: true });
-    expect(sendCalls[0]![2]).toMatchObject({ searchBar: { showsCancelButton: true } });
-  });
-
-  it("onTextChange fires handler and unsubscribe stops it", () => {
+describe("chrome.on(handler) — wildcard", () => {
+  it("fires for every event type", () => {
     const handler = mock(() => {});
-    const unsub = chrome.searchBar.onTextChange(handler);
-    simulateEvent("searchBar.textChanged", { text: "hello" });
-    expect(handler).toHaveBeenCalledWith({ text: "hello" });
+    const unsub = chrome.on(handler);
+    simulateEvent("titleBar.backTapped", {});
+    simulateEvent("navigation.itemSelected", { id: "home" });
+    simulateEvent("toolbar.itemTapped", { id: "share" });
+    expect(handler).toHaveBeenCalledTimes(3);
     unsub();
-    simulateEvent("searchBar.textChanged", { text: "world" });
+  });
+
+  it("returns an unsubscribe that stops the wildcard handler", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on(handler);
+    simulateEvent("titleBar.backTapped", {});
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    unsub();
+    simulateEvent("titleBar.backTapped", {});
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("onSubmit fires handler", () => {
-    const handler = mock(() => {});
-    const unsub = chrome.searchBar.onSubmit(handler);
-    simulateEvent("searchBar.submitted", { text: "search query" });
-    expect(handler).toHaveBeenCalledWith({ text: "search query" });
+  it("receives the full ChromeEvent with type field", () => {
+    const handler = mock((event: unknown) => event);
+    const unsub = chrome.on(handler);
+    simulateEvent("navigation.itemSelected", { id: "inbox" });
+    expect(handler).toHaveBeenCalledWith({ type: "navigation.itemSelected", id: "inbox" });
     unsub();
   });
 
-  it("onCancel fires handler", () => {
-    const handler = mock(() => {});
-    const unsub = chrome.searchBar.onCancel(handler);
-    simulateEvent("searchBar.cancelled", {});
-    expect(handler).toHaveBeenCalledTimes(1);
-    unsub();
+  it("specific and wildcard handlers both fire for the same event", () => {
+    const specific = mock(() => {});
+    const wildcard = mock(() => {});
+    const unsub1 = chrome.on("toolbar.itemTapped", specific);
+    const unsub2 = chrome.on(wildcard);
+    simulateEvent("toolbar.itemTapped", { id: "share" });
+    expect(specific).toHaveBeenCalledTimes(1);
+    expect(wildcard).toHaveBeenCalledTimes(1);
+    unsub1();
+    unsub2();
+  });
+
+  it("multiple wildcard handlers all fire", () => {
+    const h1 = mock(() => {});
+    const h2 = mock(() => {});
+    const unsub1 = chrome.on(h1);
+    const unsub2 = chrome.on(h2);
+    simulateEvent("navigation.itemSelected", { id: "home" });
+    expect(h1).toHaveBeenCalledTimes(1);
+    expect(h2).toHaveBeenCalledTimes(1);
+    unsub1();
+    unsub2();
   });
 });
 
-// ─── sheet ────────────────────────────────────────────────────────────────────
+// ─── Sheet events ─────────────────────────────────────────────────────────────
 
-describe("chrome.sheet", () => {
-  it("present() sends presented: true", () => {
-    chrome.sheet.present();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      sheet: { presented: true },
-    });
-  });
-
-  it("dismiss() sends presented: false", () => {
-    chrome.sheet.dismiss();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      sheet: { presented: false },
-    });
-  });
-
-  it("setDetents() sends detents key", () => {
-    chrome.sheet.setDetents(["small", "medium", "large"]);
-    expect(sendCalls[0]![2]).toMatchObject({ sheet: { detents: ["small", "medium", "large"] } });
-  });
-
-  it("setSelectedDetent() sends selectedDetent key", () => {
-    chrome.sheet.setSelectedDetent("large");
-    expect(sendCalls[0]![2]).toMatchObject({ sheet: { selectedDetent: "large" } });
-  });
-
-  it("configure() sends appearance keys", () => {
-    chrome.sheet.configure({ grabberVisible: true, cornerRadius: 16 });
-    expect(sendCalls[0]![2]).toMatchObject({
-      sheet: { grabberVisible: true, cornerRadius: 16 },
-    });
-  });
-
-  it("setURL() sends url key", () => {
-    chrome.sheet.setURL("./sheet/index.html");
-    expect(sendCalls[0]![2]).toMatchObject({ sheet: { url: "./sheet/index.html" } });
-  });
-
-  it("postMessage() sends a fire-and-forget sheet message bridge call", () => {
-    const message = { type: "ping", value: 1 };
-    chrome.sheet.postMessage(message);
-    expect(sendSpy).toHaveBeenCalledWith(
-      "__chrome__",
-      "__chrome_sheet_post_message_to_sheet__",
-      message,
-    );
-  });
-
-  it("postMessage() routes to nativiteSheet when called inside sheet context", () => {
-    const sheetPostSpy = mock((_message: unknown) => {});
-    const globalObject = globalThis as typeof globalThis & {
-      window?: Window & typeof globalThis;
-    };
-    const previousWindow = globalObject.window;
-    const nextWindow = (previousWindow ?? ({} as Window & typeof globalThis)) as Window &
-      typeof globalThis;
-    const previousSheet = nextWindow.nativiteSheet;
-    nextWindow.nativiteSheet = {
-      postMessage: sheetPostSpy,
-      onMessage: () => () => {},
-    };
-    globalObject.window = nextWindow;
-
-    const message = { type: "from-sheet", value: 2 };
-    chrome.sheet.postMessage(message);
-
-    expect(sheetPostSpy).toHaveBeenCalledWith(message);
-    expect(sendSpy).not.toHaveBeenCalled();
-    nextWindow.nativiteSheet = previousSheet;
-    globalObject.window = previousWindow;
-  });
-
-  it("onDetentChange fires handler and unsubscribe stops it", () => {
+describe("sheet events", () => {
+  it("sheet.presented fires with name", () => {
     const handler = mock(() => {});
-    const unsub = chrome.sheet.onDetentChange(handler);
-    simulateEvent("sheet.detentChanged", { detent: "large" });
-    expect(handler).toHaveBeenCalledWith({ detent: "large" });
-    unsub();
-    simulateEvent("sheet.detentChanged", { detent: "medium" });
-    expect(handler).toHaveBeenCalledTimes(1);
-  });
-
-  it("onDismiss fires handler", () => {
-    const handler = mock(() => {});
-    const unsub = chrome.sheet.onDismiss(handler);
-    simulateEvent("sheet.dismissed", {});
-    expect(handler).toHaveBeenCalledTimes(1);
+    const unsub = chrome.on("sheet.presented", handler);
+    simulateEvent("sheet.presented", { name: "settings" });
+    expect(handler).toHaveBeenCalledWith({ type: "sheet.presented", name: "settings" });
     unsub();
   });
 
-  it("onMessage fires handler and unsubscribe stops it", () => {
+  it("sheet.dismissed fires with name", () => {
     const handler = mock(() => {});
-    const unsub = chrome.sheet.onMessage(handler);
-    const message = { type: "pong", value: 2 };
-    simulateEvent("sheet.message", { message });
-    expect(handler).toHaveBeenCalledWith({ message });
+    const unsub = chrome.on("sheet.dismissed", handler);
+    simulateEvent("sheet.dismissed", { name: "settings" });
+    expect(handler).toHaveBeenCalledWith({ type: "sheet.dismissed", name: "settings" });
     unsub();
-    simulateEvent("sheet.message", { message: { type: "ignored" } });
-    expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("onLoadFailed fires handler and unsubscribe stops it", () => {
+  it("sheet.detentChanged fires with name and detent", () => {
     const handler = mock(() => {});
-    const unsub = chrome.sheet.onLoadFailed(handler);
-    simulateEvent("sheet.loadFailed", {
-      message: "Load failed",
-      code: -1002,
-      domain: "NSURLErrorDomain",
-      url: "http://localhost:5173/sheet",
-    });
+    const unsub = chrome.on("sheet.detentChanged", handler);
+    simulateEvent("sheet.detentChanged", { name: "settings", detent: "large" });
     expect(handler).toHaveBeenCalledWith({
-      message: "Load failed",
-      code: -1002,
-      domain: "NSURLErrorDomain",
-      url: "http://localhost:5173/sheet",
+      type: "sheet.detentChanged",
+      name: "settings",
+      detent: "large",
     });
     unsub();
-    simulateEvent("sheet.loadFailed", {
-      message: "ignored",
-      code: -1,
-      domain: "NSURLErrorDomain",
-    });
-    expect(handler).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ─── keyboard ────────────────────────────────────────────────────────────────
-
-describe("chrome.keyboard", () => {
-  it("setAccessory() sends inputAccessory key", () => {
-    const accessory = { items: [{ type: "button" as const, id: "done", title: "Done" }] };
-    chrome.keyboard.setAccessory(accessory);
-    expect(sendCalls[0]![2]).toMatchObject({ keyboard: { inputAccessory: accessory } });
   });
 
-  it("setAccessory(null) sends inputAccessory: null", () => {
-    chrome.keyboard.setAccessory(null);
-    expect(sendCalls[0]![2]).toMatchObject({ keyboard: { inputAccessory: null } });
-  });
-
-  it("configure() sends dismissMode", () => {
-    chrome.keyboard.configure({ dismissMode: "interactive" });
-    expect(sendCalls[0]![2]).toMatchObject({ keyboard: { dismissMode: "interactive" } });
-  });
-
-  it("onAccessoryItemTap fires handler and unsubscribe stops it", () => {
+  it("sheet.loadFailed fires with name, message and code", () => {
     const handler = mock(() => {});
-    const unsub = chrome.keyboard.onAccessoryItemTap(handler);
-    simulateEvent("keyboard.accessory.itemTapped", { id: "done" });
-    expect(handler).toHaveBeenCalledWith({ id: "done" });
+    const unsub = chrome.on("sheet.loadFailed", handler);
+    simulateEvent("sheet.loadFailed", { name: "settings", message: "Not found", code: 404 });
+    expect(handler).toHaveBeenCalledWith({
+      type: "sheet.loadFailed",
+      name: "settings",
+      message: "Not found",
+      code: 404,
+    });
     unsub();
-    simulateEvent("keyboard.accessory.itemTapped", { id: "done" });
-    expect(handler).toHaveBeenCalledTimes(1);
   });
 });
 
-// ─── sidebar ─────────────────────────────────────────────────────────────────
+// ─── Child webview events ─────────────────────────────────────────────────────
 
-describe("chrome.sidebar", () => {
-  it("show() sends visible: true", () => {
-    chrome.sidebar.show();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      sidebar: { visible: true },
-    });
-  });
-
-  it("hide() sends visible: false", () => {
-    chrome.sidebar.hide();
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      sidebar: { visible: false },
-    });
-  });
-
-  it("setItems() sends items key", () => {
-    const items = [{ id: "nav", title: "Nav" }];
-    chrome.sidebar.setItems(items);
-    expect(sendCalls[0]![2]).toMatchObject({ sidebar: { items } });
-  });
-
-  it("setActiveItem() sends selectedItemId key", () => {
-    chrome.sidebar.setActiveItem("nav");
-    expect(sendCalls[0]![2]).toMatchObject({ sidebar: { selectedItemId: "nav" } });
-  });
-
-  it("onItemSelect fires handler and unsubscribe stops it", () => {
+describe("child webview events", () => {
+  it("drawer.presented fires with name", () => {
     const handler = mock(() => {});
-    const unsub = chrome.sidebar.onItemSelect(handler);
-    simulateEvent("sidebar.itemSelected", { id: "nav" });
-    expect(handler).toHaveBeenCalledWith({ id: "nav" });
+    const unsub = chrome.on("drawer.presented", handler);
+    simulateEvent("drawer.presented", { name: "sidebar" });
+    expect(handler).toHaveBeenCalledWith({ type: "drawer.presented", name: "sidebar" });
     unsub();
-    simulateEvent("sidebar.itemSelected", { id: "nav" });
-    expect(handler).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ─── window ──────────────────────────────────────────────────────────────────
-
-describe("chrome.window", () => {
-  it("setTitle() sends title key", () => {
-    chrome.window.setTitle("My App");
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      window: { title: "My App" },
-    });
   });
 
-  it("setSubtitle() sends subtitle key", () => {
-    chrome.window.setSubtitle("v1.0");
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      window: { subtitle: "v1.0" },
-    });
-  });
-
-  it("configure() sends appearance keys", () => {
-    chrome.window.configure({ titleHidden: true, fullSizeContent: true });
-    expect(sendCalls[0]![2]).toMatchObject({
-      window: { titleHidden: true, fullSizeContent: true },
-    });
-  });
-});
-
-// ─── menuBar ─────────────────────────────────────────────────────────────────
-
-describe("chrome.menuBar", () => {
-  it("setMenus() sends menus key", () => {
-    const menus = [{ title: "File", items: [{ id: "save", title: "Save" }] }];
-    chrome.menuBar.setMenus(menus);
-    expect(sendCalls[0]![2]).toMatchObject({ menuBar: { menus } });
-  });
-
-  it("onItemSelect fires handler and unsubscribe stops it", () => {
+  it("appWindow.dismissed fires with name", () => {
     const handler = mock(() => {});
-    const unsub = chrome.menuBar.onItemSelect(handler);
-    simulateEvent("menuBar.itemSelected", { id: "save" });
-    expect(handler).toHaveBeenCalledWith({ id: "save" });
+    const unsub = chrome.on("appWindow.dismissed", handler);
+    simulateEvent("appWindow.dismissed", { name: "prefs" });
+    expect(handler).toHaveBeenCalledWith({ type: "appWindow.dismissed", name: "prefs" });
     unsub();
-    simulateEvent("menuBar.itemSelected", { id: "save" });
-    expect(handler).toHaveBeenCalledTimes(1);
   });
-});
 
-// ─── chrome.set (raw batch mode) ─────────────────────────────────────────────
-
-describe("chrome.set", () => {
-  it("sends raw ChromeState without merging with held state", () => {
-    chrome.set({
-      statusBar: { style: "dark" },
-      navigationBar: { title: "Batch" },
-      homeIndicator: { hidden: true },
-    });
-    expect(sendSpy).toHaveBeenCalledTimes(1);
-    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_set_state__", {
-      statusBar: { style: "dark" },
-      navigationBar: { title: "Batch" },
-      homeIndicator: { hidden: true },
-    });
-  });
-});
-
-// ─── chrome.on / chrome.off ───────────────────────────────────────────────────
-
-describe("chrome.on / chrome.off", () => {
-  it("chrome.on registers a listener", () => {
+  it("popover.presented fires with name", () => {
     const handler = mock(() => {});
-    chrome.on("tabBar.tabSelected", handler);
-    simulateEvent("tabBar.tabSelected", { id: "test" });
-    expect(handler).toHaveBeenCalledTimes(1);
-    chrome.off("tabBar.tabSelected", handler);
-  });
-
-  it("chrome.on returns an unsubscribe function", () => {
-    const handler = mock(() => {});
-    const unsub = chrome.on("tabBar.tabSelected", handler);
-
-    simulateEvent("tabBar.tabSelected", { id: "test" });
-    expect(handler).toHaveBeenCalledTimes(1);
-
+    const unsub = chrome.on("popover.presented", handler);
+    simulateEvent("popover.presented", { name: "ctx" });
+    expect(handler).toHaveBeenCalledWith({ type: "popover.presented", name: "ctx" });
     unsub();
-    simulateEvent("tabBar.tabSelected", { id: "test2" });
-    expect(handler).toHaveBeenCalledTimes(1); // not called again
+  });
+});
+
+// ─── safeArea.changed event ───────────────────────────────────────────────────
+
+describe("safeArea.changed event", () => {
+  it("fires handler with all four inset values", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("safeArea.changed", handler);
+    simulateEvent("safeArea.changed", { top: 44, right: 0, bottom: 34, left: 0 });
+    expect(handler).toHaveBeenCalledWith({
+      type: "safeArea.changed",
+      top: 44,
+      right: 0,
+      bottom: 34,
+      left: 0,
+    });
+    unsub();
+  });
+});
+
+// ─── chrome.messaging ────────────────────────────────────────────────────────
+
+describe("chrome.messaging", () => {
+  it("postToParent() sends payload to the parent bridge method", () => {
+    chrome.messaging.postToParent({ type: "saved" });
+    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_messaging_post_to_parent__", {
+      type: "saved",
+    });
   });
 
-  it("multiple on() handlers for the same event all fire", () => {
-    const handler1 = mock(() => {});
-    const handler2 = mock(() => {});
-    const unsub1 = chrome.on("navigationBar.buttonTapped", handler1);
-    const unsub2 = chrome.on("navigationBar.buttonTapped", handler2);
+  it("postToChild() sends name and payload to the child bridge method", () => {
+    chrome.messaging.postToChild("settings", { refresh: true });
+    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_messaging_post_to_child__", {
+      name: "settings",
+      payload: { refresh: true },
+    });
+  });
 
-    simulateEvent("navigationBar.buttonTapped", { id: "test" });
+  it("broadcast() sends payload to the broadcast bridge method", () => {
+    chrome.messaging.broadcast({ event: "theme-changed" });
+    expect(sendSpy).toHaveBeenCalledWith("__chrome__", "__chrome_messaging_broadcast__", {
+      event: "theme-changed",
+    });
+  });
 
-    expect(handler1).toHaveBeenCalledTimes(1);
-    expect(handler2).toHaveBeenCalledTimes(1);
+  it("onMessage() fires handler when a message event arrives", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.messaging.onMessage(handler);
+    simulateEvent("message", { from: "settings", payload: { type: "saved" } });
+    expect(handler).toHaveBeenCalledWith("settings", { type: "saved" });
+    unsub();
+  });
 
+  it("onMessage() fires with 'main' as from for the main webview", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.messaging.onMessage(handler);
+    simulateEvent("message", { from: "main", payload: { ping: true } });
+    expect(handler).toHaveBeenCalledWith("main", { ping: true });
+    unsub();
+  });
+
+  it("onMessage() returns an unsubscribe that stops the handler", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.messaging.onMessage(handler);
+    simulateEvent("message", { from: "main", payload: {} });
+    unsub();
+    simulateEvent("message", { from: "main", payload: {} });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("onMessage() and chrome.on('message') both fire for the same event", () => {
+    const msgHandler = mock(() => {});
+    const onHandler = mock(() => {});
+    const unsub1 = chrome.messaging.onMessage(msgHandler);
+    const unsub2 = chrome.on("message", onHandler);
+    simulateEvent("message", { from: "child", payload: "hello" });
+    expect(msgHandler).toHaveBeenCalledTimes(1);
+    expect(onHandler).toHaveBeenCalledTimes(1);
     unsub1();
     unsub2();
   });
+});
 
-  it("chrome.on and on* methods both fire for the same event", () => {
-    const namedHandler = mock(() => {});
-    const globalHandler = mock(() => {});
+// ─── chrome.messaging (SharedWorker path) ────────────────────────────────────
+// These tests inject a mock MessagePort via _setWorkerPort to exercise the
+// SharedWorker code path without a real SharedWorker environment.
 
-    const unsub1 = chrome.navigationBar.onButtonTap(namedHandler);
-    const unsub2 = chrome.on("navigationBar.buttonTapped", globalHandler);
+describe("chrome.messaging (SharedWorker path)", () => {
+  let postMessage: ReturnType<typeof mock>;
 
-    simulateEvent("navigationBar.buttonTapped", { id: "both" });
+  beforeEach(() => {
+    postMessage = mock(() => {});
+    _setWorkerPort({ postMessage } as unknown as MessagePort);
+  });
 
-    expect(namedHandler).toHaveBeenCalledTimes(1);
-    expect(globalHandler).toHaveBeenCalledTimes(1);
+  afterEach(() => {
+    _setWorkerPort(null);
+  });
 
-    unsub1();
-    unsub2();
+  it("postToParent() posts to the SharedWorker port instead of the native bridge", () => {
+    chrome.messaging.postToParent({ type: "saved" });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: "postToParent",
+      from: "main",
+      payload: { type: "saved" },
+    });
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("postToChild() posts to the SharedWorker port with the target name", () => {
+    chrome.messaging.postToChild("settings", { refresh: true });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: "postToChild",
+      from: "main",
+      to: "settings",
+      payload: { refresh: true },
+    });
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("broadcast() posts to the SharedWorker port", () => {
+    chrome.messaging.broadcast({ event: "theme-changed" });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: "broadcast",
+      from: "main",
+      payload: { event: "theme-changed" },
+    });
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("onMessage() uses the SharedWorker port and does not re-register when already connected", () => {
+    // connectWorker() returns early (port already set by _setWorkerPort in beforeEach),
+    // so no register message is sent — this test guards against double-registration.
+    const handler = mock(() => {});
+    const unsub = chrome.messaging.onMessage(handler);
+    expect(postMessage).not.toHaveBeenCalled();
+    // Handler still fires via native event simulation (SharedWorker pushes incoming
+    // messages by calling handleIncoming directly in the real worker path).
+    simulateEvent("message", { from: "settings", payload: { ok: true } });
+    expect(handler).toHaveBeenCalledWith("settings", { ok: true });
+    unsub();
+  });
+});
+
+// ─── Unified ButtonItem across areas ─────────────────────────────────────────
+
+describe("unified ButtonItem across chrome areas", () => {
+  it("button with menu is sent correctly in titleBar trailingItems", () => {
+    const sortButton = button({
+      id: "sort",
+      icon: "arrow.up.arrow.down",
+      menu: {
+        title: "Sort by",
+        items: [
+          menuItem({ id: "sort-name", label: "Name", checked: true }),
+          menuItem({ id: "sort-date", label: "Date" }),
+        ],
+      },
+    });
+
+    chrome(titleBar({ trailingItems: [sortButton] }));
+    _drainFlush();
+    const state = sendCalls[0]![2] as Record<string, unknown>;
+    const tb = state["titleBar"] as { trailingItems: unknown[] };
+    expect(tb.trailingItems[0]).toEqual(sortButton);
+  });
+
+  it("same button can be used in both titleBar and toolbar", () => {
+    const btn = button({ id: "share", icon: "square.and.arrow.up" });
+
+    chrome(titleBar({ trailingItems: [btn] }));
+    _drainFlush();
+    const titleBarState = sendCalls[0]![2] as Record<string, unknown>;
+    sendSpy.mockClear();
+    sendCalls = [];
+
+    chrome(toolbar({ items: [btn] }));
+    _drainFlush();
+    const toolbarState = sendCalls[0]![2] as Record<string, unknown>;
+
+    expect((titleBarState["titleBar"] as { trailingItems: unknown[] }).trailingItems[0]).toBe(btn);
+    expect((toolbarState["toolbar"] as { items: unknown[] }).items[0]).toBe(btn);
+  });
+
+  it("flexible-space and fixed-space work in toolbar items", () => {
+    chrome(
+      toolbar({
+        items: [
+          button({ id: "back", label: "Back" }),
+          { type: "flexible-space" },
+          { type: "fixed-space", width: 8 },
+          button({ id: "forward", label: "Forward" }),
+        ],
+      }),
+    );
+    _drainFlush();
+    const state = sendCalls[0]![2] as Record<string, unknown>;
+    const items = (state["toolbar"] as { items: unknown[] }).items;
+    expect(items[1]).toEqual({ type: "flexible-space" });
+    expect(items[2]).toEqual({ type: "fixed-space", width: 8 });
   });
 });

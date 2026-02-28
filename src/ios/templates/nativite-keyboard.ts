@@ -87,18 +87,15 @@ class NativiteKeyboard: NSObject {
         }
       }
 
-      // inputAccessory
-      if state["inputAccessory"] is NSNull {
+      // accessory
+      if state["accessory"] is NSNull {
         // Explicit null — hide the bar and tell vars the height is 0.
         self.accessoryView.isHidden = true
         self.vars?.updateAccessoryHeight(0)
         return
       }
-      if let accessory = state["inputAccessory"] as? [String: Any] {
+      if let accessory = state["accessory"] as? [String: Any] {
         self.accessoryView.isHidden = false
-        if let hex = accessory["barTintColor"] as? String {
-          self.accessoryView.barTintColor = UIColor(hex: hex)
-        }
         if let items = accessory["items"] as? [[String: Any]] {
           self.accessoryView.setItems(items, keyboard: self)
         }
@@ -118,7 +115,7 @@ class NativiteKeyboard: NSObject {
     viewController?.sendToWebView([
       "id": NSNull(),
       "type": "event",
-      "event": "keyboard.accessory.itemTapped",
+      "event": "keyboard.accessoryItemTapped",
       "data": ["id": id],
     ])
   }
@@ -142,8 +139,11 @@ private class NativiteAccessoryView: UIInputView {
   }
 
   init() {
-    // UIInputView needs an explicit frame; the system resizes it to fit.
-    super.init(frame: CGRect(x: 0, y: 0, width: 0, height: accessoryHeight),
+    // Compute height before super.init — Swift's two-phase init forbids
+    // accessing self (including computed properties) before super.init,
+    // even when the underlying stored properties already have values.
+    let height = toolbarHeight + keyboardTopGap
+    super.init(frame: CGRect(x: 0, y: 0, width: 0, height: height),
                inputViewStyle: .keyboard)
 
     backgroundColor = .clear
@@ -174,10 +174,10 @@ private class NativiteAccessoryView: UIInputView {
 
   private func makeToolbarItem(_ state: [String: Any], keyboard: NativiteKeyboard) -> UIBarButtonItem? {
     switch state["type"] as? String {
-    case "flexibleSpace":
+    case "flexible-space":
       return UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
 
-    case "fixedSpace":
+    case "fixed-space":
       let item = UIBarButtonItem(barButtonSystemItem: .fixedSpace, target: nil, action: nil)
       item.width = state["width"] as? CGFloat ?? 8
       return item
@@ -186,14 +186,14 @@ private class NativiteAccessoryView: UIInputView {
       guard let id = state["id"] as? String else { return nil }
 
       let barItem: UIBarButtonItem
-      let style: UIBarButtonItem.Style = (state["style"] as? String) == "prominent" ? .done : .plain
+      let style: UIBarButtonItem.Style = (state["style"] as? String) == "primary" ? .done : .plain
 
-      if let symbolName = state["systemImage"] as? String,
+      if let symbolName = state["icon"] as? String,
          let image = UIImage(systemName: symbolName) {
         barItem = UIBarButtonItem(image: image, style: style, target: keyboard,
                                   action: #selector(NativiteKeyboard.accessoryButtonTapped(_:)))
-      } else if let title = state["title"] as? String {
-        barItem = UIBarButtonItem(title: title, style: style, target: keyboard,
+      } else if let label = state["label"] as? String {
+        barItem = UIBarButtonItem(title: label, style: style, target: keyboard,
                                   action: #selector(NativiteKeyboard.accessoryButtonTapped(_:)))
       } else {
         return nil

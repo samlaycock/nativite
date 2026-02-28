@@ -1,260 +1,292 @@
-// ─── Chrome State Types ───────────────────────────────────────────────────────
+// ─── Chrome Types ──────────────────────────────────────────────────────────────
 // Pure TypeScript types with no runtime imports.
 // Imported by both src/chrome/index.ts (runtime) and src/index.ts (config schema).
 
-export type BarButtonItem = {
-  /** Unique ID used to identify this button in events. */
-  id: string;
-  /** Button label text. Use either title or systemImage, not both. */
-  title?: string;
-  /** SF Symbol name, e.g. "plus", "trash", "square.and.arrow.up". */
-  systemImage?: string;
-  style?: "plain" | "done" | "destructive";
-  disabled?: boolean;
-};
+// ─── Primitive Item Types ─────────────────────────────────────────────────────
 
-export type NavigationBarState = {
-  title?: string;
-  /** Large title display mode. Defaults to "automatic". */
-  largeTitleMode?: "always" | "never" | "automatic";
-  /** Override the back button label. Pass null to hide entirely. */
-  backButtonTitle?: string | null;
-  /** Hex colour string, e.g. "#FFFFFF". */
-  tintColor?: string;
-  /** Hex colour string for the bar background. */
-  barTintColor?: string;
-  translucent?: boolean;
-  hidden?: boolean;
-  /** Items on the leading (left) side of the navigation bar. Supports buttons, spaces, and iOS button menus. */
-  toolbarLeft?: ToolbarItem[];
-  /** Items on the trailing (right) side of the navigation bar. Supports buttons, spaces, and iOS button menus. */
-  toolbarRight?: ToolbarItem[];
-};
-
-export type TabItem = {
-  /** Unique ID used to identify this tab in events. */
-  id: string;
-  title: string;
-  /** SF Symbol name for the tab icon. */
-  systemImage?: string;
-  /** Badge label text. Pass null to hide. */
-  badge?: string | null;
-  /** Hex colour for the badge background. */
-  badgeColor?: string;
-};
-
-export type TabBarState = {
-  items: TabItem[];
-  /** ID of the currently selected tab. */
-  selectedTabId?: string;
-  /** Hex colour for the selected item tint. */
-  tintColor?: string;
-  /** Hex colour for unselected item tint. */
-  unselectedTintColor?: string;
-  /** Hex colour for the bar background. */
-  barTintColor?: string;
-  translucent?: boolean;
-  hidden?: boolean;
-};
-
-export interface ToolbarMenuItem {
-  /** Unique ID used to identify this menu item in events. */
-  id: string;
-  title: string;
-  /** SF Symbol name for the menu icon. */
-  systemImage?: string;
-  disabled?: boolean;
-  checked?: boolean;
-  submenu?: ToolbarMenuItem[];
-}
-
-export interface ToolbarButtonMenu {
-  title?: string;
-  items: ToolbarMenuItem[];
-}
-
-export interface ToolbarButtonItem extends BarButtonItem {
-  type: "button";
-  /** Native iOS menu shown from this bar button item. */
-  menu?: ToolbarButtonMenu;
-}
-
-export type ToolbarItem =
-  | ToolbarButtonItem
-  | { type: "flexibleSpace" }
-  | { type: "fixedSpace"; width: number };
-
-export type ToolbarState = {
-  items: ToolbarItem[];
-  /** Hex colour for the bar background. */
-  barTintColor?: string;
-  translucent?: boolean;
-  hidden?: boolean;
-};
-
-export type StatusBarState = {
-  /** "light" = white text/icons, "dark" = black text/icons. */
-  style?: "light" | "dark";
-  hidden?: boolean;
-};
-
-export type HomeIndicatorState = {
-  hidden?: boolean;
-};
-
-export type SearchBarState = {
-  placeholder?: string;
-  /** Hex colour for the bar background. */
-  barTintColor?: string;
-  /** Pre-fill the search text. */
-  text?: string;
-  /** Show the cancel button. */
-  showsCancelButton?: boolean;
-};
-
-export type SheetDetent = "small" | "medium" | "large";
-
-export type SheetState = {
-  presented: boolean;
-  detents?: SheetDetent[];
-  selectedDetent?: SheetDetent;
+export interface ButtonItem {
+  readonly id: string;
+  /** Visible label. Omit when using icon alone. */
+  readonly label?: string;
   /**
-   * URL to load in the sheet webview.
-   * - `"/route"` keeps the current host in dev and bootstraps bundled `index.html` + SPA route in prod.
-   * - Relative paths resolve against the current main webview URL.
+   * Platform icon identifier.
+   * On iOS/macOS this is an SF Symbol name ("plus", "square.and.arrow.up").
    */
-  url?: string;
-  grabberVisible?: boolean;
-  /** Hex colour for the sheet background. */
-  backgroundColor?: string;
-  /** Corner radius in points. */
-  cornerRadius?: number;
-};
+  readonly icon?: string;
+  /**
+   * Semantic style applied by the platform.
+   * "primary"     — highlighted / prominent (e.g. "Done" on iOS)
+   * "destructive" — red tint
+   * "plain"       — default
+   */
+  readonly style?: "plain" | "primary" | "destructive";
+  readonly disabled?: boolean;
+  /** Badge overlaid on the item. Pass null to remove. */
+  readonly badge?: string | number | null;
+  /**
+   * Attach a drop-down menu to this button.
+   * When present, tapping the button opens the menu rather than firing an
+   * itemTapped event.
+   */
+  readonly menu?: MenuConfig;
+}
 
-/** An item in the keyboard input accessory bar. */
-export type KeyboardAccessoryItem =
+export interface MenuConfig {
+  /** Optional title rendered at the top of the menu. */
+  readonly title?: string;
+  readonly items: readonly MenuItem[];
+}
+
+export interface MenuItem {
+  readonly id: string;
+  readonly label: string;
+  readonly icon?: string;
+  readonly disabled?: boolean;
+  /** Renders with a checkmark. */
+  readonly checked?: boolean;
+  /** "destructive" — rendered in red. */
+  readonly style?: "plain" | "destructive";
+  /** Key shortcut, e.g. "s" for Cmd+S (macOS/Electron only). */
+  readonly keyEquivalent?: string;
+  /** Nested submenu. */
+  readonly children?: readonly MenuItem[];
+}
+
+export type FlexibleSpace = { readonly type: "flexible-space" };
+export type FixedSpace = { readonly type: "fixed-space"; readonly width: number };
+export type BarItem = ButtonItem | FlexibleSpace | FixedSpace;
+
+export interface NavigationItem {
+  readonly id: string;
+  readonly label: string;
+  /** Required: an icon is mandatory for primary navigation items. */
+  readonly icon: string;
+  readonly badge?: string | number | null;
+  readonly disabled?: boolean;
+}
+
+export interface SidebarItem {
+  readonly id: string;
+  readonly label: string;
+  readonly icon?: string;
+  readonly badge?: string | number | null;
+  /** Child items for collapsible sections (macOS / iPadOS outline view). */
+  readonly children?: readonly SidebarItem[];
+}
+
+// ─── Chrome Area Config Interfaces ────────────────────────────────────────────
+
+export interface SearchBarConfig {
+  readonly placeholder?: string;
+  readonly value?: string;
+  readonly cancelButtonVisible?: boolean;
+}
+
+export interface TitleBarConfig {
+  readonly title?: string;
+  /**
+   * Secondary line below the title.
+   * iOS: rendered as a prompt below the title in the nav bar.
+   * macOS: rendered as the window subtitle.
+   */
+  readonly subtitle?: string;
+  /**
+   * Display mode for the title on iOS/iPadOS.
+   * "large"     — large title above scroll content
+   * "inline"    — standard compact title
+   * "automatic" — large when at top of scroll, inline when scrolled (default)
+   */
+  readonly largeTitleMode?: "large" | "inline" | "automatic";
+  /**
+   * Override the back button label. Null hides the label (icon only).
+   * Only meaningful on iOS where a navigation stack is active.
+   */
+  readonly backLabel?: string | null;
+  /** Items on the leading (left / start) side. */
+  readonly leadingItems?: readonly BarItem[];
+  /** Items on the trailing (right / end) side. */
+  readonly trailingItems?: readonly BarItem[];
+  /** Embed a search bar inside or below the title bar. */
+  readonly searchBar?: SearchBarConfig;
+  readonly hidden?: boolean;
+  /**
+   * macOS: whether the web content extends underneath the title bar.
+   * Equivalent to NSWindow.styleMask.fullSizeContentView.
+   */
+  readonly fullSizeContent?: boolean;
+  /** macOS: separator style between the title bar and content. */
+  readonly separatorStyle?: "automatic" | "none" | "line" | "shadow";
+}
+
+export interface NavigationConfig {
+  readonly items: readonly NavigationItem[];
+  readonly activeItem?: string;
+  /**
+   * Style hint for how the primary navigation should be rendered.
+   * "tabs"    — force a horizontal tab bar (bottom on mobile)
+   * "sidebar" — force a sidebar (leading column)
+   * "auto"    — let the platform decide based on screen size and idiom (default)
+   */
+  readonly style?: "tabs" | "sidebar" | "auto";
+  readonly hidden?: boolean;
+}
+
+export interface ToolbarConfig {
+  readonly items: readonly BarItem[];
+  readonly hidden?: boolean;
+}
+
+export interface SidebarPanelConfig {
+  readonly items: readonly SidebarItem[];
+  readonly activeItem?: string;
+  readonly title?: string;
+  readonly visible?: boolean;
+}
+
+export interface StatusBarConfig {
+  /**
+   * "light"  — white icons (for dark backgrounds)
+   * "dark"   — black icons (for light backgrounds)
+   * "auto"   — system decides based on colour scheme (default)
+   */
+  readonly style?: "light" | "dark" | "auto";
+  readonly hidden?: boolean;
+}
+
+export interface HomeIndicatorConfig {
+  readonly hidden?: boolean;
+}
+
+export interface KeyboardConfig {
+  /** Toolbar rendered above the software keyboard. Pass null to remove. */
+  readonly accessory?: { readonly items: readonly BarItem[] } | null;
+  readonly dismissMode?: "none" | "onDrag" | "interactive";
+}
+
+export interface MenuBarConfig {
+  /** Extra menus appended after the OS built-in menus. */
+  readonly menus: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly items: readonly MenuItem[];
+  }[];
+}
+
+// ─── Child Webview Config Interfaces ─────────────────────────────────────────
+
+interface ChildWebviewBase {
+  readonly url: string;
+  readonly presented?: boolean;
+  readonly backgroundColor?: string;
+}
+
+export interface SheetConfig extends ChildWebviewBase {
+  readonly detents?: readonly ("small" | "medium" | "large" | "full")[];
+  readonly activeDetent?: "small" | "medium" | "large" | "full";
+  readonly grabberVisible?: boolean;
+  readonly dismissible?: boolean;
+  readonly cornerRadius?: number;
+}
+
+export interface DrawerConfig extends ChildWebviewBase {
+  readonly side?: "leading" | "trailing";
+  readonly width?: "small" | "medium" | "large" | number;
+  readonly dismissible?: boolean;
+}
+
+export interface AppWindowConfig extends ChildWebviewBase {
+  readonly title?: string;
+  readonly size?: { readonly width: number; readonly height: number };
+  readonly minSize?: { readonly width: number; readonly height: number };
+  readonly resizable?: boolean;
+  /** Blocks interaction with the opener window while open. */
+  readonly modal?: boolean;
+}
+
+export interface PopoverConfig extends ChildWebviewBase {
+  readonly size?: { readonly width: number; readonly height: number };
+  /**
+   * ID of a DOM element in the main webview that the popover anchors to.
+   * The platform uses the element's bounding box as the source rect.
+   */
+  readonly anchorElementId?: string;
+}
+
+// ─── ChromeState ──────────────────────────────────────────────────────────────
+
+export interface ChromeState {
+  readonly titleBar?: TitleBarConfig;
+  readonly navigation?: NavigationConfig;
+  readonly sidebarPanel?: SidebarPanelConfig;
+  readonly toolbar?: ToolbarConfig;
+  readonly keyboard?: KeyboardConfig;
+  readonly statusBar?: StatusBarConfig;
+  readonly homeIndicator?: HomeIndicatorConfig;
+  readonly menuBar?: MenuBarConfig;
+  readonly sheets?: Readonly<Record<string, SheetConfig>>;
+  readonly drawers?: Readonly<Record<string, DrawerConfig>>;
+  readonly appWindows?: Readonly<Record<string, AppWindowConfig>>;
+  readonly popovers?: Readonly<Record<string, PopoverConfig>>;
+}
+
+// ─── Chrome Events ────────────────────────────────────────────────────────────
+
+export type ChromeEvent =
+  | { readonly type: "titleBar.leadingItemTapped"; readonly id: string }
+  | { readonly type: "titleBar.trailingItemTapped"; readonly id: string }
+  | { readonly type: "titleBar.menuItemSelected"; readonly id: string }
+  | { readonly type: "titleBar.backTapped" }
+  | { readonly type: "titleBar.searchBar.changed"; readonly value: string }
+  | { readonly type: "titleBar.searchBar.submitted"; readonly value: string }
+  | { readonly type: "titleBar.searchBar.cancelled" }
+  | { readonly type: "navigation.itemSelected"; readonly id: string }
+  | { readonly type: "sidebarPanel.itemSelected"; readonly id: string }
+  | { readonly type: "toolbar.itemTapped"; readonly id: string }
+  | { readonly type: "toolbar.menuItemSelected"; readonly id: string }
+  | { readonly type: "keyboard.accessoryItemTapped"; readonly id: string }
+  | { readonly type: "menuBar.itemSelected"; readonly id: string }
+  | { readonly type: "sheet.presented"; readonly name: string }
+  | { readonly type: "sheet.dismissed"; readonly name: string }
+  | { readonly type: "sheet.detentChanged"; readonly name: string; readonly detent: string }
   | {
-      type: "button";
-      /** Unique ID used to identify this button in events. */
-      id: string;
-      title?: string;
-      /** SF Symbol name, e.g. "checkmark", "arrow.right". */
-      systemImage?: string;
-      style?: "plain" | "prominent";
-      disabled?: boolean;
+      readonly type: "sheet.loadFailed";
+      readonly name: string;
+      readonly message: string;
+      readonly code: number;
     }
-  | { type: "flexibleSpace" }
-  | { type: "fixedSpace"; width: number };
+  | { readonly type: "drawer.presented"; readonly name: string }
+  | { readonly type: "drawer.dismissed"; readonly name: string }
+  | { readonly type: "appWindow.presented"; readonly name: string }
+  | { readonly type: "appWindow.dismissed"; readonly name: string }
+  | { readonly type: "popover.presented"; readonly name: string }
+  | { readonly type: "popover.dismissed"; readonly name: string }
+  | { readonly type: "message"; readonly from: "main" | (string & {}); readonly payload: unknown }
+  | {
+      readonly type: "safeArea.changed";
+      readonly top: number;
+      readonly right: number;
+      readonly bottom: number;
+      readonly left: number;
+    };
 
-export type KeyboardState = {
-  /** Native input accessory bar shown above the keyboard. Pass null to remove. */
-  inputAccessory?: {
-    items: KeyboardAccessoryItem[];
-    /** Hex colour for the accessory bar background. */
-    barTintColor?: string;
-  } | null;
-  /** How the keyboard is dismissed when the user scrolls. */
-  dismissMode?: "none" | "onDrag" | "interactive";
-};
+export type ChromeEventType = ChromeEvent["type"];
 
-/** iPad / macOS sidebar. */
-export type SidebarState = {
-  items: Array<{
-    id: string;
-    title: string;
-    systemImage?: string;
-  }>;
-  selectedItemId?: string;
-  /** Whether the sidebar column is visible. */
-  visible?: boolean;
-};
-
-/** macOS window title bar. */
-export type WindowState = {
-  title?: string;
-  subtitle?: string;
-  titlebarSeparatorStyle?: "automatic" | "none" | "line" | "shadow";
-  titleHidden?: boolean;
-  /** Whether content extends under the title bar (fullSizeContentView). */
-  fullSizeContent?: boolean;
-};
-
-/** macOS menu bar item. */
-export type MenuItem = {
-  id: string;
-  title: string;
-  /** Key equivalent, e.g. "s" for Cmd+S. */
-  keyEquivalent?: string;
-  /** SF Symbol name for the menu icon. */
-  systemImage?: string;
-  disabled?: boolean;
-  checked?: boolean;
-  submenu?: MenuItem[];
-};
-
-export type MenuBarState = {
-  /** Extra menus to add to the app's menu bar (after the built-in ones). */
-  menus: Array<{
-    title: string;
-    items: MenuItem[];
-  }>;
-};
-
-/** A function returned by `on*` methods to remove the event listener. */
+/** A function returned by subscriptions to remove the event listener. */
 export type Unsubscribe = () => void;
 
-/**
- * The full chrome state descriptor. All fields are optional — only the keys
- * present in a setState() call are applied; absent keys are left unchanged.
- */
-export type ChromeState = {
-  navigationBar?: NavigationBarState;
-  tabBar?: TabBarState;
-  toolbar?: ToolbarState;
-  statusBar?: StatusBarState;
-  homeIndicator?: HomeIndicatorState;
-  searchBar?: SearchBarState;
-  sheet?: SheetState;
-  keyboard?: KeyboardState;
-  sidebar?: SidebarState;
-  window?: WindowState;
-  menuBar?: MenuBarState;
-};
+// ─── Chrome Element Descriptor ────────────────────────────────────────────────
+// Internal discriminated union used by the chrome() callable and factory functions.
 
-// ─── Chrome Event Types ───────────────────────────────────────────────────────
-
-export type ChromeEventMap = {
-  /** A navigation bar button was tapped. */
-  "navigationBar.buttonTapped": { id: string };
-  /** The back button was tapped. */
-  "navigationBar.backTapped": Record<string, never>;
-  /** The user selected a tab. */
-  "tabBar.tabSelected": { id: string };
-  /** A toolbar button was tapped. */
-  "toolbar.buttonTapped": { id: string };
-  /** The search bar text changed. */
-  "searchBar.textChanged": { text: string };
-  /** The search button (return key) was tapped. */
-  "searchBar.submitted": { text: string };
-  /** The search cancel button was tapped. */
-  "searchBar.cancelled": Record<string, never>;
-  /** The sheet's detent changed (user dragged it). */
-  "sheet.detentChanged": { detent: SheetDetent };
-  /** The sheet was dismissed. */
-  "sheet.dismissed": Record<string, never>;
-  /** Message from sheet webview JS to the main webview context. */
-  "sheet.message": { message: unknown };
-  /** The sheet webview failed to load its URL. */
-  "sheet.loadFailed": { message: string; code: number; domain: string; url?: string };
-  /** A sidebar item was selected. */
-  "sidebar.itemSelected": { id: string };
-  /** A macOS menu item was selected. */
-  "menuBar.itemSelected": { id: string };
-  /** A keyboard accessory bar button was tapped. */
-  "keyboard.accessory.itemTapped": { id: string };
-  /** The safe area insets changed (on load or rotation). */
-  "safeArea.changed": { top: number; left: number; bottom: number; right: number };
-};
-
-export type ChromeEventName = keyof ChromeEventMap;
-export type ChromeEventHandler<E extends ChromeEventName> = (data: ChromeEventMap[E]) => void;
+export type ChromeElement =
+  | { readonly _area: "titleBar"; readonly _config: TitleBarConfig }
+  | { readonly _area: "navigation"; readonly _config: NavigationConfig }
+  | { readonly _area: "toolbar"; readonly _config: ToolbarConfig }
+  | { readonly _area: "sidebarPanel"; readonly _config: SidebarPanelConfig }
+  | { readonly _area: "statusBar"; readonly _config: StatusBarConfig }
+  | { readonly _area: "homeIndicator"; readonly _config: HomeIndicatorConfig }
+  | { readonly _area: "keyboard"; readonly _config: KeyboardConfig }
+  | { readonly _area: "menuBar"; readonly _config: MenuBarConfig }
+  | { readonly _area: "sheet"; readonly _name: string; readonly _config: SheetConfig }
+  | { readonly _area: "drawer"; readonly _name: string; readonly _config: DrawerConfig }
+  | { readonly _area: "appWindow"; readonly _name: string; readonly _config: AppWindowConfig }
+  | { readonly _area: "popover"; readonly _name: string; readonly _config: PopoverConfig };

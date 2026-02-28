@@ -4,389 +4,453 @@ import type { NativeToJsMessage } from "../index.ts";
 
 import { _bridgeSend, _registerReceiveHandler } from "../client/index.ts";
 
-// ─── Re-export all pure types from the types module ──────────────────────────
-// src/chrome/types.ts has zero runtime imports — safe to import from index.ts
-// (which is imported by src/index.ts) without creating a circular dependency.
+// ─── Re-export all pure types ────────────────────────────────────────────────
 
 export type {
-  BarButtonItem,
-  ChromeEventHandler,
-  ChromeEventMap,
-  ChromeEventName,
+  AppWindowConfig,
+  BarItem,
+  ButtonItem,
+  ChromeElement,
+  ChromeEvent,
+  ChromeEventType,
   ChromeState,
-  HomeIndicatorState,
-  KeyboardAccessoryItem,
-  KeyboardState,
-  MenuBarState,
+  DrawerConfig,
+  FixedSpace,
+  FlexibleSpace,
+  HomeIndicatorConfig,
+  KeyboardConfig,
+  MenuBarConfig,
+  MenuConfig,
   MenuItem,
-  NavigationBarState,
-  SearchBarState,
-  SheetDetent,
-  SheetState,
-  SidebarState,
-  StatusBarState,
-  TabBarState,
-  TabItem,
-  ToolbarItem,
-  ToolbarState,
+  NavigationConfig,
+  NavigationItem,
+  PopoverConfig,
+  SearchBarConfig,
+  SheetConfig,
+  SidebarItem,
+  SidebarPanelConfig,
+  StatusBarConfig,
+  TitleBarConfig,
+  ToolbarConfig,
   Unsubscribe,
-  WindowState,
 } from "./types.ts";
 
 import type {
-  ChromeEventHandler,
-  ChromeEventMap,
-  ChromeEventName,
+  AppWindowConfig,
+  BarItem,
+  ButtonItem,
+  ChromeElement,
+  ChromeEvent,
+  ChromeEventType,
   ChromeState,
-  HomeIndicatorState,
-  KeyboardState,
-  MenuBarState,
-  NavigationBarState,
-  SearchBarState,
-  SheetDetent,
-  SheetState,
-  SidebarState,
-  StatusBarState,
-  TabBarState,
-  TabItem,
-  ToolbarItem,
-  ToolbarState,
+  DrawerConfig,
+  HomeIndicatorConfig,
+  KeyboardConfig,
+  MenuBarConfig,
+  MenuConfig,
+  MenuItem,
+  NavigationConfig,
+  NavigationItem,
+  PopoverConfig,
+  SearchBarConfig,
+  SheetConfig,
+  SidebarItem,
+  SidebarPanelConfig,
+  StatusBarConfig,
+  TitleBarConfig,
+  ToolbarConfig,
   Unsubscribe,
-  WindowState,
 } from "./types.ts";
 
-// ─── Internal State ──────────────────────────────────────────────────────────
+// ─── Internal State ───────────────────────────────────────────────────────────
 
-/** Stacking event listeners — added via on* methods and chrome.on(). */
-const chromeEventListeners = new Map<ChromeEventName, Set<ChromeEventHandler<ChromeEventName>>>();
+type Layer = Map<string, ChromeElement>;
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const layerStack: Layer[] = [];
 
-/** Reset functions registered by each element state sender — for test use only. */
-const _stateResetters: Array<() => void> = [];
+// ─── State Helpers ────────────────────────────────────────────────────────────
 
-/**
- * Creates a state sender for one chrome element. Each call merges the patch
- * into internally held state and sends the full merged state over the bridge.
- */
-function createElementState<TState>(key: string): (patch: Partial<TState>) => void {
-  let state: Partial<TState> = {};
-  _stateResetters.push(() => {
-    state = {};
+function elementKey(el: ChromeElement): string {
+  if ("_name" in el) return `${el._area}:${el._name}`;
+  return el._area;
+}
+
+function buildState(effectiveMap: ReadonlyMap<string, ChromeElement>): ChromeState {
+  const state: Record<string, unknown> = {};
+
+  for (const el of effectiveMap.values()) {
+    switch (el._area) {
+      case "titleBar":
+        state["titleBar"] = el._config;
+        break;
+      case "navigation":
+        state["navigation"] = el._config;
+        break;
+      case "toolbar":
+        state["toolbar"] = el._config;
+        break;
+      case "sidebarPanel":
+        state["sidebarPanel"] = el._config;
+        break;
+      case "statusBar":
+        state["statusBar"] = el._config;
+        break;
+      case "homeIndicator":
+        state["homeIndicator"] = el._config;
+        break;
+      case "keyboard":
+        state["keyboard"] = el._config;
+        break;
+      case "menuBar":
+        state["menuBar"] = el._config;
+        break;
+      case "sheet": {
+        const sheets = (state["sheets"] ?? {}) as Record<string, SheetConfig>;
+        sheets[el._name] = el._config;
+        state["sheets"] = sheets;
+        break;
+      }
+      case "drawer": {
+        const drawers = (state["drawers"] ?? {}) as Record<string, DrawerConfig>;
+        drawers[el._name] = el._config;
+        state["drawers"] = drawers;
+        break;
+      }
+      case "appWindow": {
+        const appWindows = (state["appWindows"] ?? {}) as Record<string, AppWindowConfig>;
+        appWindows[el._name] = el._config;
+        state["appWindows"] = appWindows;
+        break;
+      }
+      case "popover": {
+        const popovers = (state["popovers"] ?? {}) as Record<string, PopoverConfig>;
+        popovers[el._name] = el._config;
+        state["popovers"] = popovers;
+        break;
+      }
+    }
+  }
+
+  return state as ChromeState;
+}
+
+function flushState(): void {
+  // Walk the stack from bottom to top; later layers overwrite earlier ones.
+  const effectiveMap = new Map<string, ChromeElement>();
+  for (const layer of layerStack) {
+    for (const [key, el] of layer) {
+      effectiveMap.set(key, el);
+    }
+  }
+  _bridgeSend("__chrome__", "__chrome_set_state__", buildState(effectiveMap));
+}
+
+// ─── Flush scheduling ─────────────────────────────────────────────────────────
+// Defers the actual bridge send to a microtask so that synchronous
+// cleanup+re-apply cycles (e.g. React useEffect dependency change: old effect
+// cleanup fires → new effect fires, both in the same JS tick) coalesce into a
+// single native message carrying the final merged state. Without this, the
+// native side would receive an intermediate empty-ish state that causes it to
+// reset and then immediately re-apply chrome areas — producing visible flicker
+// and spurious animations in every chrome area (title bar, toolbar, navigation,
+// sheets, etc.).
+
+let _pendingFlush = false;
+// Incremented by _resetChromeState() to cancel in-flight microtasks across
+// test boundaries without needing to track individual microtask handles.
+let _flushGeneration = 0;
+
+function scheduleFlush(): void {
+  if (_pendingFlush) return;
+  _pendingFlush = true;
+  const gen = _flushGeneration;
+  queueMicrotask(() => {
+    if (_flushGeneration !== gen) return; // cancelled by _resetChromeState
+    _pendingFlush = false;
+    flushState();
   });
-  return (patch: Partial<TState>): void => {
-    state = { ...state, ...patch };
-    _bridgeSend("__chrome__", "__chrome_set_state__", { [key]: state });
-  };
 }
 
-/**
- * Creates a typed `on*` subscription method for a specific chrome event.
- * The returned method registers a handler and returns an unsubscribe function.
- */
-function createListener<E extends ChromeEventName>(
-  eventName: E,
-): (handler: ChromeEventHandler<E>) => Unsubscribe {
-  return (handler: ChromeEventHandler<E>): Unsubscribe => chromeOn(eventName, handler);
-}
+// ─── Event Routing ────────────────────────────────────────────────────────────
 
-// ─── Event routing ────────────────────────────────────────────────────────────
+type AnyHandler = (event: ChromeEvent) => void;
+
+const specificListeners = new Map<ChromeEventType, Set<AnyHandler>>();
+const wildcardListeners = new Set<AnyHandler>();
 
 function handleIncoming(message: NativeToJsMessage): void {
-  const eventName = message.event as ChromeEventName;
-  const data = message.data as ChromeEventMap[typeof eventName];
+  const eventType = message.event as ChromeEventType;
+  const data = message.data as Record<string, unknown>;
+  const event = { type: eventType, ...data } as ChromeEvent;
 
-  const listeners = chromeEventListeners.get(eventName);
+  const listeners = specificListeners.get(eventType);
   if (listeners) {
     for (const listener of listeners) {
-      listener(data);
+      listener(event);
     }
+  }
+
+  for (const listener of wildcardListeners) {
+    listener(event);
   }
 }
 
 _registerReceiveHandler(handleIncoming);
 
-// ─── Internal on/off implementation ──────────────────────────────────────────
+// ─── Internal Subscription Helpers ────────────────────────────────────────────
 
-function chromeOn<E extends ChromeEventName>(
-  event: E,
-  handler: ChromeEventHandler<E>,
+function subscribeSpecific<T extends ChromeEventType>(
+  type: T,
+  handler: (event: Extract<ChromeEvent, { readonly type: T }>) => void,
 ): Unsubscribe {
-  if (!chromeEventListeners.has(event)) {
-    chromeEventListeners.set(event, new Set());
+  const h = handler as AnyHandler;
+  if (!specificListeners.has(type)) {
+    specificListeners.set(type, new Set());
   }
-  chromeEventListeners.get(event)!.add(handler as ChromeEventHandler<ChromeEventName>);
-  return () => chromeOff(event, handler);
+  specificListeners.get(type)!.add(h);
+  return () => {
+    specificListeners.get(type)?.delete(h);
+  };
 }
 
-function chromeOff<E extends ChromeEventName>(event: E, handler: ChromeEventHandler<E>): void {
-  chromeEventListeners.get(event)?.delete(handler as ChromeEventHandler<ChromeEventName>);
+function subscribeAll(handler: (event: ChromeEvent) => void): Unsubscribe {
+  wildcardListeners.add(handler);
+  return () => {
+    wildcardListeners.delete(handler);
+  };
 }
 
-// ─── Element state senders ────────────────────────────────────────────────────
+// ─── chrome() callable ───────────────────────────────────────────────────────
 
-const sendNavBar = createElementState<NavigationBarState>("navigationBar");
-const sendTabBar = createElementState<TabBarState>("tabBar");
-const sendToolbar = createElementState<ToolbarState>("toolbar");
-const sendStatusBar = createElementState<StatusBarState>("statusBar");
-const sendHomeIndicator = createElementState<HomeIndicatorState>("homeIndicator");
-const sendSearchBar = createElementState<SearchBarState>("searchBar");
-const sendSheet = createElementState<SheetState>("sheet");
-const sendKeyboard = createElementState<KeyboardState>("keyboard");
-const sendSidebar = createElementState<SidebarState>("sidebar");
-const sendWindow = createElementState<WindowState>("window");
-const sendMenuBar = createElementState<MenuBarState>("menuBar");
+type ChromeOnOverloads = {
+  <T extends ChromeEventType>(
+    type: T,
+    handler: (event: Extract<ChromeEvent, { readonly type: T }>) => void,
+  ): Unsubscribe;
+  (handler: (event: ChromeEvent) => void): Unsubscribe;
+};
 
-// ─── chrome ──────────────────────────────────────────────────────────────────
+// ─── Shared Messaging Worker ──────────────────────────────────────────────────
+// The instance name is injected by the native shell via a WKUserScript as
+// window.__nativekit_instance_name__ before any app code runs.
+// The primary webview is always "main"; child webviews use their configured
+// name (e.g. "settings" for sheet("settings", ...)).
 
-/**
- * The Nativite chrome API — singleton namespaces for each native UI element.
- *
- * @example
- * // Configure the navigation bar
- * chrome.navigationBar.setTitle("Settings");
- * chrome.navigationBar.setToolbarRight([
- *   { type: "button", id: "save", title: "Save", style: "done" },
- * ]);
- * chrome.navigationBar.show();
- *
- * // Subscribe to button taps (returns an unsubscribe function)
- * const unsub = chrome.navigationBar.onButtonTap(({ id }) => {
- *   console.log("Tapped:", id);
- * });
- * unsub(); // remove listener
- *
- * // Set up the tab bar
- * chrome.tabBar.setTabs([
- *   { id: "home", title: "Home", systemImage: "house.fill" },
- *   { id: "profile", title: "Profile", systemImage: "person.fill" },
- * ]);
- * chrome.tabBar.show();
- * const unsubTab = chrome.tabBar.onSelect(({ id }) => console.log("Tab:", id));
- */
-export const chrome = {
-  /** Navigation bar (top of screen). */
-  navigationBar: {
-    /** Show the navigation bar. */
-    show: (): void => sendNavBar({ hidden: false }),
-    /** Hide the navigation bar. */
-    hide: (): void => sendNavBar({ hidden: true }),
-    /** Set the title text. */
-    setTitle: (title: string): void => sendNavBar({ title }),
-    /** Set the items on the leading (left) side. Supports buttons, spaces, and iOS button menus. */
-    setToolbarLeft: (items: ToolbarItem[]): void => sendNavBar({ toolbarLeft: items }),
-    /** Set the items on the trailing (right) side. Supports buttons, spaces, and iOS button menus. */
-    setToolbarRight: (items: ToolbarItem[]): void => sendNavBar({ toolbarRight: items }),
-    /** Configure appearance properties (tint, background colour, translucency, back button label). */
-    configure: (
-      opts: Partial<
-        Pick<
-          NavigationBarState,
-          "tintColor" | "barTintColor" | "translucent" | "backButtonTitle" | "largeTitleMode"
-        >
-      >,
-    ): void => sendNavBar(opts),
-    /** Subscribe to navigation bar button taps. Returns an unsubscribe function. */
-    onButtonTap: createListener("navigationBar.buttonTapped"),
-    /** Subscribe to the back button being tapped. Returns an unsubscribe function. */
-    onBackTap: createListener("navigationBar.backTapped"),
-  },
+function instanceName(): string {
+  if (typeof window === "undefined") return "main";
+  const name = (window as unknown as Record<string, unknown>)["__nativekit_instance_name__"];
+  return typeof name === "string" ? name : "main";
+}
 
-  /** Tab bar (bottom of screen). */
-  tabBar: {
-    /** Show the tab bar. */
-    show: (): void => sendTabBar({ hidden: false }),
-    /** Hide the tab bar. */
-    hide: (): void => sendTabBar({ hidden: true }),
-    /** Set the tab items. */
-    setTabs: (items: TabItem[]): void => sendTabBar({ items }),
-    /** Set the currently selected tab by ID. */
-    setActiveTab: (id: string): void => sendTabBar({ selectedTabId: id }),
-    /** Configure appearance properties (tint colours, translucency). */
-    configure: (
-      opts: Partial<
-        Pick<TabBarState, "tintColor" | "unselectedTintColor" | "barTintColor" | "translucent">
-      >,
-    ): void => sendTabBar(opts),
-    /** Subscribe to tab selection. Returns an unsubscribe function. */
-    onSelect: createListener("tabBar.tabSelected"),
-  },
+// Lazily initialised on first messaging call; null when SharedWorker is
+// unavailable (Node / Bun test runner) or when injected by _setWorkerPort.
+let _workerPort: MessagePort | null = null;
 
-  /** Bottom toolbar (UINavigationController toolbar). */
-  toolbar: {
-    /** Show the toolbar. */
-    show: (): void => sendToolbar({ hidden: false }),
-    /** Hide the toolbar. */
-    hide: (): void => sendToolbar({ hidden: true }),
-    /** Set the toolbar items. Supports buttons, spaces, and iOS button menus. */
-    setItems: (items: ToolbarItem[]): void => sendToolbar({ items }),
-    /** Configure appearance properties (background colour, translucency). */
-    configure: (opts: Partial<Pick<ToolbarState, "barTintColor" | "translucent">>): void =>
-      sendToolbar(opts),
-    /** Subscribe to toolbar button taps. Returns an unsubscribe function. */
-    onButtonTap: createListener("toolbar.buttonTapped"),
-  },
-
-  /** Status bar style and visibility. */
-  statusBar: {
-    /** Show the status bar. */
-    show: (): void => sendStatusBar({ hidden: false }),
-    /** Hide the status bar. */
-    hide: (): void => sendStatusBar({ hidden: true }),
-    /** Set the status bar style. */
-    setStyle: (style: "light" | "dark"): void => sendStatusBar({ style }),
-  },
-
-  /** Home indicator visibility. */
-  homeIndicator: {
-    /** Show the home indicator. */
-    show: (): void => sendHomeIndicator({ hidden: false }),
-    /** Hide the home indicator. */
-    hide: (): void => sendHomeIndicator({ hidden: true }),
-  },
-
-  /** Search bar. */
-  searchBar: {
-    /** Set the search field text. */
-    setText: (text: string): void => sendSearchBar({ text }),
-    /** Set the placeholder text shown when the field is empty. */
-    setPlaceholder: (placeholder: string): void => sendSearchBar({ placeholder }),
-    /** Configure appearance properties (background colour, cancel button visibility). */
-    configure: (opts: Partial<Pick<SearchBarState, "barTintColor" | "showsCancelButton">>): void =>
-      sendSearchBar(opts),
-    /** Subscribe to text changes. Returns an unsubscribe function. */
-    onTextChange: createListener("searchBar.textChanged"),
-    /** Subscribe to search submission (return key). Returns an unsubscribe function. */
-    onSubmit: createListener("searchBar.submitted"),
-    /** Subscribe to the cancel button being tapped. Returns an unsubscribe function. */
-    onCancel: createListener("searchBar.cancelled"),
-  },
-
-  /** Sheet / bottom sheet modal. */
-  sheet: {
-    /** Present the sheet. */
-    present: (): void => sendSheet({ presented: true }),
-    /** Dismiss the sheet. */
-    dismiss: (): void => sendSheet({ presented: false }),
-    /** Set the available detent stops. */
-    setDetents: (detents: SheetDetent[]): void => sendSheet({ detents }),
-    /** Set the currently selected detent. */
-    setSelectedDetent: (detent: SheetDetent): void => sendSheet({ selectedDetent: detent }),
-    /**
-     * Set the sheet webview URL.
-     * Use `"/route"` to load the same app host route (dev server host in dev,
-     * bundled SPA entry in prod).
-     */
-    setURL: (url: string): void => sendSheet({ url }),
-    /** Configure appearance properties (grabber, background colour, corner radius). */
-    configure: (
-      opts: Partial<Pick<SheetState, "grabberVisible" | "backgroundColor" | "cornerRadius">>,
-    ): void => sendSheet(opts),
-    /** Send a message to JS running inside the sheet webview. */
-    postMessage: (message: unknown): void => {
-      // When called inside the sheet webview itself, route directly to the
-      // sheet->main bridge helper for ergonomics.
-      if (
-        typeof window !== "undefined" &&
-        typeof window.nativiteSheet?.postMessage === "function"
-      ) {
-        window.nativiteSheet.postMessage(message);
-        return;
+function connectWorker(): MessagePort | null {
+  if (_workerPort !== null) return _workerPort;
+  if (typeof SharedWorker === "undefined") return null;
+  try {
+    const worker = new SharedWorker(new URL("../messaging-worker.ts", import.meta.url), {
+      type: "module",
+    });
+    _workerPort = worker.port;
+    _workerPort.addEventListener("message", (e: MessageEvent) => {
+      const msg = e.data as { type: string; from: string; payload: unknown };
+      if (msg.type === "message") {
+        handleIncoming({
+          id: null,
+          type: "event",
+          event: "message",
+          data: { from: msg.from, payload: msg.payload },
+        });
       }
-      _bridgeSend("__chrome__", "__chrome_sheet_post_message_to_sheet__", message);
-    },
-    /** Subscribe to detent changes (user dragging). Returns an unsubscribe function. */
-    onDetentChange: createListener("sheet.detentChanged"),
-    /** Subscribe to the sheet being dismissed. Returns an unsubscribe function. */
-    onDismiss: createListener("sheet.dismissed"),
-    /** Subscribe to messages posted from sheet webview JS. Returns an unsubscribe function. */
-    onMessage: createListener("sheet.message"),
-    /** Subscribe to sheet webview load failures. Returns an unsubscribe function. */
-    onLoadFailed: createListener("sheet.loadFailed"),
-  },
+    });
+    _workerPort.start();
+    _workerPort.postMessage({ type: "register", name: instanceName() });
+  } catch {
+    _workerPort = null;
+  }
+  return _workerPort;
+}
 
-  /** Keyboard input accessory bar. */
-  keyboard: {
-    /** Set the input accessory bar. Pass null to remove it. */
-    setAccessory: (accessory: KeyboardState["inputAccessory"]): void =>
-      sendKeyboard({ inputAccessory: accessory }),
-    /** Configure keyboard dismiss behaviour. */
-    configure: (opts: Partial<Pick<KeyboardState, "dismissMode">>): void => sendKeyboard(opts),
-    /** Subscribe to accessory bar button taps. Returns an unsubscribe function. */
-    onAccessoryItemTap: createListener("keyboard.accessory.itemTapped"),
-  },
+interface ChromeMessaging {
+  postToParent(payload: unknown): void;
+  postToChild(name: string, payload: unknown): void;
+  broadcast(payload: unknown): void;
+  onMessage(handler: (from: "main" | (string & {}), payload: unknown) => void): Unsubscribe;
+}
 
-  /** Sidebar column (iPad / macOS). */
-  sidebar: {
-    /** Show the sidebar column. */
-    show: (): void => sendSidebar({ visible: true }),
-    /** Hide the sidebar column. */
-    hide: (): void => sendSidebar({ visible: false }),
-    /** Set the sidebar items. */
-    setItems: (items: SidebarState["items"]): void => sendSidebar({ items }),
-    /** Set the active sidebar item by ID. */
-    setActiveItem: (id: string): void => sendSidebar({ selectedItemId: id }),
-    /** Subscribe to sidebar item selection. Returns an unsubscribe function. */
-    onItemSelect: createListener("sidebar.itemSelected"),
-  },
+interface ChromeFunction {
+  (...elements: ChromeElement[]): Unsubscribe;
+  readonly on: ChromeOnOverloads;
+  readonly messaging: ChromeMessaging;
+}
 
-  /** macOS window title bar. */
-  window: {
-    /** Set the window title. */
-    setTitle: (title: string): void => sendWindow({ title }),
-    /** Set the window subtitle. */
-    setSubtitle: (subtitle: string): void => sendWindow({ subtitle }),
-    /** Configure title bar appearance (separator style, title visibility, full-size content). */
-    configure: (
-      opts: Partial<
-        Pick<WindowState, "titlebarSeparatorStyle" | "titleHidden" | "fullSizeContent">
-      >,
-    ): void => sendWindow(opts),
-  },
+function chromeImpl(...elements: ChromeElement[]): Unsubscribe {
+  const layer: Layer = new Map();
+  for (const el of elements) {
+    layer.set(elementKey(el), el);
+  }
+  layerStack.push(layer);
+  scheduleFlush();
 
-  /** macOS menu bar (extra menus appended after built-in menus). */
-  menuBar: {
-    /** Set the extra menu bar menus. */
-    setMenus: (menus: MenuBarState["menus"]): void => sendMenuBar({ menus }),
-    /** Subscribe to menu item selection. Returns an unsubscribe function. */
-    onItemSelect: createListener("menuBar.itemSelected"),
-  },
+  return (): void => {
+    const idx = layerStack.indexOf(layer);
+    if (idx === -1) return;
+    layerStack.splice(idx, 1);
+    scheduleFlush();
+  };
+}
 
-  /**
-   * Raw batch state update — sets multiple chrome elements at once.
-   * State is sent as-is without merging with per-element held state.
-   */
-  set(state: ChromeState): void {
-    _bridgeSend("__chrome__", "__chrome_set_state__", state);
-  },
+const chromeOn: ChromeOnOverloads = (<T extends ChromeEventType>(
+  typeOrHandler: T | ((event: ChromeEvent) => void),
+  handler?: (event: Extract<ChromeEvent, { readonly type: T }>) => void,
+): Unsubscribe => {
+  if (typeof typeOrHandler === "function") {
+    return subscribeAll(typeOrHandler);
+  }
+  return subscribeSpecific(typeOrHandler, handler!);
+}) as ChromeOnOverloads;
 
-  /**
-   * Subscribe to any chrome event by name. Returns an unsubscribe function.
-   * Useful for events without a dedicated `on*` method (e.g. `"safeArea.changed"`),
-   * or for listening to multiple elements from a single handler.
-   *
-   * @example
-   * const unsub = chrome.on("safeArea.changed", ({ top, bottom }) => { ... })
-   * unsub()
-   */
-  on<E extends ChromeEventName>(event: E, handler: ChromeEventHandler<E>): Unsubscribe {
-    return chromeOn(event, handler);
+const messaging: ChromeMessaging = {
+  postToParent(payload: unknown): void {
+    const port = connectWorker();
+    if (port) {
+      port.postMessage({ type: "postToParent", from: instanceName(), payload });
+    } else {
+      _bridgeSend("__chrome__", "__chrome_messaging_post_to_parent__", payload);
+    }
   },
-
-  /** Unsubscribe a handler from a chrome event. */
-  off<E extends ChromeEventName>(event: E, handler: ChromeEventHandler<E>): void {
-    chromeOff(event, handler);
+  postToChild(name: string, payload: unknown): void {
+    const port = connectWorker();
+    if (port) {
+      port.postMessage({ type: "postToChild", from: instanceName(), to: name, payload });
+    } else {
+      _bridgeSend("__chrome__", "__chrome_messaging_post_to_child__", { name, payload });
+    }
   },
-} as const;
+  broadcast(payload: unknown): void {
+    const port = connectWorker();
+    if (port) {
+      port.postMessage({ type: "broadcast", from: instanceName(), payload });
+    } else {
+      _bridgeSend("__chrome__", "__chrome_messaging_broadcast__", payload);
+    }
+  },
+  onMessage(handler: (from: "main" | (string & {}), payload: unknown) => void): Unsubscribe {
+    // Eagerly connect to the SharedWorker so this instance is registered (as
+    // "main") before any child webview sends a postToParent message.  Without
+    // this call, connectWorker() would only fire when the parent itself sends a
+    // message, meaning the SharedWorker's ports.get("main") would be undefined
+    // and child→parent messages would be silently dropped.
+    connectWorker();
+    return subscribeSpecific("message", (event) => {
+      handler(event.from, event.payload);
+    });
+  },
+};
 
-// ─── Test helpers ─────────────────────────────────────────────────────────────
+export const chrome = Object.assign(chromeImpl, {
+  on: chromeOn,
+  messaging,
+}) as ChromeFunction;
+
+// ─── Chrome Area Factory Functions ────────────────────────────────────────────
+
+export function titleBar(config: TitleBarConfig): ChromeElement {
+  return { _area: "titleBar", _config: config };
+}
+
+export function navigation(config: NavigationConfig): ChromeElement {
+  return { _area: "navigation", _config: config };
+}
+
+export function toolbar(config: ToolbarConfig): ChromeElement {
+  return { _area: "toolbar", _config: config };
+}
+
+export function sidebarPanel(config: SidebarPanelConfig): ChromeElement {
+  return { _area: "sidebarPanel", _config: config };
+}
+
+export function statusBar(config: StatusBarConfig): ChromeElement {
+  return { _area: "statusBar", _config: config };
+}
+
+export function homeIndicator(config: HomeIndicatorConfig): ChromeElement {
+  return { _area: "homeIndicator", _config: config };
+}
+
+export function keyboard(config: KeyboardConfig): ChromeElement {
+  return { _area: "keyboard", _config: config };
+}
+
+export function menuBar(config: MenuBarConfig): ChromeElement {
+  return { _area: "menuBar", _config: config };
+}
+
+// ─── Child Webview Factory Functions ─────────────────────────────────────────
+
+export function sheet(name: string, config: SheetConfig): ChromeElement {
+  return { _area: "sheet", _name: name, _config: config };
+}
+
+export function drawer(name: string, config: DrawerConfig): ChromeElement {
+  return { _area: "drawer", _name: name, _config: config };
+}
+
+export function appWindow(name: string, config: AppWindowConfig): ChromeElement {
+  return { _area: "appWindow", _name: name, _config: config };
+}
+
+export function popover(name: string, config: PopoverConfig): ChromeElement {
+  return { _area: "popover", _name: name, _config: config };
+}
+
+// ─── Item Constructors ────────────────────────────────────────────────────────
+
+export function button(config: ButtonItem): ButtonItem {
+  return config;
+}
+
+export function navItem(config: NavigationItem): NavigationItem {
+  return config;
+}
+
+export function menuItem(config: MenuItem): MenuItem {
+  return config;
+}
+
+// ─── Test Helpers ─────────────────────────────────────────────────────────────
 
 /** @internal */
 export const _handleIncoming = handleIncoming;
 
-/** @internal — Reset all held element state. For use in test beforeEach only. */
+/** @internal — Reset all chrome state and listeners. For use in test beforeEach only. */
 export function _resetChromeState(): void {
-  for (const reset of _stateResetters) {
-    reset();
-  }
+  layerStack.splice(0);
+  specificListeners.clear();
+  wildcardListeners.clear();
+  _workerPort = null;
+  _pendingFlush = false;
+  _flushGeneration++; // invalidate any in-flight microtask so it becomes a no-op
+}
+
+/**
+ * @internal — Immediately flush any pending scheduled state to the bridge.
+ * Use this in tests after calling `chrome()` or its cleanup function when you
+ * need to assert on `_bridgeSend` calls synchronously rather than waiting for
+ * the microtask queue to drain.
+ */
+export function _drainFlush(): void {
+  if (!_pendingFlush) return;
+  _pendingFlush = false;
+  _flushGeneration++; // cancel the queued microtask so it won't double-fire
+  flushState();
+}
+
+/** @internal — Inject a mock SharedWorker port so messaging tests can verify
+ *  worker-path behaviour without a real SharedWorker environment. */
+export function _setWorkerPort(port: MessagePort | null): void {
+  _workerPort = port;
 }

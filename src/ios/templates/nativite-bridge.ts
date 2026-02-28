@@ -69,18 +69,34 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
       return
     }
 
-    // Chrome sheet message (main webview -> sheet webview) — fire-and-forget
-    if namespace == "__chrome__" && method == "__chrome_sheet_post_message_to_sheet__" {
+    // Chrome inter-webview messaging — native fallback (SharedWorker not available)
+    if namespace == "__chrome__" && method == "__chrome_messaging_post_to_parent__" {
       if !isMessageFromPrimaryWebView(message) {
-        // Sheet webview fallback: treat chrome.sheet.postMessage(...) as
-        // sheet->main messaging so host listeners still receive it.
+        // Child webview → primary webview
         chrome.viewController = viewController
-        chrome.sendEvent(name: "sheet.message", data: ["message": body["args"] ?? NSNull()])
-        replyHandler(nil, nil)
-        return
+        let fromName = chrome.instanceName(for: message.webView)
+        chrome.sendEvent(name: "message", data: ["from": fromName, "payload": body["args"] ?? NSNull()])
       }
+      replyHandler(nil, nil)
+      return
+    }
+
+    if namespace == "__chrome__" && method == "__chrome_messaging_post_to_child__" {
+      if isMessageFromPrimaryWebView(message) {
+        chrome.viewController = viewController
+        if let args = body["args"] as? [String: Any],
+           let name = args["name"] as? String {
+          chrome.postMessageToChild(name: name, payload: args["payload"])
+        }
+      }
+      replyHandler(nil, nil)
+      return
+    }
+
+    if namespace == "__chrome__" && method == "__chrome_messaging_broadcast__" {
       chrome.viewController = viewController
-      chrome.postMessageToSheet(body["args"])
+      let fromName = isMessageFromPrimaryWebView(message) ? "main" : chrome.instanceName(for: message.webView)
+      chrome.broadcastMessage(from: fromName, payload: body["args"])
       replyHandler(nil, nil)
       return
     }

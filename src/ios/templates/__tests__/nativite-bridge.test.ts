@@ -16,16 +16,34 @@ describe("nativiteBridgeTemplate", () => {
     expect(output).toContain("return sourceWebView === primaryWebView");
   });
 
-  it("routes sheet-context chrome.sheet.postMessage fallback to sheet.message host events", () => {
+  it("handles post_to_parent messaging from child webviews", () => {
     const output = nativiteBridgeTemplate(baseConfig);
 
     expect(output).toContain(
-      'if namespace == "__chrome__" && method == "__chrome_sheet_post_message_to_sheet__" {',
+      'if namespace == "__chrome__" && method == "__chrome_messaging_post_to_parent__" {',
     );
     expect(output).toContain("if !isMessageFromPrimaryWebView(message) {");
+    expect(output).toContain("let fromName = chrome.instanceName(for: message.webView)");
     expect(output).toContain(
-      'chrome.sendEvent(name: "sheet.message", data: ["message": body["args"] ?? NSNull()])',
+      'chrome.sendEvent(name: "message", data: ["from": fromName, "payload": body["args"] ?? NSNull()])',
     );
-    expect(output).toContain('chrome.postMessageToSheet(body["args"])');
+  });
+
+  it("handles post_to_child messaging from the primary webview", () => {
+    const output = nativiteBridgeTemplate(baseConfig);
+
+    expect(output).toContain(
+      'if namespace == "__chrome__" && method == "__chrome_messaging_post_to_child__" {',
+    );
+    expect(output).toContain('chrome.postMessageToChild(name: name, payload: args["payload"])');
+  });
+
+  it("handles broadcast messaging from any webview", () => {
+    const output = nativiteBridgeTemplate(baseConfig);
+
+    expect(output).toContain(
+      'if namespace == "__chrome__" && method == "__chrome_messaging_broadcast__" {',
+    );
+    expect(output).toContain('chrome.broadcastMessage(from: fromName, payload: body["args"])');
   });
 });

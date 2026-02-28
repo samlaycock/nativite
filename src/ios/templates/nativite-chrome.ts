@@ -61,6 +61,7 @@ class NativiteChrome: NSObject {
   // Self-managed tab bar — not backed by a UITabBarController. Installed lazily
   // into vc.view on the first applyTabBar(_:) call.
   private lazy var tabBar = UITabBar()
+  private var lastAppliedAreas: Set<String> = []
 
   // ── Entry point ────────────────────────────────────────────────────────────
 
@@ -70,11 +71,18 @@ class NativiteChrome: NSObject {
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
 
-      if let navBar = state["navigationBar"] as? [String: Any] {
-        self.applyNavigationBar(navBar)
+      // Reset areas that were previously applied but are now absent.
+      let currentAreas = Set(state.keys)
+      for area in self.lastAppliedAreas.subtracting(currentAreas) {
+        self.resetArea(area)
       }
-      if let tabBar = state["tabBar"] as? [String: Any] {
-        self.applyTabBar(tabBar)
+      self.lastAppliedAreas = currentAreas
+
+      if let titleBar = state["titleBar"] as? [String: Any] {
+        self.applyTitleBar(titleBar)
+      }
+      if let navigation = state["navigation"] as? [String: Any] {
+        self.applyNavigation(navigation)
       }
       if let toolbar = state["toolbar"] as? [String: Any] {
         self.applyToolbar(toolbar)
@@ -85,11 +93,10 @@ class NativiteChrome: NSObject {
       if let homeIndicator = state["homeIndicator"] as? [String: Any] {
         self.applyHomeIndicator(homeIndicator)
       }
-      if let searchBar = state["searchBar"] as? [String: Any] {
-        self.applySearchBar(searchBar)
-      }
-      if let sheet = state["sheet"] as? [String: Any] {
-        self.applySheet(sheet)
+      if let sheets = state["sheets"] as? [String: [String: Any]] {
+        for (name, sheetState) in sheets {
+          self.applySheet(name: name, state: sheetState)
+        }
       }
       // keyboard key — forward to NativiteKeyboard when the key is present.
       // We pass the dict directly; NativiteKeyboard handles missing/null sub-keys.
@@ -122,52 +129,47 @@ class NativiteChrome: NSObject {
     )
   }
 ${applyInitialStateMethod}
-  // ── Navigation Bar ─────────────────────────────────────────────────────────
+  // ── Title Bar ──────────────────────────────────────────────────────────────
 
-  private func applyNavigationBar(_ state: [String: Any]) {
+  private func applyTitleBar(_ state: [String: Any]) {
     guard let vc = viewController,
           let navController = vc.navigationController else { return }
 
     let navItem = vc.navigationItem
-    let navBar = navController.navigationBar
 
     if let title = state["title"] as? String {
       navItem.title = title
     }
+    if let subtitle = state["subtitle"] as? String {
+      navItem.prompt = subtitle
+    }
     if let mode = state["largeTitleMode"] as? String {
       navItem.largeTitleDisplayMode = largeTitleDisplayMode(from: mode)
     }
-    if let backTitle = state["backButtonTitle"] as? String {
-      navItem.backButtonTitle = backTitle
-    } else if state["backButtonTitle"] is NSNull {
+    if let backLabel = state["backLabel"] as? String {
+      navItem.backButtonTitle = backLabel
+    } else if state["backLabel"] is NSNull {
       navItem.backButtonTitle = ""
     }
-    if let hex = state["tintColor"] as? String {
-      navBar.tintColor = UIColor(hex: hex)
+    let navHidden = (state["hidden"] as? Bool) ?? false
+    if navController.isNavigationBarHidden != navHidden {
+      navController.setNavigationBarHidden(navHidden, animated: true)
     }
-    if let hex = state["barTintColor"] as? String {
-      let appearance = UINavigationBarAppearance()
-      appearance.configureWithOpaqueBackground()
-      appearance.backgroundColor = UIColor(hex: hex)
-      navBar.standardAppearance = appearance
-      navBar.scrollEdgeAppearance = appearance
+    if let leadingItems = state["leadingItems"] as? [[String: Any]] {
+      navItem.leftBarButtonItems = leadingItems.compactMap { toolbarItem($0, position: "left") }
     }
-    if let translucent = state["translucent"] as? Bool {
-      navBar.isTranslucent = translucent
+    if let trailingItems = state["trailingItems"] as? [[String: Any]] {
+      navItem.rightBarButtonItems = trailingItems.compactMap { toolbarItem($0, position: "right") }
     }
-    navController.setNavigationBarHidden((state["hidden"] as? Bool) ?? false, animated: true)
-    if let leftItems = state["toolbarLeft"] as? [[String: Any]] {
-      navItem.leftBarButtonItems = leftItems.compactMap { toolbarItem($0, position: "left") }
-    }
-    if let rightItems = state["toolbarRight"] as? [[String: Any]] {
-      navItem.rightBarButtonItems = rightItems.compactMap { toolbarItem($0, position: "right") }
+    if let searchBarState = state["searchBar"] as? [String: Any] {
+      applySearchBar(searchBarState, to: vc)
     }
   }
 
   private func largeTitleDisplayMode(from string: String) -> UINavigationItem.LargeTitleDisplayMode {
     switch string {
-    case "always": return .always
-    case "never": return .never
+    case "large": return .always
+    case "inline": return .never
     default: return .automatic
     }
   }
@@ -177,7 +179,7 @@ ${applyInitialStateMethod}
 
     let style: UIBarButtonItem.Style
     switch state["style"] as? String {
-    case "done": style = .done
+    case "primary": style = .done
     default: style = .plain
     }
 
@@ -185,8 +187,6 @@ ${applyInitialStateMethod}
     if #available(iOS 14.0, *) {
       if let menuState = state["menu"] as? [String: Any] {
         menu = barButtonMenu(menuState, position: position)
-      } else if let menuItems = state["menu"] as? [[String: Any]] {
-        menu = barButtonMenu(["items": menuItems], position: position)
       } else {
         menu = nil
       }
@@ -195,24 +195,27 @@ ${applyInitialStateMethod}
     }
 
     let item: UIBarButtonItem
-    if let symbolName = state["systemImage"] as? String,
+    if let symbolName = state["icon"] as? String,
        let image = UIImage(systemName: symbolName) {
       if #available(iOS 14.0, *), let menu {
         item = UIBarButtonItem(title: nil, image: image, primaryAction: nil, menu: menu)
       } else {
         item = UIBarButtonItem(image: image, style: style, target: self, action: #selector(barButtonTapped(_:)))
       }
-    } else if let title = state["title"] as? String {
+    } else if let label = state["label"] as? String {
       if #available(iOS 14.0, *), let menu {
-        item = UIBarButtonItem(title: title, image: nil, primaryAction: nil, menu: menu)
+        item = UIBarButtonItem(title: label, image: nil, primaryAction: nil, menu: menu)
       } else {
-        item = UIBarButtonItem(title: title, style: style, target: self, action: #selector(barButtonTapped(_:)))
+        item = UIBarButtonItem(title: label, style: style, target: self, action: #selector(barButtonTapped(_:)))
       }
     } else {
       return nil
     }
 
     item.style = style
+    if (state["style"] as? String) == "destructive" {
+      item.tintColor = .systemRed
+    }
     item.accessibilityIdentifier = "\\(position):\\(id)"
     item.isEnabled = !((state["disabled"] as? Bool) ?? false)
     return item
@@ -229,22 +232,18 @@ ${applyInitialStateMethod}
 
   @available(iOS 14.0, *)
   private func barButtonMenuElement(_ itemState: [String: Any], position: String) -> UIMenuElement? {
-    if itemState["separator"] as? Bool == true {
-      return UIMenuElement.separator()
-    }
-
-    if let submenuStates = itemState["submenu"] as? [[String: Any]] {
-      let menuTitle = itemState["title"] as? String ?? ""
-      let menuImage = (itemState["systemImage"] as? String).flatMap { UIImage(systemName: $0) }
-      let children = submenuStates.compactMap { barButtonMenuElement($0, position: position) }
+    if let childrenStates = itemState["children"] as? [[String: Any]] {
+      let menuLabel = itemState["label"] as? String ?? ""
+      let menuImage = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
+      let children = childrenStates.compactMap { barButtonMenuElement($0, position: position) }
       guard !children.isEmpty else { return nil }
-      return UIMenu(title: menuTitle, image: menuImage, identifier: nil, options: [], children: children)
+      return UIMenu(title: menuLabel, image: menuImage, identifier: nil, options: [], children: children)
     }
 
     guard let id = itemState["id"] as? String,
-          let title = itemState["title"] as? String else { return nil }
+          let label = itemState["label"] as? String else { return nil }
 
-    let image = (itemState["systemImage"] as? String).flatMap { UIImage(systemName: $0) }
+    let image = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
     var attributes = UIMenuElement.Attributes()
     if (itemState["disabled"] as? Bool) ?? false {
       attributes.insert(.disabled)
@@ -253,10 +252,14 @@ ${applyInitialStateMethod}
       attributes.insert(.destructive)
     }
     let actionState: UIMenuElement.State = ((itemState["checked"] as? Bool) ?? false) ? .on : .off
-    let eventName = position == "toolbar" ? "toolbar.buttonTapped" : "navigationBar.buttonTapped"
+    let eventName: String
+    switch position {
+    case "toolbar": eventName = "toolbar.menuItemSelected"
+    default:        eventName = "titleBar.menuItemSelected"
+    }
 
     return UIAction(
-      title: title,
+      title: label,
       image: image,
       identifier: nil,
       discoverabilityTitle: nil,
@@ -269,19 +272,20 @@ ${applyInitialStateMethod}
 
   @objc private func barButtonTapped(_ sender: UIBarButtonItem) {
     guard let identifier = sender.accessibilityIdentifier else { return }
-    let parts = identifier.split(separator: ":").map(String.init)
+    let parts = identifier.split(separator: ":", maxSplits: 1).map(String.init)
     guard parts.count == 2 else { return }
+    let position = parts[0]
     let id = parts[1]
-    if parts[0] == "toolbar" {
-      sendEvent(name: "toolbar.buttonTapped", data: ["id": id])
-    } else {
-      sendEvent(name: "navigationBar.buttonTapped", data: ["id": id])
+    switch position {
+    case "toolbar": sendEvent(name: "toolbar.itemTapped", data: ["id": id])
+    case "right":   sendEvent(name: "titleBar.trailingItemTapped", data: ["id": id])
+    default:        sendEvent(name: "titleBar.leadingItemTapped", data: ["id": id])
     }
   }
 
-  // ── Tab Bar ────────────────────────────────────────────────────────────────
+  // ── Navigation (Tab Bar) ───────────────────────────────────────────────────
 
-  private func applyTabBar(_ state: [String: Any]) {
+  private func applyNavigation(_ state: [String: Any]) {
     guard let vc = viewController else { return }
 
     // Lazily install the owned tab bar into vc.view on first use.
@@ -298,45 +302,26 @@ ${applyInitialStateMethod}
 
     if let items = state["items"] as? [[String: Any]] {
       tabBar.items = items.enumerated().compactMap { (index, itemState) -> UITabBarItem? in
-        guard let title = itemState["title"] as? String else { return nil }
-        let image = (itemState["systemImage"] as? String).flatMap { UIImage(systemName: $0) }
-        let item = UITabBarItem(title: title, image: image, tag: index)
+        guard let label = itemState["label"] as? String else { return nil }
+        let image = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
+        let item = UITabBarItem(title: label, image: image, tag: index)
         item.accessibilityIdentifier = itemState["id"] as? String
         if let badge = itemState["badge"] as? String {
           item.badgeValue = badge
+        } else if let badge = itemState["badge"] as? Int {
+          item.badgeValue = String(badge)
         } else if itemState["badge"] is NSNull {
           item.badgeValue = nil
-        }
-        if let hex = itemState["badgeColor"] as? String {
-          item.badgeColor = UIColor(hex: hex)
         }
         return item
       }
     }
 
-    if let selectedId = state["selectedTabId"] as? String,
-       let item = tabBar.items?.first(where: { $0.accessibilityIdentifier == selectedId }) {
+    if let activeId = state["activeItem"] as? String,
+       let item = tabBar.items?.first(where: { $0.accessibilityIdentifier == activeId }) {
       tabBar.selectedItem = item
     }
-    if let hex = state["tintColor"] as? String {
-      tabBar.tintColor = UIColor(hex: hex)
-    }
-    if let hex = state["unselectedTintColor"] as? String {
-      tabBar.unselectedItemTintColor = UIColor(hex: hex)
-    }
-    if let hex = state["barTintColor"] as? String {
-      let appearance = UITabBarAppearance()
-      appearance.configureWithOpaqueBackground()
-      appearance.backgroundColor = UIColor(hex: hex)
-      tabBar.standardAppearance = appearance
-      tabBar.scrollEdgeAppearance = appearance
-    }
-    if let translucent = state["translucent"] as? Bool {
-      tabBar.isTranslucent = translucent
-    }
-    if let hidden = state["hidden"] as? Bool {
-      tabBar.isHidden = hidden
-    }
+    tabBar.isHidden = (state["hidden"] as? Bool) ?? false
   }
 
   // ── Toolbar ────────────────────────────────────────────────────────────────
@@ -345,12 +330,9 @@ ${applyInitialStateMethod}
     guard let vc = viewController,
           let navController = vc.navigationController else { return }
 
-    navController.setToolbarHidden((state["hidden"] as? Bool) ?? false, animated: true)
-    if let hex = state["barTintColor"] as? String {
-      navController.toolbar.barTintColor = UIColor(hex: hex)
-    }
-    if let translucent = state["translucent"] as? Bool {
-      navController.toolbar.isTranslucent = translucent
+    let toolbarHidden = (state["hidden"] as? Bool) ?? false
+    if navController.isToolbarHidden != toolbarHidden {
+      navController.setToolbarHidden(toolbarHidden, animated: true)
     }
     if let items = state["items"] as? [[String: Any]] {
       vc.toolbarItems = items.compactMap { toolbarItem($0) }
@@ -359,9 +341,9 @@ ${applyInitialStateMethod}
 
   private func toolbarItem(_ state: [String: Any], position: String = "toolbar") -> UIBarButtonItem? {
     switch state["type"] as? String {
-    case "flexibleSpace":
+    case "flexible-space":
       return UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-    case "fixedSpace":
+    case "fixed-space":
       let item = UIBarButtonItem(barButtonSystemItem: .fixedSpace, target: nil, action: nil)
       item.width = state["width"] as? CGFloat ?? 8
       return item
@@ -376,7 +358,11 @@ ${applyInitialStateMethod}
     guard let vc = viewController else { return }
 
     if let style = state["style"] as? String {
-      vc.statusBarStyle = style == "light" ? .lightContent : .darkContent
+      switch style {
+      case "light": vc.statusBarStyle = .lightContent
+      case "dark":  vc.statusBarStyle = .darkContent
+      default:      vc.statusBarStyle = .default
+      }
     }
     if let hidden = state["hidden"] as? Bool {
       vc.statusBarHidden = hidden
@@ -397,9 +383,7 @@ ${applyInitialStateMethod}
 
   // ── Search Bar ────────────────────────────────────────────────────────────
 
-  private func applySearchBar(_ state: [String: Any]) {
-    guard let vc = viewController else { return }
-
+  private func applySearchBar(_ state: [String: Any], to vc: ViewController) {
     // Lazily create and attach a UISearchController to the navigation item
     if vc.navigationItem.searchController == nil {
       let searchController = UISearchController(searchResultsController: nil)
@@ -415,20 +399,17 @@ ${applyInitialStateMethod}
     if let placeholder = state["placeholder"] as? String {
       searchBar.placeholder = placeholder
     }
-    if let text = state["text"] as? String {
-      searchBar.text = text
+    if let value = state["value"] as? String {
+      searchBar.text = value
     }
-    if let hex = state["barTintColor"] as? String {
-      searchBar.barTintColor = UIColor(hex: hex)
-    }
-    if let shows = state["showsCancelButton"] as? Bool {
+    if let shows = state["cancelButtonVisible"] as? Bool {
       searchBar.showsCancelButton = shows
     }
   }
 
   // ── Sheet ──────────────────────────────────────────────────────────────────
 
-  private func applySheet(_ state: [String: Any]) {
+  private func applySheet(name: String, state: [String: Any]) {
     guard let vc = viewController else { return }
 
     let presented = state["presented"] as? Bool ?? false
@@ -439,6 +420,7 @@ ${applyInitialStateMethod}
 
       if let existing = vc.presentedViewController as? NativiteSheetViewController {
         sheetVC = existing
+        sheetVC.bridge = self // re-set in case NativiteChrome was re-created
         shouldPresent = false
       } else if vc.presentedViewController == nil {
         let created = NativiteSheetViewController()
@@ -455,8 +437,8 @@ ${applyInitialStateMethod}
         } else if shouldPresent {
           sheet.detents = [.medium(), .large()]
         }
-        if let selectedDetent = state["selectedDetent"] as? String {
-          sheet.selectedDetentIdentifier = sheetDetentIdentifier(from: selectedDetent)
+        if let activeDetent = state["activeDetent"] as? String {
+          sheet.selectedDetentIdentifier = sheetDetentIdentifier(from: activeDetent)
         }
         sheet.prefersGrabberVisible = state["grabberVisible"] as? Bool ?? false
         // Prioritise embedded webview interaction over "drag anywhere to resize".
@@ -466,7 +448,9 @@ ${applyInitialStateMethod}
         }
         sheet.delegate = sheetVC
       }
+      sheetVC.isModalInPresentation = !((state["dismissible"] as? Bool) ?? true)
       sheetVC.nativeBridge = vc.nativiteBridgeHandler()
+      sheetVC.instanceName = name
       if let hex = state["backgroundColor"] as? String {
         sheetVC.view.backgroundColor = UIColor(hex: hex)
       }
@@ -474,7 +458,9 @@ ${applyInitialStateMethod}
         sheetVC.loadURL(rawURL, relativeTo: vc.webView.url)
       }
       if shouldPresent {
-        vc.present(sheetVC, animated: true)
+        vc.present(sheetVC, animated: true) { [weak self] in
+          self?.sendEvent(name: "sheet.presented", data: ["name": name])
+        }
       }
     } else {
       if vc.presentedViewController is NativiteSheetViewController {
@@ -483,19 +469,39 @@ ${applyInitialStateMethod}
     }
   }
 
-  func postMessageToSheet(_ message: Any?) {
-    guard let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController else {
-      return
+  func postMessageToChild(name: String, payload: Any?) {
+    guard let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController,
+          sheetVC.instanceName == name else { return }
+    sheetVC.receiveMessage(from: "main", payload: payload)
+  }
+
+  func broadcastMessage(from sender: String, payload: Any?) {
+    // Forward to primary webview (via sendEvent) unless sender is "main"
+    if sender != "main" {
+      sendEvent(name: "message", data: ["from": sender, "payload": payload ?? NSNull()])
     }
-    sheetVC.postMessage(message)
+    // Forward to all presented child webviews
+    if let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController {
+      sheetVC.receiveMessage(from: sender, payload: payload)
+    }
+  }
+
+  func instanceName(for webView: WKWebView?) -> String {
+    guard let webView else { return "unknown" }
+    if let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController,
+       sheetVC.webView === webView {
+      return sheetVC.instanceName
+    }
+    return "unknown"
   }
 
   private func sheetDetent(from string: String) -> UISheetPresentationController.Detent? {
     switch string {
-    case "small": return smallDetent()
+    case "small":  return smallDetent()
     case "medium": return .medium()
-    case "large": return .large()
-    default: return nil
+    case "large":  return .large()
+    case "full":   return fullDetent()
+    default:       return nil
     }
   }
 
@@ -503,11 +509,30 @@ ${applyInitialStateMethod}
     from string: String
   ) -> UISheetPresentationController.Detent.Identifier? {
     switch string {
-    case "small": return smallDetentIdentifier()
+    case "small":  return smallDetentIdentifier()
     case "medium": return .medium
-    case "large": return .large
-    default: return nil
+    case "large":  return .large
+    case "full":   return fullDetentIdentifier()
+    default:       return nil
     }
+  }
+
+  private func fullDetent() -> UISheetPresentationController.Detent? {
+    if #available(iOS 16.0, *) {
+      return UISheetPresentationController.Detent.custom(
+        identifier: UISheetPresentationController.Detent.Identifier("nativite.full")
+      ) { context in
+        context.maximumDetentValue
+      }
+    }
+    return .large()
+  }
+
+  private func fullDetentIdentifier() -> UISheetPresentationController.Detent.Identifier? {
+    if #available(iOS 16.0, *) {
+      return UISheetPresentationController.Detent.Identifier("nativite.full")
+    }
+    return .large
   }
 
   private func smallDetent() -> UISheetPresentationController.Detent? {
@@ -525,6 +550,64 @@ ${applyInitialStateMethod}
     }
     return .medium
   }
+
+  // ── Area cleanup ───────────────────────────────────────────────────────────
+
+  private func resetArea(_ area: String) {
+    switch area {
+    case "titleBar":      resetTitleBar()
+    case "navigation":    resetNavigation()
+    case "toolbar":       resetToolbar()
+    case "statusBar":     resetStatusBar()
+    case "homeIndicator": resetHomeIndicator()
+    case "sheets":        resetSheets()
+    case "keyboard":      keyboard?.applyState(["accessory": NSNull()])
+    default: break
+    }
+  }
+
+  private func resetTitleBar() {
+    guard let vc = viewController,
+          let navController = vc.navigationController else { return }
+    let navItem = vc.navigationItem
+    navItem.title = nil
+    navItem.prompt = nil
+    navItem.backButtonTitle = nil
+    navItem.leftBarButtonItems = nil
+    navItem.rightBarButtonItems = nil
+    navItem.searchController = nil
+    navController.setNavigationBarHidden(true, animated: true)
+  }
+
+  private func resetNavigation() {
+    tabBar.isHidden = true
+  }
+
+  private func resetToolbar() {
+    guard let vc = viewController,
+          let navController = vc.navigationController else { return }
+    vc.toolbarItems = nil
+    navController.setToolbarHidden(true, animated: true)
+  }
+
+  private func resetStatusBar() {
+    guard let vc = viewController else { return }
+    vc.statusBarStyle = .default
+    vc.statusBarHidden = false
+    vc.setNeedsStatusBarAppearanceUpdate()
+  }
+
+  private func resetHomeIndicator() {
+    guard let vc = viewController else { return }
+    vc.homeIndicatorHidden = false
+    vc.setNeedsUpdateOfHomeIndicatorAutoHidden()
+  }
+
+  private func resetSheets() {
+    if viewController?.presentedViewController is NativiteSheetViewController {
+      viewController?.dismiss(animated: true)
+    }
+  }
 ${sendEventMethod}
 }
 
@@ -533,7 +616,7 @@ ${sendEventMethod}
 extension NativiteChrome: UITabBarDelegate {
   func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
     guard let id = item.accessibilityIdentifier else { return }
-    sendEvent(name: "tabBar.tabSelected", data: ["id": id])
+    sendEvent(name: "navigation.itemSelected", data: ["id": id])
   }
 }
 
@@ -541,11 +624,14 @@ extension NativiteChrome: UITabBarDelegate {
 
 private class NativiteSheetViewController: UIViewController,
   UISheetPresentationControllerDelegate,
-  WKScriptMessageHandler,
   WKNavigationDelegate
 {
   weak var bridge: NativiteChrome?
   weak var nativeBridge: NativiteBridge?
+  // The name given to sheet("name", ...) on the JS side. Injected as
+  // window.__nativekit_instance_name__ so the SharedWorker messaging bus
+  // can correctly route postToParent/broadcast calls from this webview.
+  var instanceName: String = "sheet"
   private(set) var webView: NativiteWebView!
   private var lastLoadedURL: URL?
   private var pendingSPARoute: String?
@@ -555,50 +641,17 @@ private class NativiteSheetViewController: UIViewController,
     view.backgroundColor = .systemBackground
 
     let config = WKWebViewConfiguration()
-    let bridgeScript = """
-      (function () {
-        if (window.nativiteSheet) return;
-
-        const listeners = new Set();
-        window.nativiteSheet = {
-          postMessage(message) {
-            const payload = message ?? null;
-            const sheetHandler = window.webkit?.messageHandlers?.nativiteSheet;
-            if (sheetHandler && typeof sheetHandler.postMessage === "function") {
-              sheetHandler.postMessage(payload);
-              return;
-            }
-            const bridgeHandler = window.webkit?.messageHandlers?.nativite;
-            if (bridgeHandler && typeof bridgeHandler.postMessage === "function") {
-              bridgeHandler.postMessage({
-                id: null,
-                type: "call",
-                namespace: "__chrome__",
-                method: "__chrome_sheet_post_message_to_sheet__",
-                args: payload,
-              });
-            }
-          },
-          onMessage(handler) {
-            if (typeof handler !== "function") return () => {};
-            listeners.add(handler);
-            return () => listeners.delete(handler);
-          }
-        };
-
-        window.__nativiteSheetReceive = function(message) {
-          for (const listener of listeners) listener(message);
-          window.dispatchEvent(new CustomEvent("nativite:sheet-message", { detail: message }));
-        };
-      })();
-    """
-    let userScript = WKUserScript(
-      source: bridgeScript,
+    // Using WKWebsiteDataStore.default() ensures this webview shares the same
+    // web process as the primary webview (iOS 15+), enabling SharedWorker and
+    // shared storage (localStorage, IndexedDB, cookies) across instances.
+    config.websiteDataStore = WKWebsiteDataStore.default()
+    // Identify this webview by its configured name so the SharedWorker messaging
+    // bus can route postToParent/broadcast calls from this instance correctly.
+    config.userContentController.addUserScript(WKUserScript(
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
-    )
-    config.userContentController.addUserScript(userScript)
-    config.userContentController.add(self, name: "nativiteSheet")
+    ))
     if let nativeBridge {
       config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")
     }
@@ -624,7 +677,6 @@ private class NativiteSheetViewController: UIViewController,
 
   deinit {
     webView?.configuration.userContentController.removeScriptMessageHandler(forName: "nativite")
-    webView?.configuration.userContentController.removeScriptMessageHandler(forName: "nativiteSheet")
   }
 
   func loadURL(_ rawURL: String, relativeTo baseURL: URL?) {
@@ -653,17 +705,16 @@ private class NativiteSheetViewController: UIViewController,
     webView.load(URLRequest(url: absoluteURL))
   }
 
-  func postMessage(_ message: Any?) {
+  func receiveMessage(from sender: String, payload: Any?) {
     loadViewIfNeeded()
-    let payload = message ?? NSNull()
-    let envelope: [String: Any] = ["message": payload]
-    guard JSONSerialization.isValidJSONObject(envelope),
-      let data = try? JSONSerialization.data(withJSONObject: envelope),
-      let json = String(data: data, encoding: .utf8)
+    let data: [String: Any] = ["from": sender, "payload": payload ?? NSNull()]
+    let message: [String: Any] = ["id": NSNull(), "type": "event", "event": "message", "data": data]
+    guard JSONSerialization.isValidJSONObject(message),
+      let msgData = try? JSONSerialization.data(withJSONObject: message),
+      let json = String(data: msgData, encoding: .utf8)
     else { return }
 
-    let js = "if(window.__nativiteSheetReceive){window.__nativiteSheetReceive(\\(json).message);}"
-    webView.evaluateJavaScript(js, completionHandler: nil)
+    webView.evaluateJavaScript("window.nativiteReceive(\\(json))", completionHandler: nil)
   }
 
   private func resolveURL(_ rawURL: String, relativeTo baseURL: URL?) -> URL? {
@@ -778,11 +829,6 @@ private class NativiteSheetViewController: UIViewController,
     return targetURL.deletingLastPathComponent()
   }
 
-  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-    guard message.name == "nativiteSheet" else { return }
-    bridge?.sendEvent(name: "sheet.message", data: ["message": message.body])
-  }
-
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     guard let route = pendingSPARoute else { return }
     pendingSPARoute = nil
@@ -830,9 +876,9 @@ private class NativiteSheetViewController: UIViewController,
       (nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String) ??
       currentURL?.absoluteString
     var payload: [String: Any] = [
+      "name": instanceName,
       "message": nsError.localizedDescription,
       "code": nsError.code,
-      "domain": nsError.domain,
     ]
     if let failingURL {
       payload["url"] = failingURL
@@ -846,19 +892,27 @@ private class NativiteSheetViewController: UIViewController,
     let detent: String
     if #available(iOS 16.0, *), controller.selectedDetentIdentifier == nativiteSmallDetentIdentifier {
       detent = "small"
+    } else if #available(iOS 16.0, *),
+              controller.selectedDetentIdentifier == UISheetPresentationController.Detent.Identifier("nativite.full") {
+      detent = "full"
     } else {
       switch controller.selectedDetentIdentifier {
       case .medium: detent = "medium"
-      case .large: detent = "large"
-      default: detent = "large"
+      case .large:  detent = "large"
+      default:      detent = "large"
       }
     }
-    bridge?.sendEvent(name: "sheet.detentChanged", data: ["detent": detent])
+    bridge?.sendEvent(name: "sheet.detentChanged", data: ["name": instanceName, "detent": detent])
   }
 
-  override func viewDidDisappear(_ animated: Bool) {
-    super.viewDidDisappear(animated)
-    bridge?.sendEvent(name: "sheet.dismissed", data: [:])
+  // UIAdaptivePresentationControllerDelegate — fires only when the sheet is
+  // actually dismissed (user swipe or programmatic dismiss), never when another
+  // VC is merely presented on top of the sheet.  viewDidDisappear was wrong
+  // because it fires for any view-disappearance (e.g. alert over the sheet).
+  // UISheetPresentationControllerDelegate inherits UIAdaptivePresentationControllerDelegate,
+  // and sheet.delegate = sheetVC is set in applySheet(), so UIKit routes this call correctly.
+  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+    bridge?.sendEvent(name: "sheet.dismissed", data: ["name": instanceName])
   }
 }
 
@@ -892,6 +946,7 @@ class NativiteChrome: NSObject {
 
   // Track built menu item actions for target-action dispatch.
   private var menuActions: [String: String] = [:] // tag → id
+  private var lastAppliedAreas: Set<String> = []
 
   // ── Entry point ────────────────────────────────────────────────────────────
 
@@ -901,29 +956,36 @@ class NativiteChrome: NSObject {
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
 
-      if let windowState = state["window"] as? [String: Any] {
-        self.applyWindow(windowState)
+      // Reset areas that were previously applied but are now absent.
+      let currentAreas = Set(state.keys)
+      for area in self.lastAppliedAreas.subtracting(currentAreas) {
+        self.resetArea(area)
+      }
+      self.lastAppliedAreas = currentAreas
+
+      if let titleBarState = state["titleBar"] as? [String: Any] {
+        self.applyTitleBar(titleBarState)
       }
       if let menuBarState = state["menuBar"] as? [String: Any] {
         self.applyMenuBar(menuBarState)
       }
-      if let sidebarState = state["sidebar"] as? [String: Any] {
-        self.applySidebar(sidebarState)
+      if let sidebarPanelState = state["sidebarPanel"] as? [String: Any] {
+        self.applySidebarPanel(sidebarPanelState)
       }
 
-      // Silently ignore iOS-only keys: navigationBar, tabBar, toolbar,
-      // statusBar, homeIndicator, sheet, keyboard, searchBar
+      // Silently ignore iOS-only keys: navigation, toolbar,
+      // statusBar, homeIndicator, sheets, keyboard
     }
   }
 
   // iOS-only in this phase.
-  func postMessageToSheet(_ message: Any?) {
-    _ = message
-  }
+  func postMessageToChild(name: String, payload: Any?) { _ = name; _ = payload }
+  func broadcastMessage(from sender: String, payload: Any?) { _ = sender; _ = payload }
+  func instanceName(for webView: WKWebView?) -> String { _ = webView; return "unknown" }
 ${applyInitialStateMethod}
-  // ── Window ──────────────────────────────────────────────────────────────────
+  // ── Title Bar (macOS window) ─────────────────────────────────────────────────
 
-  private func applyWindow(_ state: [String: Any]) {
+  private func applyTitleBar(_ state: [String: Any]) {
     guard let window = viewController?.view.window else { return }
 
     if let title = state["title"] as? String {
@@ -932,13 +994,7 @@ ${applyInitialStateMethod}
     if let subtitle = state["subtitle"] as? String {
       window.subtitle = subtitle
     }
-    if let titleVisibility = state["titleVisibility"] as? String {
-      switch titleVisibility {
-      case "hidden": window.titleVisibility = .hidden
-      default:       window.titleVisibility = .visible
-      }
-    }
-    if let separator = state["titlebarSeparatorStyle"] as? String {
+    if let separator = state["separatorStyle"] as? String {
       switch separator {
       case "none":       window.titlebarSeparatorStyle = .none
       case "shadow":     window.titlebarSeparatorStyle = .shadow
@@ -946,7 +1002,7 @@ ${applyInitialStateMethod}
       default:           window.titlebarSeparatorStyle = .automatic
       }
     }
-    if let fullSizeContent = state["fullSizeContentView"] as? Bool {
+    if let fullSizeContent = state["fullSizeContent"] as? Bool {
       if fullSizeContent {
         window.styleMask.insert(.fullSizeContentView)
         window.titlebarAppearsTransparent = true
@@ -955,8 +1011,8 @@ ${applyInitialStateMethod}
         window.titlebarAppearsTransparent = false
       }
     }
-    if let hex = state["backgroundColor"] as? String {
-      window.backgroundColor = NSColor(hex: hex)
+    if let hidden = state["hidden"] as? Bool {
+      window.titleVisibility = hidden ? .hidden : .visible
     }
 
     // Push titlebar height to CSS vars
@@ -977,41 +1033,14 @@ ${applyInitialStateMethod}
     menuActions.removeAll()
 
     for menuState in menus {
-      guard let title = menuState["title"] as? String else { continue }
+      guard let label = menuState["label"] as? String else { continue }
 
-      let submenu = NSMenu(title: title)
-      let menuItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+      let submenu = NSMenu(title: label)
+      let menuItem = NSMenuItem(title: label, action: nil, keyEquivalent: "")
       menuItem.submenu = submenu
 
       if let items = menuState["items"] as? [[String: Any]] {
-        for itemState in items {
-          if itemState["separator"] as? Bool == true {
-            submenu.addItem(.separator())
-            continue
-          }
-
-          guard let itemTitle = itemState["title"] as? String,
-                let itemId = itemState["id"] as? String else { continue }
-
-          let keyEquiv = itemState["keyEquivalent"] as? String ?? ""
-          let item = NSMenuItem(
-            title: itemTitle,
-            action: #selector(menuItemClicked(_:)),
-            keyEquivalent: keyEquiv
-          )
-          item.target = self
-          item.tag = menuActions.count
-          menuActions[String(item.tag)] = itemId
-
-          if let disabled = itemState["disabled"] as? Bool, disabled {
-            item.isEnabled = false
-          }
-          if let symbolName = itemState["systemImage"] as? String {
-            item.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
-          }
-
-          submenu.addItem(item)
-        }
+        addMenuItems(items, to: submenu)
       }
 
       mainMenu.addItem(menuItem)
@@ -1020,33 +1049,101 @@ ${applyInitialStateMethod}
     NSApp.mainMenu = mainMenu
   }
 
+  private func addMenuItems(_ items: [[String: Any]], to menu: NSMenu) {
+    for itemState in items {
+      guard let itemLabel = itemState["label"] as? String,
+            let itemId = itemState["id"] as? String else { continue }
+
+      if let childrenStates = itemState["children"] as? [[String: Any]] {
+        let submenu = NSMenu(title: itemLabel)
+        addMenuItems(childrenStates, to: submenu)
+        let subItem = NSMenuItem(title: itemLabel, action: nil, keyEquivalent: "")
+        if let symbolName = itemState["icon"] as? String {
+          subItem.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+        }
+        subItem.submenu = submenu
+        menu.addItem(subItem)
+        continue
+      }
+
+      let keyEquiv = itemState["keyEquivalent"] as? String ?? ""
+      let item = NSMenuItem(
+        title: itemLabel,
+        action: #selector(menuItemClicked(_:)),
+        keyEquivalent: keyEquiv
+      )
+      item.target = self
+      item.tag = menuActions.count
+      menuActions[String(item.tag)] = itemId
+
+      if (itemState["disabled"] as? Bool) ?? false {
+        item.isEnabled = false
+      }
+      if (itemState["checked"] as? Bool) ?? false {
+        item.state = .on
+      }
+      if (itemState["style"] as? String) == "destructive" {
+        item.attributedTitle = NSAttributedString(
+          string: itemLabel,
+          attributes: [.foregroundColor: NSColor.systemRed]
+        )
+      }
+      if let symbolName = itemState["icon"] as? String {
+        item.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+      }
+
+      menu.addItem(item)
+    }
+  }
+
   @objc private func menuItemClicked(_ sender: NSMenuItem) {
     guard let id = menuActions[String(sender.tag)] else { return }
     sendEvent(name: "menuBar.itemSelected", data: ["id": id])
   }
 
-  // ── Sidebar ─────────────────────────────────────────────────────────────────
+  // ── Sidebar Panel ────────────────────────────────────────────────────────────
 
-  private func applySidebar(_ state: [String: Any]) {
+  private func applySidebarPanel(_ state: [String: Any]) {
     guard let items = state["items"] as? [[String: Any]] else { return }
 
-    // Fire a sidebar.itemSelected event with the full item list so the JS side
-    // can reconcile. The actual NSSplitViewController wiring is deferred to a
-    // later phase — for now we emit the event so the bridge contract is honoured.
+    // Fire a sidebarPanel.itemSelected event with the full item list so the JS
+    // side can reconcile. The actual NSSplitViewController wiring is deferred to
+    // a later phase — for now we emit the event so the bridge contract is honoured.
     var sidebarItems: [[String: Any]] = []
     for itemState in items {
       guard let id = itemState["id"] as? String,
-            let title = itemState["title"] as? String else { continue }
-      var item: [String: Any] = ["id": id, "title": title]
-      if let symbolName = itemState["systemImage"] as? String {
-        item["systemImage"] = symbolName
+            let label = itemState["label"] as? String else { continue }
+      var item: [String: Any] = ["id": id, "label": label]
+      if let symbolName = itemState["icon"] as? String {
+        item["icon"] = symbolName
       }
       sidebarItems.append(item)
     }
 
-    if let selectedId = state["selectedItemId"] as? String {
-      sendEvent(name: "sidebar.itemSelected", data: ["id": selectedId, "items": sidebarItems])
+    if let activeId = state["activeItem"] as? String {
+      sendEvent(name: "sidebarPanel.itemSelected", data: ["id": activeId, "items": sidebarItems])
     }
+  }
+
+  // ── Area cleanup ───────────────────────────────────────────────────────────
+
+  private func resetArea(_ area: String) {
+    switch area {
+    case "titleBar": resetTitleBar()
+    case "menuBar":  resetMenuBar()
+    default: break
+    }
+  }
+
+  private func resetTitleBar() {
+    guard let window = viewController?.view.window else { return }
+    window.title = ""
+    window.subtitle = ""
+  }
+
+  private func resetMenuBar() {
+    NSApp.mainMenu = nil
+    menuActions.removeAll()
   }
 ${sendEventMethod}
 }
