@@ -1,58 +1,156 @@
 import type { NativiteConfig } from "../../index.ts";
 
 export function appDelegateTemplate(config: NativiteConfig): string {
-  const appName = config.app.name;
+  // ── Splash overlay (iOS only) ───────────────────────────────────────────
+  // Three states:
+  //   1. No config.splash        → systemBackground + ProgressView spinner
+  //   2. backgroundColor only    → custom colour, no content
+  //   3. backgroundColor + image → custom colour + Image("Splash")
+  const splashBgColor = config.splash?.backgroundColor
+    ? swiftUIColorFromHex(config.splash.backgroundColor)
+    : "Color(uiColor: .systemBackground)";
 
-  return `#if os(iOS)
+  const splashContent = config.splash?.image
+    ? `
+            Image("Splash")
+              .resizable()
+              .scaledToFit()
+              .frame(
+                maxWidth: UIScreen.main.bounds.width * 0.8,
+                maxHeight: UIScreen.main.bounds.height * 0.8
+              )`
+    : config.splash
+      ? "" // backgroundColor only — no inner content
+      : `
+            ProgressView()
+              .controlSize(.large)
+              .tint(Color(uiColor: .secondaryLabel))`;
+
+  const splashOverlay = `
+      if chromeState.splashVisible {
+        ${splashBgColor}
+          .ignoresSafeArea()${splashContent ? `\n          .overlay {${splashContent}\n          }` : ""}
+          .transition(.opacity)
+          .zIndex(1)
+      }`;
+
+  return `import SwiftUI
+import WebKit
+#if os(iOS)
 import UIKit
+#elseif os(macOS)
+import Cocoa
+#endif
 
-@main
-class AppDelegate: UIResponder, UIApplicationDelegate {
+// ─── NativiteRootView ─────────────────────────────────────────────────────────
+// SwiftUI host view that owns the NativiteChromeState observable model and
+// applies SwiftUI-driven chrome modifiers (navigation bar, toolbar, sheets,
+// alerts, status bar, etc.). The underlying UIKit/AppKit ViewController is
+// embedded via a Representable.
 
-  var window: UIWindow?
+#if os(iOS)
+struct NativiteRootView: View {
+  @State private var chromeState = NativiteChromeState()
 
-  func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-      window = UIWindow(windowScene: windowScene)
-    } else {
-      window = UIWindow()
+  var body: some View {
+    ZStack {
+      NavigationStack {
+        NativiteViewControllerRepresentable(chromeState: chromeState)
+          .ignoresSafeArea()
+          .nativiteTitleBar(chromeState: chromeState)
+          .nativiteToolbar(chromeState: chromeState)
+      }
+      .nativiteSheets(chromeState: chromeState)
+      .nativiteAlerts(chromeState: chromeState)
+${splashOverlay}
     }
-    let nav = UINavigationController(rootViewController: ViewController())
-    nav.setNavigationBarHidden(true, animated: false)
-    window?.rootViewController = nav
-    window?.makeKeyAndVisible()
-    return true
+    .animation(.easeOut(duration: 0.2), value: chromeState.splashVisible)
+  }
+}
+#else
+struct NativiteRootView: View {
+  @State private var chromeState = NativiteChromeState()
+
+  var body: some View {
+    NativiteViewControllerRepresentable(chromeState: chromeState)
+      .ignoresSafeArea()
+      .nativiteSheets(chromeState: chromeState)
+      .nativiteAlerts(chromeState: chromeState)
+  }
+}
+#endif
+
+// ─── NativiteViewControllerRepresentable ─────────────────────────────────────
+// Platform-specific Representable that wraps the imperative ViewController and
+// injects chromeState so the ViewController can forward state to it.
+
+#if os(iOS)
+struct NativiteViewControllerRepresentable: UIViewControllerRepresentable {
+  let chromeState: NativiteChromeState
+
+  func makeUIViewController(context: Context) -> ViewController {
+    let vc = ViewController()
+    vc.chromeState = chromeState
+    return vc
+  }
+
+  func updateUIViewController(_ vc: ViewController, context: Context) {
+    // Hybrid: set prompt (subtitle) via UIKit since SwiftUI has no
+    // .navigationSubtitle() on iOS. This works because NavigationStack
+    // creates a UINavigationController internally.
+    vc.navigationItem.prompt = chromeState.titleBarSubtitle
   }
 }
 
 #elseif os(macOS)
-import Cocoa
+struct NativiteViewControllerRepresentable: NSViewControllerRepresentable {
+  let chromeState: NativiteChromeState
 
-@main
-class AppDelegate: NSObject, NSApplicationDelegate {
+  func makeNSViewController(context: Context) -> ViewController {
+    let vc = ViewController()
+    vc.chromeState = chromeState
+    return vc
+  }
 
-  var window: NSWindow!
+  func updateNSViewController(_ nsViewController: ViewController, context: Context) {}
+}
 
+// macOS delegate adaptor — promotes the process from background agent to
+// regular GUI app (Dock icon, key windows) when spawned directly, and
+// terminates when the last window closes.
+class NativiteAppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
-    window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 1024, height: 768),
-      styleMask: [.titled, .closable, .miniaturizable, .resizable],
-      backing: .buffered,
-      defer: false
-    )
-    window.title = "${appName}"
-    window.contentViewController = ViewController()
-    window.center()
-    window.makeKeyAndOrderFront(nil)
+    NSApp.setActivationPolicy(.regular)
+    NSApp.activate(ignoringOtherApps: true)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-    return true
+    true
   }
 }
 #endif
 `;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  let cleaned = hex.trim();
+  if (cleaned.startsWith("#")) cleaned = cleaned.slice(1);
+  if (cleaned.length === 3) {
+    cleaned = cleaned
+      .split("")
+      .map((char) => char + char)
+      .join("");
+  }
+  const value = parseInt(cleaned.slice(0, 6), 16);
+  if (Number.isNaN(value)) return { r: 1, g: 1, b: 1 };
+  return {
+    r: ((value >> 16) & 0xff) / 255,
+    g: ((value >> 8) & 0xff) / 255,
+    b: (value & 0xff) / 255,
+  };
+}
+
+function swiftUIColorFromHex(hex: string): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `Color(red: ${r.toFixed(4)}, green: ${g.toFixed(4)}, blue: ${b.toFixed(4)})`;
 }

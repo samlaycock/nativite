@@ -86,6 +86,15 @@ function resolveRequestedPlatform(
     );
     process.exit(1);
   }
+  // When multiple platforms are configured and no explicit --platform was
+  // given, hint which one was auto-selected so the user knows how to switch.
+  if (!optionsPlatform && runtimes.length > 1) {
+    const others = runtimes
+      .filter((r) => r.id !== requested)
+      .map((r) => r.id)
+      .join(", ");
+    logger.info(`Using platform "${requested}". Switch with --platform [${others}]`);
+  }
   return requested;
 }
 
@@ -105,34 +114,45 @@ function setPlatformEnv(config: NativiteConfig, selectedPlatform: string): void 
 program
   .command("generate")
   .description("Generate the native project from nativite.config.ts")
-  .option("--platform <platform>", "Target platform")
+  .option("--platform <platform>", "Target platform (omit to generate all)")
   .option("--force", "Force regeneration even if the config has not changed")
   .action(async (options: { platform?: string; force?: boolean }) => {
     const logger = createNativiteLogger("nativite");
     await ensureViteOrExit(logger);
     const cwd = process.cwd();
     const config = await loadNativiteConfig(cwd, logger);
-    const platform = resolveRequestedPlatform(options.platform, config, logger);
-    const runtime = resolveConfiguredPlatformRuntimes(config).find(
-      (entry) => entry.id === platform,
-    );
+    const runtimes = resolveConfiguredPlatformRuntimes(config);
 
-    if (!runtime) process.exit(1);
+    // When a specific platform is requested, generate only that one.
+    // Otherwise generate all configured platforms.
+    const targets = options.platform
+      ? [resolveRequestedPlatform(options.platform, config, logger)]
+      : runtimes.map((r) => r.id);
 
-    logger.info(`Generating ${platform} project...`);
-    if (typeof runtime.plugin.generate !== "function") {
-      logger.warn(`Platform "${platform}" has no generate hook. Nothing to generate.`);
-    } else {
-      const platformConfig = resolveConfigForPlatform(config, platform);
-      await runtime.plugin.generate({
-        rootConfig: config,
-        config: platformConfig,
-        projectRoot: cwd,
-        platform: runtime.config,
-        logger,
-        force: options.force ?? false,
-        mode: "generate",
-      });
+    if (targets.length === 0) {
+      logger.error("No platforms are configured.");
+      process.exit(1);
+    }
+
+    for (const platform of targets) {
+      const runtime = runtimes.find((entry) => entry.id === platform);
+      if (!runtime) continue;
+
+      logger.info(`Generating ${platform} project...`);
+      if (typeof runtime.plugin.generate !== "function") {
+        logger.warn(`Platform "${platform}" has no generate hook. Nothing to generate.`);
+      } else {
+        const platformConfig = resolveConfigForPlatform(config, platform);
+        await runtime.plugin.generate({
+          rootConfig: config,
+          config: platformConfig,
+          projectRoot: cwd,
+          platform: runtime.config,
+          logger,
+          force: options.force ?? false,
+          mode: "generate",
+        });
+      }
     }
   });
 

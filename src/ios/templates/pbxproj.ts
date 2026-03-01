@@ -70,6 +70,8 @@ const UUID = {
   keyboardFile: "AA0000000000000000000009",
   launchScreenFile: "AA000000000000000000000A",
   pluginRegistrantFile: "AA000000000000000000000C",
+  mainEntryFile: "AA000000000000000000000D",
+  chromeStateFile: "AA000000000000000000000E",
   appDelegateBuildFile: "BB0000000000000000000001",
   viewControllerBuildFile: "BB0000000000000000000002",
   bridgeBuildFile: "BB0000000000000000000003",
@@ -80,6 +82,8 @@ const UUID = {
   keyboardBuildFile: "BB0000000000000000000008",
   launchScreenBuildFile: "BB0000000000000000000009",
   pluginRegistrantBuildFile: "BB0000000000000000000012",
+  mainEntryBuildFile: "BB0000000000000000000013",
+  chromeStateBuildFile: "BB0000000000000000000014",
   webKitFileRef: "CC0000000000000000000001",
   webKitBuildFile: "CC0000000000000000000002",
   sourcesBuildPhase: "DD0000000000000000000001",
@@ -188,11 +192,13 @@ export function pbxprojTemplate(
   // ── PBXBuildFile entries ──────────────────────────────────────────────────
 
   const sourcesBuildFiles = [
+    `\t\t${UUID.mainEntryBuildFile} /* NativiteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.mainEntryFile} /* NativiteApp.swift */; };`,
     `\t\t${UUID.appDelegateBuildFile} /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.appDelegateFile} /* AppDelegate.swift */; };`,
     `\t\t${UUID.viewControllerBuildFile} /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.viewControllerFile} /* ViewController.swift */; };`,
     `\t\t${UUID.bridgeBuildFile} /* NativiteBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.bridgeFile} /* NativiteBridge.swift */; };`,
     `\t\t${UUID.pluginRegistrantBuildFile} /* NativitePluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.pluginRegistrantFile} /* NativitePluginRegistrant.swift */; };`,
     `\t\t${UUID.chromeBuildFile} /* NativiteChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.chromeFile} /* NativiteChrome.swift */; };`,
+    `\t\t${UUID.chromeStateBuildFile} /* NativiteChromeState.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.chromeStateFile} /* NativiteChromeState.swift */; };`,
     `\t\t${UUID.varsBuildFile} /* NativiteVars.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.varsFile} /* NativiteVars.swift */; };`,
     `\t\t${UUID.keyboardBuildFile} /* NativiteKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.keyboardFile} /* NativiteKeyboard.swift */; };`,
     ...(hasOta
@@ -210,11 +216,13 @@ export function pbxprojTemplate(
   // ── PBXFileReference entries ──────────────────────────────────────────────
 
   const sourceFileRefs = [
+    `\t\t${UUID.mainEntryFile} /* NativiteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteApp.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.appDelegateFile} /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.viewControllerFile} /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.bridgeFile} /* NativiteBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteBridge.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.pluginRegistrantFile} /* NativitePluginRegistrant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativitePluginRegistrant.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.chromeFile} /* NativiteChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteChrome.swift; sourceTree = "<group>"; };`,
+    `\t\t${UUID.chromeStateFile} /* NativiteChromeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteChromeState.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.varsFile} /* NativiteVars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteVars.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.keyboardFile} /* NativiteKeyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteKeyboard.swift; sourceTree = "<group>"; };`,
     ...(hasOta
@@ -230,11 +238,13 @@ export function pbxprojTemplate(
   // ── Sources group children ────────────────────────────────────────────────
 
   const sourcesGroupChildren = [
+    UUID.mainEntryFile,
     UUID.appDelegateFile,
     UUID.viewControllerFile,
     UUID.bridgeFile,
     UUID.pluginRegistrantFile,
     UUID.chromeFile,
+    UUID.chromeStateFile,
     UUID.varsFile,
     UUID.keyboardFile,
     ...(hasOta ? [UUID.otaUpdaterFile] : []),
@@ -249,11 +259,13 @@ export function pbxprojTemplate(
   // ── Sources build phase files ─────────────────────────────────────────────
 
   const sourcesPhaseFiles = [
+    UUID.mainEntryBuildFile,
     UUID.appDelegateBuildFile,
     UUID.viewControllerBuildFile,
     UUID.bridgeBuildFile,
     UUID.pluginRegistrantBuildFile,
     UUID.chromeBuildFile,
+    UUID.chromeStateBuildFile,
     UUID.varsBuildFile,
     UUID.keyboardBuildFile,
     ...(hasOta ? [UUID.otaUpdaterBuildFile] : []),

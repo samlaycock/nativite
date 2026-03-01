@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { baseConfig, splashImageConfig } from "../../../__tests__/fixtures.ts";
+import { baseConfig } from "../../../__tests__/fixtures.ts";
 import { viewControllerTemplate } from "../view-controller.ts";
 
 describe("viewControllerTemplate", () => {
@@ -80,6 +80,19 @@ describe("viewControllerTemplate", () => {
     expect(output).toContain("runJavaScriptTextInputPanelWithPrompt");
   });
 
+  it("delegates alert/confirm/prompt to chromeState.enqueueAlert with guard fallback", () => {
+    const output = viewControllerTemplate(baseConfig);
+    // All three dialog methods should use the guard pattern
+    expect(output).toContain("guard let chromeState else { completionHandler(); return }");
+    expect(output).toContain("guard let chromeState else { completionHandler(false); return }");
+    expect(output).toContain("guard let chromeState else { completionHandler(nil); return }");
+    // Should delegate to chromeState.enqueueAlert
+    expect(output).toContain("chromeState.enqueueAlert(");
+    // Should NOT contain UIAlertController or NSAlert fallback code
+    expect(output).not.toContain("UIAlertController(");
+    expect(output).not.toContain("NSAlert()");
+  });
+
   it("marks the main webview as the primary bridge source", () => {
     const output = viewControllerTemplate(baseConfig);
     expect(output).toContain("bridge.primaryWebView = webView");
@@ -105,41 +118,19 @@ describe("viewControllerTemplate", () => {
     expect(output).toContain("injectionTime: .atDocumentStart");
   });
 
-  it("shows a dark-mode-aware default iOS splash overlay with a centered spinner", () => {
+  it("signals first load complete to SwiftUI by clearing splash state in didFinish", () => {
     const output = viewControllerTemplate(baseConfig);
-    expect(output).toContain("private var splashOverlayView: UIView?");
-    expect(output).toContain("splashView.backgroundColor = UIColor.systemBackground");
-    expect(output).toContain("let activityIndicator = UIActivityIndicatorView(style: .large)");
-    expect(output).toContain("activityIndicator.startAnimating()");
-    expect(output).toContain(
-      "activityIndicator.centerXAnchor.constraint(equalTo: splashView.centerXAnchor)",
-    );
-    expect(output).toContain(
-      "activityIndicator.centerYAnchor.constraint(equalTo: splashView.centerYAnchor)",
-    );
-    expect(output).toContain("showSplashOverlay()");
-  });
-
-  it("keeps the iOS splash overlay visible until the first page load completes", () => {
-    const output = viewControllerTemplate(baseConfig);
-    const showSplashIndex = output.indexOf("showSplashOverlay()");
-    const loadContentIndex = output.indexOf("loadContent()");
     const didFinishIndex = output.indexOf(
       "func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!)",
     );
-    const hideSplashIndex = output.indexOf("hideSplashOverlay()", didFinishIndex);
+    const setSplashIndex = output.indexOf("chromeState?.splashVisible = false", didFinishIndex);
 
-    expect(showSplashIndex).toBeGreaterThan(-1);
-    expect(loadContentIndex).toBeGreaterThan(-1);
     expect(didFinishIndex).toBeGreaterThan(-1);
-    expect(hideSplashIndex).toBeGreaterThan(didFinishIndex);
-    expect(showSplashIndex).toBeLessThan(loadContentIndex);
-  });
+    expect(setSplashIndex).toBeGreaterThan(didFinishIndex);
 
-  it("renders splash image on iOS overlay when splash image is configured", () => {
-    const output = viewControllerTemplate(splashImageConfig);
-    expect(output).toContain('if let splashImage = UIImage(named: "Splash")');
-    expect(output).toContain("splashImageView.contentMode = .center");
-    expect(output).not.toContain("UIActivityIndicatorView(style: .large)");
+    // UIKit splash code should be fully removed
+    expect(output).not.toContain("showSplashOverlay()");
+    expect(output).not.toContain("hideSplashOverlay()");
+    expect(output).not.toContain("splashOverlayView");
   });
 });

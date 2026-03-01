@@ -3,40 +3,6 @@ import type { NativiteConfig } from "../../index.ts";
 export function viewControllerTemplate(config: NativiteConfig): string {
   const hasOta = Boolean(config.updates);
   const hasDefaultChrome = Boolean(config.defaultChrome);
-  const splashBackgroundColor = config.splash?.backgroundColor
-    ? swiftUIColorFromHex(config.splash.backgroundColor)
-    : "UIColor.systemBackground";
-  const splashImageOverlay = config.splash?.image
-    ? `
-    if let splashImage = UIImage(named: "Splash") {
-      let splashImageView = UIImageView(image: splashImage)
-      splashImageView.translatesAutoresizingMaskIntoConstraints = false
-      splashImageView.contentMode = .center
-      splashView.addSubview(splashImageView)
-
-      NSLayoutConstraint.activate([
-        splashImageView.centerXAnchor.constraint(equalTo: splashView.centerXAnchor),
-        splashImageView.centerYAnchor.constraint(equalTo: splashView.centerYAnchor),
-        splashImageView.widthAnchor.constraint(lessThanOrEqualTo: splashView.widthAnchor, multiplier: 0.8),
-        splashImageView.heightAnchor.constraint(lessThanOrEqualTo: splashView.heightAnchor, multiplier: 0.8),
-      ])
-    }
-`
-    : "";
-  const splashDefaultActivityIndicator = config.splash
-    ? ""
-    : `
-    let activityIndicator = UIActivityIndicatorView(style: .large)
-    activityIndicator.translatesAutoresizingMaskIntoConstraints = false
-    activityIndicator.color = .secondaryLabel
-    activityIndicator.startAnimating()
-    splashView.addSubview(activityIndicator)
-
-    NSLayoutConstraint.activate([
-      activityIndicator.centerXAnchor.constraint(equalTo: splashView.centerXAnchor),
-      activityIndicator.centerYAnchor.constraint(equalTo: splashView.centerYAnchor),
-    ])
-`;
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
   // These methods are identical on both platforms and compiled into both targets.
@@ -172,17 +138,23 @@ class ViewController: UIViewController {
   private let bridge   = NativiteBridge()
   private let vars     = NativiteVars()
   private let keyboard = NativiteKeyboard()${hasOta ? "\n  private let otaUpdater = OTAUpdater()" : ""}
-  private var splashOverlayView: UIView?
-  private var splashOverlayHidden = false
 
-  // Chrome-controllable properties — set by NativiteChrome and read by UIKit overrides
-  var statusBarStyle: UIStatusBarStyle = .default
-  var statusBarHidden: Bool = false
-  var homeIndicatorHidden: Bool = false
+  // SwiftUI @Observable model — injected by NativiteViewControllerRepresentable.
+  // NativiteChrome writes to this model; SwiftUI views observe it for sheets,
+  // alerts, status bar, home indicator, etc.
+  var chromeState: NativiteChromeState?
 
-  override var preferredStatusBarStyle: UIStatusBarStyle { statusBarStyle }
-  override var prefersStatusBarHidden: Bool { statusBarHidden }
-  override var prefersHomeIndicatorAutoHidden: Bool { homeIndicatorHidden }
+  // Chrome-controllable overrides — read from chromeState (@Observable model)
+  // so that NativiteChrome only needs to write once (to chromeState).
+  override var preferredStatusBarStyle: UIStatusBarStyle {
+    switch chromeState?.statusBarStyle {
+    case .light: return .lightContent
+    case .dark:  return .darkContent
+    default:     return .default
+    }
+  }
+  override var prefersStatusBarHidden: Bool { chromeState?.statusBarHidden ?? false }
+  override var prefersHomeIndicatorAutoHidden: Bool { chromeState?.homeIndicatorHidden ?? false }
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -252,6 +224,14 @@ class ViewController: UIViewController {
     bridge.chrome.keyboard = keyboard
     keyboard.install(on: webView)
 
+    // Wire SwiftUI chrome state — NativiteChrome writes to this model,
+    // SwiftUI views observe it for sheets, alerts, status bar, etc.
+    if let chromeState {
+      chromeState.bridge = bridge
+      chromeState.primaryWebView = webView
+      bridge.chrome.chromeState = chromeState
+    }
+
     // Use the modern trait change registration API (iOS 17+) instead of the
     // deprecated traitCollectionDidChange override.
     registerForTraitChanges(
@@ -260,8 +240,7 @@ class ViewController: UIViewController {
       vc.vars.updateTraits(vc.traitCollection)
     }
 
-    ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()\n    " : ""}showSplashOverlay()
-    loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
+    ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()\n    " : ""}loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
   }
 
   override func viewDidLayoutSubviews() {
@@ -276,33 +255,6 @@ class ViewController: UIViewController {
       "bottom": insets.bottom,
       "right": insets.right,
     ])
-  }
-
-  private func showSplashOverlay() {
-    guard splashOverlayView == nil else { return }
-
-    let splashView = UIView(frame: view.bounds)
-    splashView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    splashView.backgroundColor = ${splashBackgroundColor}
-${splashImageOverlay}${splashDefaultActivityIndicator}    view.addSubview(splashView)
-    view.bringSubviewToFront(splashView)
-    splashOverlayView = splashView
-  }
-
-  private func hideSplashOverlay() {
-    guard !splashOverlayHidden else { return }
-    splashOverlayHidden = true
-
-    guard let splashView = splashOverlayView else { return }
-    UIView.animate(
-      withDuration: 0.2,
-      animations: {
-        splashView.alpha = 0
-      },
-      completion: { _ in
-        splashView.removeFromSuperview()
-      }
-    )
   }
 
   private func isExternalURL(_ url: URL) -> Bool {
@@ -371,7 +323,7 @@ extension ViewController: WKNavigationDelegate {
     // all --nk-* variables reflect actual safe area, traits, etc.
     vars.updateSafeArea(view.safeAreaInsets, in: self)
     vars.updateTraits(traitCollection)
-    hideSplashOverlay()
+    chromeState?.splashVisible = false
   }
 }
 
@@ -401,11 +353,10 @@ extension ViewController: WKUIDelegate {
     initiatedByFrame frame: WKFrameInfo,
     completionHandler: @escaping () -> Void
   ) {
-    let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+    guard let chromeState else { completionHandler(); return }
+    chromeState.enqueueAlert(message: message, type: .alert) { _ in
       completionHandler()
-    })
-    present(alert, animated: true, completion: nil)
+    }
   }
 
   func webView(
@@ -414,14 +365,14 @@ extension ViewController: WKUIDelegate {
     initiatedByFrame frame: WKFrameInfo,
     completionHandler: @escaping (Bool) -> Void
   ) {
-    let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
-      completionHandler(false)
-    })
-    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-      completionHandler(true)
-    })
-    present(alert, animated: true, completion: nil)
+    guard let chromeState else { completionHandler(false); return }
+    chromeState.enqueueAlert(message: message, type: .confirm) { result in
+      switch result {
+      case .ok: completionHandler(true)
+      case .cancel: completionHandler(false)
+      case .text: completionHandler(false)
+      }
+    }
   }
 
   func webView(
@@ -431,17 +382,14 @@ extension ViewController: WKUIDelegate {
     initiatedByFrame frame: WKFrameInfo,
     completionHandler: @escaping (String?) -> Void
   ) {
-    let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
-    alert.addTextField { textField in
-      textField.text = defaultText
+    guard let chromeState else { completionHandler(nil); return }
+    chromeState.enqueueAlert(message: prompt, type: .prompt, defaultText: defaultText) { result in
+      switch result {
+      case .text(let text): completionHandler(text)
+      case .ok: completionHandler("")
+      case .cancel: completionHandler(nil)
+      }
     }
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
-      completionHandler(nil)
-    })
-    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-      completionHandler(alert.textFields?.first?.text)
-    })
-    present(alert, animated: true, completion: nil)
   }
 }
 
@@ -471,6 +419,10 @@ class ViewController: NSViewController {
   private(set) var webView: WKWebView!
   private let bridge = NativiteBridge()
   private let vars   = NativiteVars()${hasOta ? "\n  private let otaUpdater = OTAUpdater()" : ""}
+  private var hasLoadedContent = false
+
+  // SwiftUI @Observable model — injected by NativiteViewControllerRepresentable.
+  var chromeState: NativiteChromeState?
 
   override func loadView() {
     view = NSView(frame: NSRect(x: 0, y: 0, width: 1024, height: 768))
@@ -506,7 +458,22 @@ class ViewController: NSViewController {
     bridge.chrome.vars = vars
     bridge.chrome.viewController = self
 
-    ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()\n    " : ""}loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
+    // Wire SwiftUI chrome state — NativiteChrome writes to this model,
+    // SwiftUI views observe it for sheets, alerts, etc.
+    if let chromeState {
+      chromeState.bridge = bridge
+      chromeState.primaryWebView = webView
+      bridge.chrome.chromeState = chromeState
+    }
+
+    ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
+  }
+
+  override func viewDidAppear() {
+    super.viewDidAppear()
+    guard !hasLoadedContent else { return }
+    hasLoadedContent = true
+    loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}
   }
 
   override func viewDidLayout() {
@@ -605,20 +572,10 @@ extension ViewController: WKUIDelegate {
     initiatedByFrame frame: WKFrameInfo,
     completionHandler: @escaping () -> Void
   ) {
-    let alert = NSAlert()
-    alert.alertStyle = .informational
-    alert.messageText = message
-    alert.addButton(withTitle: "OK")
-
-    if let window = view.window {
-      alert.beginSheetModal(for: window) { _ in
-        completionHandler()
-      }
-      return
+    guard let chromeState else { completionHandler(); return }
+    chromeState.enqueueAlert(message: message, type: .alert) { _ in
+      completionHandler()
     }
-
-    _ = alert.runModal()
-    completionHandler()
   }
 
   func webView(
@@ -627,21 +584,14 @@ extension ViewController: WKUIDelegate {
     initiatedByFrame frame: WKFrameInfo,
     completionHandler: @escaping (Bool) -> Void
   ) {
-    let alert = NSAlert()
-    alert.alertStyle = .informational
-    alert.messageText = message
-    alert.addButton(withTitle: "OK")
-    alert.addButton(withTitle: "Cancel")
-
-    if let window = view.window {
-      alert.beginSheetModal(for: window) { response in
-        completionHandler(response == .alertFirstButtonReturn)
+    guard let chromeState else { completionHandler(false); return }
+    chromeState.enqueueAlert(message: message, type: .confirm) { result in
+      switch result {
+      case .ok: completionHandler(true)
+      case .cancel: completionHandler(false)
+      case .text: completionHandler(false)
       }
-      return
     }
-
-    let response = alert.runModal()
-    completionHandler(response == .alertFirstButtonReturn)
   }
 
   func webView(
@@ -651,25 +601,14 @@ extension ViewController: WKUIDelegate {
     initiatedByFrame frame: WKFrameInfo,
     completionHandler: @escaping (String?) -> Void
   ) {
-    let textField = NSTextField(string: defaultText ?? "")
-    textField.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
-
-    let alert = NSAlert()
-    alert.alertStyle = .informational
-    alert.messageText = prompt
-    alert.accessoryView = textField
-    alert.addButton(withTitle: "OK")
-    alert.addButton(withTitle: "Cancel")
-
-    if let window = view.window {
-      alert.beginSheetModal(for: window) { response in
-        completionHandler(response == .alertFirstButtonReturn ? textField.stringValue : nil)
+    guard let chromeState else { completionHandler(nil); return }
+    chromeState.enqueueAlert(message: prompt, type: .prompt, defaultText: defaultText) { result in
+      switch result {
+      case .text(let text): completionHandler(text)
+      case .ok: completionHandler("")
+      case .cancel: completionHandler(nil)
       }
-      return
     }
-
-    let response = alert.runModal()
-    completionHandler(response == .alertFirstButtonReturn ? textField.stringValue : nil)
   }
 }`;
 
@@ -678,27 +617,4 @@ extension ViewController: WKUIDelegate {
 ${macosViewController}
 #endif
 `;
-}
-
-function swiftUIColorFromHex(hex: string): string {
-  const { r, g, b } = hexToRgb(hex);
-  return `UIColor(red: ${r.toFixed(4)}, green: ${g.toFixed(4)}, blue: ${b.toFixed(4)}, alpha: 1)`;
-}
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  let cleaned = hex.trim();
-  if (cleaned.startsWith("#")) cleaned = cleaned.slice(1);
-  if (cleaned.length === 3) {
-    cleaned = cleaned
-      .split("")
-      .map((char) => char + char)
-      .join("");
-  }
-  const value = parseInt(cleaned.slice(0, 6), 16);
-  if (Number.isNaN(value)) return { r: 1, g: 1, b: 1 };
-  return {
-    r: ((value >> 16) & 0xff) / 255,
-    g: ((value >> 8) & 0xff) / 255,
-    b: (value & 0xff) / 255,
-  };
 }

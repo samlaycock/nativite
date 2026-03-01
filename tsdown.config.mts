@@ -11,7 +11,12 @@ export default defineConfig([
     clean: true,
   },
   {
-    entry: ["./src/client/index.ts", "./src/chrome/index.ts", "./src/css-vars/index.ts"],
+    entry: [
+      "./src/client/index.ts",
+      "./src/chrome/index.ts",
+      "./src/css-vars/index.ts",
+      "./src/utils.ts",
+    ],
     format: ["cjs", "esm"],
     platform: "browser",
     dts: true,

@@ -11,7 +11,9 @@ import { appDelegateTemplate } from "./templates/app-delegate.ts";
 import { appIconContentsTemplate } from "./templates/app-icon-contents.ts";
 import { infoPlistMacOSTemplate, infoPlistTemplate } from "./templates/info-plist.ts";
 import { launchScreenTemplate } from "./templates/launch-screen.ts";
+import { mainEntryTemplate } from "./templates/main-entry.ts";
 import { nativiteBridgeTemplate } from "./templates/nativite-bridge.ts";
+import { nativiteChromeStateTemplate } from "./templates/nativite-chrome-state.ts";
 import { nativiteChromeTemplate } from "./templates/nativite-chrome.ts";
 import { nativiteKeyboardTemplate } from "./templates/nativite-keyboard.ts";
 import { nativitePluginRegistrantTemplate } from "./templates/nativite-plugin-registrant.ts";
@@ -39,6 +41,12 @@ function requiresLegacyProjectRefresh(
 
   try {
     const pbxproj = readFileSync(projectPath, "utf-8");
+    // Ensure NativiteApp.swift entry point is present (SwiftUI @main)
+    if (!pbxproj.includes("NativiteApp.swift")) return true;
+    // Ensure SwiftUI migration has been applied (NativiteRootView lives in AppDelegate.swift)
+    if (!pbxproj.includes("AppDelegate.swift")) return true;
+    // Ensure NativiteChromeState.swift observable model is present
+    if (!pbxproj.includes("NativiteChromeState.swift")) return true;
     if (targetPlatform === "ios") {
       if (!pbxproj.includes('SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";')) return true;
       if (!pbxproj.includes("SDKROOT = iphoneos;")) return true;
@@ -94,6 +102,7 @@ export async function generateProject(
   }
 
   // Swift source files — shared across both platforms (use #if os() guards)
+  writeFileSync(join(appDir, "NativiteApp.swift"), mainEntryTemplate());
   writeFileSync(join(appDir, "AppDelegate.swift"), appDelegateTemplate(config));
   writeFileSync(join(appDir, "ViewController.swift"), viewControllerTemplate(config));
   writeFileSync(join(appDir, "NativiteBridge.swift"), nativiteBridgeTemplate(config));
@@ -102,6 +111,7 @@ export async function generateProject(
     nativitePluginRegistrantTemplate(resolvedPlugins),
   );
   writeFileSync(join(appDir, "NativiteChrome.swift"), nativiteChromeTemplate(config));
+  writeFileSync(join(appDir, "NativiteChromeState.swift"), nativiteChromeStateTemplate());
   writeFileSync(join(appDir, "NativiteVars.swift"), nativiteVarsTemplate());
   writeFileSync(join(appDir, "NativiteKeyboard.swift"), nativiteKeyboardTemplate(config));
 

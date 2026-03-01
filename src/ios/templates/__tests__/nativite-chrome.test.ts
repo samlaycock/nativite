@@ -4,283 +4,116 @@ import { baseConfig } from "../../../__tests__/fixtures.ts";
 import { nativiteChromeTemplate } from "../nativite-chrome.ts";
 
 describe("nativiteChromeTemplate", () => {
-  describe("toolbar button events", () => {
-    it("routes toolbar button taps to toolbar.itemTapped, not titleBar events", () => {
+  describe("iOS title bar — SwiftUI delegation", () => {
+    it("applyTitleBar delegates to chromeState.updateTitleBar", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      const barButtonTappedStart = output.indexOf("func barButtonTapped");
-      expect(barButtonTappedStart).toBeGreaterThan(-1);
-      const toolbarEventInHandler = output.indexOf('"toolbar.itemPressed"', barButtonTappedStart);
-      expect(toolbarEventInHandler).toBeGreaterThan(barButtonTappedStart);
+      const start = output.indexOf("func applyTitleBar");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  // ──", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start, start + 300);
+      expect(body).toContain("chromeState?.updateTitleBar(state)");
     });
 
-    it("routes leading nav bar buttons to titleBar.leadingItemTapped", () => {
+    it("applyTitleBar does not use UINavigationItem or UIBarButtonItem", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      const barButtonTappedStart = output.indexOf("func barButtonTapped");
-      const nextMethodStart = output.indexOf("@objc private func", barButtonTappedStart + 1);
-      const handlerBody =
-        nextMethodStart !== -1
-          ? output.slice(barButtonTappedStart, nextMethodStart)
-          : output.slice(barButtonTappedStart);
-
-      expect(handlerBody).toContain('"titleBar.leadingItemPressed"');
-      expect(handlerBody).toContain('"titleBar.trailingItemPressed"');
-      expect(handlerBody).toContain('"toolbar.itemPressed"');
+      const start = output.indexOf("func applyTitleBar");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  // ──", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start, start + 300);
+      // No UIKit navigation bar manipulation — all handled by SwiftUI
+      expect(body).not.toContain("navItem");
+      expect(body).not.toContain("navigationController");
+      expect(body).not.toContain("setNavigationBarHidden");
+      expect(body).not.toContain("UIBarButtonItem");
     });
 
-    it("removes the unreachable toolbarButtonTapped dead-code method", () => {
+    it("resetTitleBar delegates to chromeState.resetTitleBar", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func resetTitleBar");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// ", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start, start + 300);
+      expect(body).toContain("chromeState?.resetTitleBar()");
+    });
+
+    it("resetTitleBar does not touch UIKit navigation bar", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func resetTitleBar");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// ", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start, start + 300);
+      expect(body).not.toContain("setNavigationBarHidden");
+      expect(body).not.toContain("setLeftBarButtonItems");
+      expect(body).not.toContain("setRightBarButtonItems");
+      expect(body).not.toContain("barItemCache");
+    });
+
+    it("no longer contains UIBarButtonItem building code", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      // iOS section only (before #elseif os(macOS))
+      const macStart = output.indexOf("#elseif os(macOS)");
+      const iosSection = output.slice(0, macStart);
+      expect(iosSection).not.toContain("func barButtonItem(");
+      expect(iosSection).not.toContain("func barButtonMenu(");
+      expect(iosSection).not.toContain("func barButtonMenuElement(");
+      expect(iosSection).not.toContain("func barButtonTapped(");
+      expect(iosSection).not.toContain("barItemCache");
+    });
+
+    it("no longer contains legacy applySearchBar method for title bar", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const macStart = output.indexOf("#elseif os(macOS)");
+      const iosSection = output.slice(0, macStart);
+      // The title bar search bar is now handled by SwiftUI's .searchable() modifier.
+      // UISearchController still exists in the navigation legacy path for search-role tabs.
+      expect(iosSection).not.toContain("func applySearchBar(");
+    });
+  });
+
+  describe("iOS toolbar — SwiftUI delegation", () => {
+    it("applyToolbar delegates to chromeState.updateToolbar", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyToolbar");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  // ──", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start, start + 300);
+      expect(body).toContain("chromeState?.updateToolbar(state)");
+    });
+
+    it("applyToolbar does not use UINavigationController toolbar", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyToolbar");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  // ──", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start, start + 300);
+      expect(body).not.toContain("setToolbarHidden");
+      expect(body).not.toContain("setToolbarItems");
+      expect(body).not.toContain("navigationController");
+    });
+
+    it("resetToolbar delegates to chromeState.resetToolbar", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func resetToolbar");
+      expect(start).toBeGreaterThan(-1);
+      const body = output.slice(start, start + 200);
+      expect(body).toContain("chromeState?.resetToolbar()");
+    });
+
+    it("no legacy toolbarButtonTapped dead-code method", () => {
       const output = nativiteChromeTemplate(baseConfig);
       expect(output).not.toContain("func toolbarButtonTapped");
     });
-
-    it("uses maxSplits: 1 when parsing the accessibilityIdentifier so button IDs containing colons are preserved", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const barButtonTappedStart = output.indexOf("func barButtonTapped");
-      expect(barButtonTappedStart).toBeGreaterThan(-1);
-      const nextMethodStart = output.indexOf("\n  private func ", barButtonTappedStart);
-      const handlerBody =
-        nextMethodStart !== -1
-          ? output.slice(barButtonTappedStart, nextMethodStart)
-          : output.slice(barButtonTappedStart);
-
-      // Must use maxSplits: 1 to avoid silently dropping events when IDs
-      // contain colons (e.g. id: "edit:profile").
-      expect(handlerBody).toContain('split(separator: ":", maxSplits: 1)');
-      // Must NOT use the bare split without maxSplits (which would break on colon IDs).
-      expect(handlerBody).not.toContain('split(separator: ":").');
-    });
   });
 
-  describe("title bar button items", () => {
-    it("uses leadingItems key for leading nav bar items", () => {
+  describe("iOS onChromeEvent callback wiring", () => {
+    it("wires onChromeEvent in applyState so SwiftUI views can send events", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyTitleBar");
+      const start = output.indexOf("func applyState");
       expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain('state["leadingItems"]');
-      expect(body).not.toContain('state["toolbarLeft"]');
-    });
-
-    it("uses trailingItems key for trailing nav bar items", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain('state["trailingItems"]');
-      expect(body).not.toContain('state["toolbarRight"]');
-    });
-
-    it("uses backLabel key for back button title", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain('state["backLabel"]');
-      expect(body).not.toContain('state["backButtonTitle"]');
-    });
-
-    it("delegates to toolbarItem() so fixed-space and flexible-space work in nav bar items", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain("toolbarItem(");
-      expect(body).not.toContain("compactMap { barButtonItem($0");
-    });
-
-    it("builds native UIMenu from button state when menu data is present", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func barButtonItem");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  @objc private func barButtonTapped", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain("#available(iOS 14.0, *)");
-      expect(body).toContain('state["menu"] as? [String: Any]');
-      expect(body).toContain("barButtonMenu(");
-      expect(body).toContain("primaryAction: nil");
-      expect(body).toContain("menu: menu");
-    });
-
-    it("uses icon key instead of systemImage for button icons", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func barButtonItem");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  @objc private func barButtonTapped", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain('state["icon"]');
-      expect(body).not.toContain('state["systemImage"]');
-    });
-
-    it("uses label key instead of title for button text", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func barButtonItem");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  @objc private func barButtonTapped", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain('state["label"]');
-    });
-
-    it("maps primary style to .done, not done style string", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func barButtonItem");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  @objc private func barButtonTapped", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain('"primary"');
-      expect(body).not.toContain('"done"');
-    });
-
-    it("wires non-menu buttons to barButtonTapped via target-action so taps fire events", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func barButtonItem");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  @objc private func barButtonTapped", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      // Non-menu buttons must use the old-style target/action init so UIKit
-      // calls barButtonTapped when the user taps them.
-      expect(body).toContain("target: self, action: #selector(barButtonTapped(_:))");
-    });
-
-    it("encodes position and id in accessibilityIdentifier so barButtonTapped can route events", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func barButtonItem");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  @objc private func barButtonTapped", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      // The cache key uses the same position:id format and is assigned as the accessibilityIdentifier.
-      expect(body).toContain('cacheKey = "\\(position):\\(id)"');
-      expect(body).toContain("accessibilityIdentifier = cacheKey");
-    });
-
-    it("applies 'left' position for leading items and 'right' for trailing so barButtonTapped routes correctly", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      // Leading items use "left" and trailing items use "right" — must match the
-      // switch cases in barButtonTapped.
-      expect(body).toContain('position: "left"');
-      expect(body).toContain('position: "right"');
-    });
-
-    it("supports recursive menu children rendering for nested menus", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain("private func barButtonMenu(");
-      expect(output).toContain("private func barButtonMenuElement(");
-      expect(output).toContain('itemState["children"] as? [[String: Any]]');
-      expect(output).toContain("UIAction(");
-    });
-
-    it("fires toolbar.menuItemSelected for toolbar menu items", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('"toolbar.menuItemPressed"');
-    });
-
-    it("fires titleBar.menuItemPressed for title bar menu items", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('"titleBar.menuItemPressed"');
-    });
-
-    it("never reuses cached UIBarButtonItem for menu-bearing buttons", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("// ── Reuse cached item");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("// ── Create new item", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      // Menu-bearing items must never be reused from the cache because setting
-      // UIBarButtonItem.menu on a cached item does not reliably re-wire the
-      // new UIAction handlers.
-      expect(body).toContain("!hasMenu");
-      expect(body).not.toContain("cached.menu = menu");
-    });
-  });
-
-  describe("title bar cleanup", () => {
-    it("resetTitleBar hides the nav bar so it returns to its initial state", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func resetTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      // The app delegate starts with the nav bar hidden. resetTitleBar must
-      // restore that state by hiding it — NOT revealing it.
-      expect(body).toContain("setNavigationBarHidden(true,");
-      expect(body).not.toContain("setNavigationBarHidden(false,");
-    });
-
-    it("resetTitleBar uses animated: true because JS-layer coalescing prevents it being called during a rapid cleanup+re-apply cycle", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func resetTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      // The JS chrome() flush is debounced via queueMicrotask: a synchronous
-      // cleanup+re-apply (React useEffect dependency change) is coalesced into
-      // one native message with the final state, so resetTitleBar is never called
-      // in that scenario. When it IS called (genuine unmount), animated: true
-      // gives a smooth hide transition.
-      expect(body).toContain("setNavigationBarHidden(true, animated: true)");
-    });
-
-    it("resetTitleBar clears all nav item properties", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func resetTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain("setLeftBarButtonItems(nil, animated: true)");
-      expect(body).toContain("setRightBarButtonItems(nil, animated: true)");
-      expect(body).toContain("searchController = nil");
-    });
-  });
-
-  describe("title bar and toolbar default visibility", () => {
-    it("applyTitleBar shows the nav bar by default without requiring hidden: false", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).not.toContain('if let hidden = state["hidden"]');
-      expect(body).toContain("setNavigationBarHidden");
-      expect(body).toContain("?? false");
-    });
-
-    it("applyToolbar shows the toolbar by default without requiring hidden: false", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyToolbar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).not.toContain('if let hidden = state["hidden"]');
-      expect(body).toContain("setToolbarHidden");
-      expect(body).toContain("?? false");
-    });
-
-    it("applyTitleBar only calls setNavigationBarHidden when the hidden state has changed to avoid spurious animations", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyTitleBar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      // Must guard with isNavigationBarHidden comparison so repeated state flushes
-      // (e.g. on every route change) don't produce a slide-in/out animation.
-      expect(body).toContain("isNavigationBarHidden");
-      expect(body).toContain("setNavigationBarHidden");
-    });
-
-    it("applyToolbar only calls setToolbarHidden when the hidden state has changed to avoid spurious animations", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      const start = output.indexOf("func applyToolbar");
-      expect(start).toBeGreaterThan(-1);
-      const end = output.indexOf("\n  private func ", start + 1);
-      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
-      expect(body).toContain("isToolbarHidden");
-      expect(body).toContain("setToolbarHidden");
+      const end = output.indexOf("\n  // ── Title", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start, start + 800);
+      expect(body).toContain("chromeState?.onChromeEvent == nil");
+      expect(body).toContain("self?.sendEvent(name: name, data: data)");
     });
   });
 
@@ -751,95 +584,14 @@ describe("nativiteChromeTemplate", () => {
   });
 
   describe("sheet", () => {
-    it("mounts a WKWebView in sheet view controller for URL-driven content", () => {
+    it("delegates applySheet to chromeState.updateSheet", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain("import WebKit");
-      expect(output).toContain("private(set) var webView: NativiteWebView!");
-      expect(output).toContain(
-        'config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"',
-      );
-      expect(output).toContain(
-        "webView = NativiteWebView(frame: view.bounds, configuration: config)",
-      );
-      expect(output).toContain("webView.isOpaque = false");
-      expect(output).toContain("webView.backgroundColor = .clear");
-      expect(output).toContain("webView.scrollView.backgroundColor = .clear");
-      expect(output).toContain("webView.lockRootScroll = false");
-      expect(output).toContain("webView.scrollView.contentInsetAdjustmentBehavior = .never");
-      expect(output).toContain("webView.scrollView.isScrollEnabled = true");
-      expect(output).toContain("webView.scrollView.bounces = false");
-      expect(output).toContain("webView.scrollView.alwaysBounceVertical = false");
-      expect(output).toContain("webView.scrollView.alwaysBounceHorizontal = false");
+      expect(output).toContain("chromeState?.updateSheet(name: name, state: state)");
     });
 
-    it("resolves relative sheet URLs against the main webview URL and loads them", () => {
+    it("delegates resetSheets to chromeState.resetSheets", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain("func loadURL(_ rawURL: String, relativeTo baseURL: URL?)");
-      expect(output).toContain("loadViewIfNeeded()");
-      expect(output).toContain("let effectiveBaseURL = baseURL ?? fallbackBaseURL()");
-      expect(output).toContain('if rawURL.hasPrefix("/") {');
-      expect(output).toContain("return resolveRootPath(rawURL, relativeTo: effectiveBaseURL)");
-      expect(output).toContain("URL(string: rawURL, relativeTo: effectiveBaseURL)");
-      expect(output).toContain('if let rawURL = state["url"] as? String');
-      expect(output).toContain("sheetVC.loadURL(rawURL, relativeTo: vc.webView.url)");
-    });
-
-    it("routes root-prefixed sheet URLs to the same host and supports bundled file fallback", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('if baseScheme == "file" {');
-      expect(output).toContain("return bundleEntryURL(relativeTo: baseURL)");
-      expect(output).toContain(
-        "let nextSPARoute = pendingFileSPARoute(for: rawURL, resolvedURL: absoluteURL)",
-      );
-      expect(output).toContain("pendingSPARoute = nextSPARoute");
-      expect(output).toContain("if absoluteURL == lastLoadedURL {");
-      expect(output).toContain("applySPARoute(route)");
-      expect(output).toContain(
-        'window.history.replaceState(window.history.state ?? null, "", payload.route);',
-      );
-      expect(output).toContain('window.dispatchEvent(new PopStateEvent("popstate"));');
-      expect(output).toContain('UserDefaults.standard.string(forKey: "nativite.dev.url")');
-      expect(output).toContain(
-        'Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist")',
-      );
-      expect(output).toContain("sheet.prefersScrollingExpandsWhenScrolledToEdge = false");
-    });
-
-    it("bootstraps file-based root routes through index.html and applies SPA route updates", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain("guard resolvedURL.isFileURL else { return nil }");
-      expect(output).toContain('guard rawPath.hasPrefix("/") else { return nil }');
-      expect(output).toContain("return bundleEntryURL(relativeTo: baseURL)");
-      expect(output).toContain("if absoluteURL == lastLoadedURL {");
-      expect(output).toContain("if let route = nextSPARoute {");
-      expect(output).toContain("applySPARoute(route)");
-      expect(output).toContain("guard let route = pendingSPARoute else { return }");
-      expect(output).toContain("pendingSPARoute = nil");
-      expect(output).toContain(
-        'window.history.replaceState(window.history.state ?? null, "", payload.route);',
-      );
-      expect(output).toContain('window.dispatchEvent(new PopStateEvent("popstate"));');
-    });
-
-    it("supports small, medium, large and full detent mappings", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('"small"');
-      expect(output).toContain("smallDetent()");
-      expect(output).toContain("smallDetentIdentifier()");
-      expect(output).toContain("fullDetent()");
-      expect(output).toContain("UISheetPresentationController.Detent.custom");
-    });
-
-    it("uses activeDetent key instead of selectedDetent", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('state["activeDetent"]');
-      expect(output).not.toContain('state["selectedDetent"]');
-    });
-
-    it("uses WKWebsiteDataStore.default() so the sheet webview shares a process with the primary (iOS 15+)", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain("config.websiteDataStore = WKWebsiteDataStore.default()");
-      expect(output).not.toContain("WKProcessPool");
+      expect(output).toContain("chromeState?.resetSheets()");
     });
 
     it("reads sheet state from 'sheets' dict so named instances are dispatched correctly", () => {
@@ -850,10 +602,10 @@ describe("nativiteChromeTemplate", () => {
       expect(output).not.toContain('state["sheet"] as? [String: Any]');
     });
 
-    it("passes the sheet name to NativiteSheetViewController as instanceName", () => {
+    it("uses WKWebsiteDataStore.default() so the sheet webview shares a process with the primary (iOS 15+)", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('var instanceName: String = "sheet"');
-      expect(output).toContain("sheetVC.instanceName = name");
+      expect(output).toContain("config.websiteDataStore = WKWebsiteDataStore.default()");
+      expect(output).not.toContain("WKProcessPool");
     });
 
     it("injects the instance name user script so the native message broker can identify this webview", () => {
@@ -863,49 +615,11 @@ describe("nativiteChromeTemplate", () => {
       expect(output).toContain("injectionTime: .atDocumentStart");
     });
 
-    it("emits sheet.presented event with sheet name when the sheet is presented", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('sendEvent(name: "sheet.presented", data: ["name": name])');
-    });
-
-    it("emits sheet.dismissed via presentationControllerDidDismiss, not viewDidDisappear", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      // Uses the correct UIAdaptivePresentationControllerDelegate method so the event
-      // fires only on actual dismissal — not when another VC is presented over the sheet.
-      expect(output).toContain(
-        "func presentationControllerDidDismiss(_ presentationController: UIPresentationController)",
-      );
-      expect(output).toContain('sendEvent(name: "sheet.dismissed", data: ["name": instanceName])');
-      // override func viewDidDisappear must NOT be used for sheet.dismissed: it fires on
-      // any view-disappearance (e.g. alert or another modal presented over the sheet).
-      expect(output).not.toContain("override func viewDidDisappear");
-    });
-
-    it("re-sets bridge on reused sheet VC so events keep firing after NativiteChrome re-create", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      // When an existing NativiteSheetViewController is reused (sheet already presented),
-      // bridge must be re-assigned because the weak var may have gone stale.
-      expect(output).toContain(
-        "sheetVC.bridge = self // re-set in case NativiteChrome was re-created",
-      );
-    });
-
-    it("emits sheet.detentChanged event with sheet name and detent", () => {
+    it("uses deliverMessage to send messages to child webviews via nativiteReceive", () => {
       const output = nativiteChromeTemplate(baseConfig);
       expect(output).toContain(
-        'sendEvent(name: "sheet.detentChanged", data: ["name": instanceName, "detent": detent])',
+        "private func deliverMessage(to webView: WKWebView, from sender: String, payload: Any?)",
       );
-    });
-
-    it("emits sheet.loadFailed event with sheet name", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain('"name": instanceName');
-      expect(output).toContain('sendEvent(name: "sheet.loadFailed", data: payload)');
-    });
-
-    it("uses receiveMessage to deliver messages to sheet webview via nativiteReceive", () => {
-      const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain("func receiveMessage(from sender: String, payload: Any?)");
       expect(output).toContain("window.nativiteReceive(");
     });
 
@@ -915,13 +629,22 @@ describe("nativiteChromeTemplate", () => {
       expect(output).toContain("func broadcastMessage(from sender: String, payload: Any?)");
     });
 
-    it("registers the nativite bridge handler in the sheet webview", () => {
+    it("uses chromeState.childWebViews for messaging instead of NativiteSheetViewController", () => {
       const output = nativiteChromeTemplate(baseConfig);
-      expect(output).toContain("sheetVC.nativeBridge = vc.nativiteBridgeHandler()");
-      expect(output).toContain(
-        'config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")',
-      );
-      expect(output).toContain("didFailProvisionalNavigation");
+      // iOS messaging should use chromeState?.childWebViews for lookups
+      expect(output).toContain("chromeState?.childWebViews[name]");
+      expect(output).toContain("chromeState?.childWebViews");
+      // NativiteSheetViewController should not exist
+      expect(output).not.toContain("class NativiteSheetViewController");
+    });
+
+    it("does not contain legacy UIKit sheet presentation code", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).not.toContain("UISheetPresentationController.Detent.custom");
+      expect(output).not.toContain("smallDetent()");
+      expect(output).not.toContain("fullDetent()");
+      expect(output).not.toContain("sheetVC.instanceName");
+      expect(output).not.toContain("presentationControllerDidDismiss");
     });
   });
 
@@ -981,28 +704,33 @@ describe("nativiteChromeTemplate", () => {
       });
     });
 
-    describe("NSTabView (navigation)", () => {
-      it("creates an NSTabView lazily", () => {
+    describe("NSSegmentedControl (navigation)", () => {
+      it("creates an NSSegmentedControl lazily", () => {
         const macos = getMacosSection();
-        expect(macos).toContain("private var tabView: NSTabView?");
+        expect(macos).toContain("private var navigationSegmentedControl: NSSegmentedControl?");
         expect(macos).toContain("func applyNavigation");
       });
 
-      it("creates NSTabViewItem for each navigation item", () => {
+      it("uses capsule segment style", () => {
         const macos = getMacosSection();
-        expect(macos).toContain("NSTabViewItem(identifier: id)");
-        expect(macos).toContain("tv.addTabViewItem(tabItem)");
+        expect(macos).toContain("seg.segmentStyle = .capsule");
+        expect(macos).toContain("seg.trackingMode = .selectOne");
       });
 
-      it("implements NSTabViewDelegate for selection events", () => {
+      it("fires navigation.itemPressed on segment selection", () => {
         const macos = getMacosSection();
-        expect(macos).toContain("extension NativiteChrome: NSTabViewDelegate");
+        expect(macos).toContain("navigationSegmentTapped");
         expect(macos).toContain('"navigation.itemPressed"');
       });
 
       it("handles hidden state", () => {
         const macos = getMacosSection();
-        expect(macos).toContain("tv.isHidden = hidden");
+        expect(macos).toContain("navigationContainerView?.isHidden = hidden");
+      });
+
+      it("reads the style property", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain('let style = (state["style"] as? String) ?? "auto"');
       });
     });
 
@@ -1041,23 +769,23 @@ describe("nativiteChromeTemplate", () => {
       });
     });
 
-    describe("sheets (NSPanel)", () => {
-      it("presents sheets via window.beginSheet", () => {
+    describe("sheets", () => {
+      it("delegates applySheet to chromeState.updateSheet", () => {
         const macos = getMacosSection();
-        expect(macos).toContain("private var activeSheets: [String: NSPanel]");
-        expect(macos).toContain("window.beginSheet(panel)");
-        expect(macos).toContain('"sheet.presented"');
-        expect(macos).toContain('"sheet.dismissed"');
+        expect(macos).toContain("chromeState?.updateSheet(name: name, state: state)");
       });
 
-      it("dismisses sheets via window.endSheet", () => {
+      it("delegates resetSheets to chromeState.resetSheets", () => {
         const macos = getMacosSection();
-        expect(macos).toContain("window.endSheet(panel)");
+        expect(macos).toContain("chromeState?.resetSheets()");
       });
 
-      it("supports dismissible configuration", () => {
+      it("does not contain legacy NSPanel sheet presentation code", () => {
         const macos = getMacosSection();
-        expect(macos).toContain("panel.styleMask.remove(.closable)");
+        expect(macos).not.toContain("private var activeSheets: [String: NSPanel]");
+        expect(macos).not.toContain("window.beginSheet(panel)");
+        expect(macos).not.toContain("window.endSheet(panel)");
+        expect(macos).not.toContain("resolveSheetHeight");
       });
     });
 

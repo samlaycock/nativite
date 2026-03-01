@@ -90,12 +90,19 @@ async function buildAndLaunchMacOS(
     logger,
   });
 
-  const appPath = `${buildDir}/${appName}.app/Contents/MacOS/${appName}`;
-  const child = spawn(appPath, [], {
-    env: { ...process.env, NATIVITE_DEV_URL: devUrl },
+  // Kill any existing instance before launching a fresh one.
+  const appBundle = `${buildDir}/${appName}.app`;
+  execSync(`pkill -f "${appBundle}/Contents/MacOS/" 2>/dev/null || true`, { stdio: "pipe" });
+
+  // Launch the binary directly with NATIVITE_DEV_URL in the environment.
+  // The explicit main.swift entry point calls NSApp.setActivationPolicy(.regular)
+  // so the process gets a Dock icon and proper GUI behavior without needing `open`.
+  const child = spawn(`${appBundle}/Contents/MacOS/${appName}`, [], {
     detached: true,
-    stdio: "ignore",
+    stdio: ["ignore", "ignore", "inherit"],
+    env: { ...process.env, NATIVITE_DEV_URL: devUrl },
   });
+  child.on("error", (err) => logger.error(`Failed to launch: ${err.message}`));
   child.unref();
 }
 

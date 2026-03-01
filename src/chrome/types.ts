@@ -115,6 +115,12 @@ export interface TitleBarConfig {
    * Only meaningful on iOS where a navigation stack is active.
    */
   readonly backLabel?: string | null;
+  /**
+   * Accent colour applied to all buttons in the title bar.
+   * Accepts any platform colour string (e.g. "#FF6600").
+   * Individual button `tint` overrides this.
+   */
+  readonly tint?: string;
   /** Items on the leading (left / start) side. */
   readonly leadingItems?: readonly BarItem[];
   /** Items on the trailing (right / end) side. */

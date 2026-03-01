@@ -45,6 +45,7 @@ export function nativiteChromeTemplate(config: NativiteConfig): string {
   const iosChrome = `#if os(iOS)
 import UIKit
 import WebKit
+import SwiftUI
 
 // MARK: - NativiteChrome
 
@@ -61,7 +62,6 @@ import WebKit
 ///       └─ NativiteChrome  (this class)
 ///            ├─ UITabBarController   (iOS 18+ tabs)
 ///            ├─ UITabBar             (< iOS 18 legacy tabs)
-///            ├─ NativiteSheetViewController  (child webview sheets)
 ///            └─ NativiteTabBottomAccessoryController
 ///
 /// ## Threading
@@ -69,7 +69,6 @@ import WebKit
 /// All UIKit work is dispatched to the main queue inside applyState(_:).
 /// Public helpers like postMessageToChild(name:payload:) must be called
 /// from the main thread.
-private let nativiteSmallDetentIdentifier = UISheetPresentationController.Detent.Identifier("nativite.small")
 
 class NativiteChrome: NSObject {
 
@@ -79,6 +78,9 @@ class NativiteChrome: NSObject {
   weak var vars: NativiteVars?
   // NativiteKeyboard handles the input accessory bar and keyboard dismiss mode.
   weak var keyboard: NativiteKeyboard?
+  // SwiftUI @Observable model — receives state updates for areas migrated to
+  // SwiftUI (sheets, alerts, status bar, home indicator). Set by ViewController.
+  var chromeState: NativiteChromeState?
   // Self-managed tab bar — used on < iOS 18. Installed lazily into vc.view.
   private lazy var tabBar = UITabBar()
   /// iOS 18+ tab bar controller — used for UITab/UISearchTab support.
@@ -95,13 +97,6 @@ class NativiteChrome: NSObject {
   private var tabFingerprint: [String] = []
   private var tabBottomAccessoryVC: NativiteTabBottomAccessoryController?
   private var lastAppliedAreas: Set<String> = []
-  /// Cache of bar button items keyed by "{position}:{id}" for identity-based
-  /// reuse. Preserving the same UIBarButtonItem object reference lets UIKit
-  /// animate transitions (and morph liquid-glass capsules on iOS 26+).
-  private var barItemCache: [String: UIBarButtonItem] = [:]
-  /// Suppresses animation on the very first applyState() call so
-  /// defaultChrome renders instantly before the WebView has loaded.
-  private var isInitialApply = true
   /// Active Auto Layout constraints pinning the WKWebView into the
   /// selected tab's VC view. Tracked explicitly so they can be
   /// deactivated before new ones are activated, avoiding duplicates.
@@ -124,6 +119,14 @@ class NativiteChrome: NSObject {
 
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
+
+      // Wire the event callback so SwiftUI views (NativiteBarButton, etc.)
+      // can route user interactions back to the JS bridge.
+      if self.chromeState?.onChromeEvent == nil {
+        self.chromeState?.onChromeEvent = { [weak self] name, data in
+          self?.sendEvent(name: name, data: data)
+        }
+      }
 
       // Reset areas that were previously applied but are now absent.
       let currentAreas = Set(state.keys)
@@ -164,7 +167,6 @@ class NativiteChrome: NSObject {
 
       // Push updated chrome geometry to CSS variables after all state is applied.
       self.pushVarUpdates()
-      self.isInitialApply = false
     }
   }
 
@@ -199,231 +201,12 @@ class NativiteChrome: NSObject {
 ${applyInitialStateMethod}
   // ── Title Bar ──────────────────────────────────────────────────────────────
 
-  /// Applies the titleBar area — maps onto the UINavigationController's
-  /// navigation bar (title, subtitle, large-title mode, bar button items,
-  /// search bar, and visibility).
-  ///
-  /// On iOS 26+ title/subtitle changes are animated inside
-  /// UIView.animate so the liquid-glass navigation bar morphs smoothly.
-  /// The animation is skipped on the very first apply (isInitialApply)
-  /// to avoid a flash during launch.
+  /// Applies the titleBar area — delegates to NativiteChromeState so the
+  /// SwiftUI NativiteTitleBarModifier (inside NavigationStack) renders the
+  /// navigation bar title, buttons, search, and visibility.
   private func applyTitleBar(_ state: [String: Any]) {
-    guard let vc = viewController,
-          let navController = vc.navigationController else { return }
-
-    let navItem = vc.navigationItem
-
-    if let title = state["title"] as? String {
-      // Animate on iOS 26+ for liquid-glass morph; skip on first apply.
-      if #available(iOS 26.0, *), !isInitialApply {
-        UIView.animate(withDuration: 0.35) { navItem.title = title }
-      } else {
-        navItem.title = title
-      }
-    }
-    if let subtitle = state["subtitle"] as? String {
-      if #available(iOS 26.0, *), !isInitialApply {
-        UIView.animate(withDuration: 0.35) { navItem.prompt = subtitle }
-      } else {
-        navItem.prompt = subtitle
-      }
-    }
-    if let mode = state["largeTitleMode"] as? String {
-      navController.navigationBar.prefersLargeTitles = true
-      navItem.largeTitleDisplayMode = largeTitleDisplayMode(from: mode)
-    } else {
-      navController.navigationBar.prefersLargeTitles = false
-      navItem.largeTitleDisplayMode = .automatic
-    }
-    if let backLabel = state["backLabel"] as? String {
-      navItem.backButtonTitle = backLabel
-    } else if state["backLabel"] is NSNull {
-      navItem.backButtonTitle = ""
-    }
-    let navHidden = (state["hidden"] as? Bool) ?? false
-    if navController.isNavigationBarHidden != navHidden {
-      navController.setNavigationBarHidden(navHidden, animated: true)
-    }
-    if let leadingItems = state["leadingItems"] as? [[String: Any]] {
-      let items = leadingItems.compactMap { toolbarItem($0, position: "left") }
-      navItem.setLeftBarButtonItems(items, animated: !isInitialApply)
-    }
-    if let trailingItems = state["trailingItems"] as? [[String: Any]] {
-      let items = trailingItems.compactMap { toolbarItem($0, position: "right") }
-      navItem.setRightBarButtonItems(items, animated: !isInitialApply)
-    }
-    if let searchBarState = state["searchBar"] as? [String: Any] {
-      applySearchBar(searchBarState, to: vc)
-    }
-  }
-
-  /// Maps the JS largeTitleMode string to a UIKit display mode.
-  ///
-  /// - "large"  → .always  (always show the large title)
-  /// - "inline" → .never   (always show the inline/small title)
-  /// - anything else → .automatic (UIKit decides based on scroll)
-  private func largeTitleDisplayMode(from string: String) -> UINavigationItem.LargeTitleDisplayMode {
-    switch string {
-    case "large": return .always
-    case "inline": return .never
-    default: return .automatic
-    }
-  }
-
-  /// Creates or reuses a UIBarButtonItem for the given JS button state.
-  ///
-  /// - Parameter position: Cache namespace ("left", "right", or
-  ///   "toolbar"). Combined with the item's id to form the cache key.
-  ///
-  /// Cached items are reused by identity so UIKit can animate transitions
-  /// (and morph liquid-glass capsules on iOS 26+). Items with menus are
-  /// always recreated because resetting UIBarButtonItem.menu does not
-  /// reliably re-wire the new UIAction closures.
-  private func barButtonItem(_ state: [String: Any], position: String) -> UIBarButtonItem? {
-    guard let id = state["id"] as? String else { return nil }
-    let cacheKey = "\\(position):\\(id)"
-
-    let style: UIBarButtonItem.Style
-    switch state["style"] as? String {
-    case "primary": style = .done
-    default: style = .plain
-    }
-    let isDestructive = (state["style"] as? String) == "destructive"
-    let isEnabled = !((state["disabled"] as? Bool) ?? false)
-    let image = (state["icon"] as? String).flatMap { UIImage(systemName: $0) }
-    let label = state["label"] as? String
-
-    guard image != nil || label != nil else { return nil }
-
-    let menu: UIMenu?
-    if #available(iOS 14.0, *) {
-      if let menuState = state["menu"] as? [String: Any] {
-        menu = barButtonMenu(menuState, position: position)
-      } else {
-        menu = nil
-      }
-    } else {
-      menu = nil
-    }
-
-    let hasMenu = menu != nil
-
-    // ── Reuse cached item ──────────────────────────────────────────────────
-    // Preserving the same UIBarButtonItem object reference lets UIKit animate
-    // transitions and morph liquid-glass capsules on iOS 26+.
-    //
-    // Items with menus are NEVER reused. Setting UIBarButtonItem.menu on a
-    // cached item does not reliably re-wire the new UIAction handlers — the
-    // old closures may be retained internally, causing events to silently
-    // fail. Always recreate menu-bearing items so the UIBarButtonItem is
-    // initialised with the fresh UIMenu from the start.
-    if !hasMenu, let cached = barItemCache[cacheKey] {
-      let cachedHasMenu: Bool
-      if #available(iOS 14.0, *) { cachedHasMenu = cached.menu != nil }
-      else { cachedHasMenu = false }
-
-      if !cachedHasMenu {
-        cached.image = image
-        cached.title = label
-        cached.style = style
-        cached.tintColor = isDestructive ? .systemRed : nil
-        cached.isEnabled = isEnabled
-        return cached
-      }
-      // Cached item had a menu but new state does not — fall through.
-    }
-
-    // ── Create new item ────────────────────────────────────────────────────
-    let item: UIBarButtonItem
-    if let image {
-      if #available(iOS 14.0, *), let menu {
-        item = UIBarButtonItem(title: label, image: image, primaryAction: nil, menu: menu)
-      } else {
-        item = UIBarButtonItem(image: image, style: style, target: self, action: #selector(barButtonTapped(_:)))
-      }
-    } else if let label {
-      if #available(iOS 14.0, *), let menu {
-        item = UIBarButtonItem(title: label, image: nil, primaryAction: nil, menu: menu)
-      } else {
-        item = UIBarButtonItem(title: label, style: style, target: self, action: #selector(barButtonTapped(_:)))
-      }
-    } else {
-      return nil
-    }
-
-    item.style = style
-    if isDestructive { item.tintColor = .systemRed }
-    item.accessibilityIdentifier = cacheKey
-    item.isEnabled = isEnabled
-    barItemCache[cacheKey] = item
-    return item
-  }
-
-  /// Builds a UIMenu from the JS menu config (title + items array).
-  @available(iOS 14.0, *)
-  private func barButtonMenu(_ state: [String: Any], position: String) -> UIMenu? {
-    let menuTitle = state["title"] as? String ?? ""
-    guard let itemStates = state["items"] as? [[String: Any]] else { return nil }
-    let children = itemStates.compactMap { barButtonMenuElement($0, position: position) }
-    guard !children.isEmpty else { return nil }
-    return UIMenu(title: menuTitle, children: children)
-  }
-
-  /// Recursively builds a single UIMenuElement — either a UIAction
-  /// leaf or a nested UIMenu sub-group (when children is present).
-  @available(iOS 14.0, *)
-  private func barButtonMenuElement(_ itemState: [String: Any], position: String) -> UIMenuElement? {
-    if let childrenStates = itemState["children"] as? [[String: Any]] {
-      let menuLabel = itemState["label"] as? String ?? ""
-      let menuImage = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
-      let children = childrenStates.compactMap { barButtonMenuElement($0, position: position) }
-      guard !children.isEmpty else { return nil }
-      return UIMenu(title: menuLabel, image: menuImage, identifier: nil, options: [], children: children)
-    }
-
-    guard let id = itemState["id"] as? String,
-          let label = itemState["label"] as? String else { return nil }
-
-    let image = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
-    var attributes = UIMenuElement.Attributes()
-    if (itemState["disabled"] as? Bool) ?? false {
-      attributes.insert(.disabled)
-    }
-    if (itemState["style"] as? String) == "destructive" {
-      attributes.insert(.destructive)
-    }
-    let actionState: UIMenuElement.State = ((itemState["checked"] as? Bool) ?? false) ? .on : .off
-    let eventName: String
-    switch position {
-    case "toolbar": eventName = "toolbar.menuItemPressed"
-    default:        eventName = "titleBar.menuItemPressed"
-    }
-
-    return UIAction(
-      title: label,
-      image: image,
-      identifier: nil,
-      discoverabilityTitle: nil,
-      attributes: attributes,
-      state: actionState
-    ) { [weak self] _ in
-      self?.sendEvent(name: eventName, data: ["id": id])
-    }
-  }
-
-  /// Target-action handler for bar button items on < iOS 14 (where
-  /// UIAction-based menus are unavailable). The item's position and ID
-  /// are encoded in its accessibilityIdentifier as "position:id".
-  @objc private func barButtonTapped(_ sender: UIBarButtonItem) {
-    guard let identifier = sender.accessibilityIdentifier else { return }
-    let parts = identifier.split(separator: ":", maxSplits: 1).map(String.init)
-    guard parts.count == 2 else { return }
-    let position = parts[0]
-    let id = parts[1]
-    switch position {
-    case "toolbar": sendEvent(name: "toolbar.itemPressed", data: ["id": id])
-    case "right":   sendEvent(name: "titleBar.trailingItemPressed", data: ["id": id])
-    default:        sendEvent(name: "titleBar.leadingItemPressed", data: ["id": id])
+    withAnimation(.easeInOut(duration: 0.3)) {
+      chromeState?.updateTitleBar(state)
     }
   }
 
@@ -443,6 +226,9 @@ ${applyInitialStateMethod}
   /// path. The modern path uses UITabBarController with UITab /
   /// UISearchTab; the legacy path manages a standalone UITabBar.
   private func applyNavigation(_ state: [String: Any]) {
+    // Sync to SwiftUI observable model.
+    chromeState?.updateNavigation(state)
+
     guard let vc = viewController else { return }
     if #available(iOS 18.0, *) {
       applyNavigationModern(state, vc: vc)
@@ -858,35 +644,11 @@ ${applyInitialStateMethod}
 
   // ── Toolbar ────────────────────────────────────────────────────────────────
 
-  /// Applies the toolbar area — maps items onto the
-  /// UINavigationController's bottom toolbar (setToolbarItems).
+  /// Applies the toolbar area — delegates to NativiteChromeState so the
+  /// SwiftUI NativiteToolbarModifier renders the bottom toolbar.
   private func applyToolbar(_ state: [String: Any]) {
-    guard let vc = viewController,
-          let navController = vc.navigationController else { return }
-
-    let toolbarHidden = (state["hidden"] as? Bool) ?? false
-    if navController.isToolbarHidden != toolbarHidden {
-      navController.setToolbarHidden(toolbarHidden, animated: true)
-    }
-    if let items = state["items"] as? [[String: Any]] {
-      let barItems = items.compactMap { toolbarItem($0) }
-      vc.setToolbarItems(barItems, animated: !isInitialApply)
-    }
-  }
-
-  /// Converts a single toolbar-item state dict into a UIBarButtonItem.
-  /// Handles the special "flexible-space" and "fixed-space" types
-  /// directly; everything else delegates to barButtonItem(_:position:).
-  private func toolbarItem(_ state: [String: Any], position: String = "toolbar") -> UIBarButtonItem? {
-    switch state["type"] as? String {
-    case "flexible-space":
-      return UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-    case "fixed-space":
-      let item = UIBarButtonItem(barButtonSystemItem: .fixedSpace, target: nil, action: nil)
-      item.width = state["width"] as? CGFloat ?? 8
-      return item
-    default:
-      return barButtonItem(state, position: position)
+    withAnimation(.easeInOut(duration: 0.3)) {
+      chromeState?.updateToolbar(state)
     }
   }
 
@@ -895,19 +657,8 @@ ${applyInitialStateMethod}
   /// Applies the statusBar area — sets the status bar style
   /// ("light" / "dark" / default) and visibility.
   private func applyStatusBar(_ state: [String: Any]) {
-    guard let vc = viewController else { return }
-
-    if let style = state["style"] as? String {
-      switch style {
-      case "light": vc.statusBarStyle = .lightContent
-      case "dark":  vc.statusBarStyle = .darkContent
-      default:      vc.statusBarStyle = .default
-      }
-    }
-    if let hidden = state["hidden"] as? Bool {
-      vc.statusBarHidden = hidden
-    }
-    vc.setNeedsStatusBarAppearanceUpdate()
+    chromeState?.updateStatusBar(state)
+    viewController?.setNeedsStatusBarAppearanceUpdate()
   }
 
   // ── Home Indicator ─────────────────────────────────────────────────────────
@@ -915,43 +666,8 @@ ${applyInitialStateMethod}
   /// Applies the homeIndicator area — controls whether the home
   /// indicator (the bottom swipe affordance) should auto-hide.
   private func applyHomeIndicator(_ state: [String: Any]) {
-    guard let vc = viewController else { return }
-
-    if let hidden = state["hidden"] as? Bool {
-      vc.homeIndicatorHidden = hidden
-    }
-    vc.setNeedsUpdateOfHomeIndicatorAutoHidden()
-  }
-
-  // ── Search Bar ────────────────────────────────────────────────────────────
-
-  /// Applies a search bar to the title bar's navigation item.
-  ///
-  /// This is used when titleBar.searchBar is set (independent of the
-  /// navigation search-role tab). Lazily creates a UISearchController
-  /// and attaches it to vc.navigationItem.
-  private func applySearchBar(_ state: [String: Any], to vc: ViewController) {
-    // Lazily create and attach a UISearchController to the navigation item
-    if vc.navigationItem.searchController == nil {
-      let searchController = UISearchController(searchResultsController: nil)
-      searchController.searchResultsUpdater = vc
-      searchController.searchBar.delegate = vc
-      searchController.obscuresBackgroundDuringPresentation = false
-      vc.navigationItem.searchController = searchController
-      vc.navigationItem.hidesSearchBarWhenScrolling = true
-    }
-
-    let searchBar = vc.navigationItem.searchController!.searchBar
-
-    if let placeholder = state["placeholder"] as? String {
-      searchBar.placeholder = placeholder
-    }
-    if let value = state["value"] as? String {
-      searchBar.text = value
-    }
-    if let shows = state["cancelButtonVisible"] as? Bool {
-      searchBar.showsCancelButton = shows
-    }
+    chromeState?.updateHomeIndicator(state)
+    viewController?.setNeedsUpdateOfHomeIndicatorAutoHidden()
   }
 
   // ── Sheet ──────────────────────────────────────────────────────────────────
@@ -959,67 +675,10 @@ ${applyInitialStateMethod}
   /// Presents or updates a child webview sheet.
   ///
   /// When presented is true the method either reuses an existing
-  /// NativiteSheetViewController or creates a new one, configures its
-  /// detents, grab handle, corner radius, background colour, and URL, then
-  /// presents it modally. When presented is false the sheet is dismissed.
+  /// Delegates sheet presentation to the SwiftUI NativiteSheetModifier
+  /// via the @Observable NativiteChromeState model.
   private func applySheet(name: String, state: [String: Any]) {
-    guard let vc = viewController else { return }
-
-    let presented = state["presented"] as? Bool ?? false
-
-    if presented {
-      let sheetVC: NativiteSheetViewController
-      let shouldPresent: Bool
-
-      if let existing = vc.presentedViewController as? NativiteSheetViewController {
-        sheetVC = existing
-        sheetVC.bridge = self // re-set in case NativiteChrome was re-created
-        shouldPresent = false
-      } else if vc.presentedViewController == nil {
-        let created = NativiteSheetViewController()
-        created.bridge = self
-        sheetVC = created
-        shouldPresent = true
-      } else {
-        return
-      }
-
-      if let sheet = sheetVC.sheetPresentationController {
-        if let detentStrings = state["detents"] as? [String] {
-          sheet.detents = detentStrings.compactMap { sheetDetent(from: $0) }
-        } else if shouldPresent {
-          sheet.detents = [.medium(), .large()]
-        }
-        if let activeDetent = state["activeDetent"] as? String {
-          sheet.selectedDetentIdentifier = sheetDetentIdentifier(from: activeDetent)
-        }
-        sheet.prefersGrabberVisible = state["grabberVisible"] as? Bool ?? false
-        // Prioritise embedded webview interaction over "drag anywhere to resize".
-        sheet.prefersScrollingExpandsWhenScrolledToEdge = false
-        if let radiusNumber = state["cornerRadius"] as? NSNumber {
-          sheet.preferredCornerRadius = CGFloat(truncating: radiusNumber)
-        }
-        sheet.delegate = sheetVC
-      }
-      sheetVC.isModalInPresentation = !((state["dismissible"] as? Bool) ?? true)
-      sheetVC.nativeBridge = vc.nativiteBridgeHandler()
-      sheetVC.instanceName = name
-      if let hex = state["backgroundColor"] as? String {
-        sheetVC.view.backgroundColor = UIColor(hex: hex)
-      }
-      if let rawURL = state["url"] as? String {
-        sheetVC.loadURL(rawURL, relativeTo: vc.webView.url)
-      }
-      if shouldPresent {
-        vc.present(sheetVC, animated: true) { [weak self] in
-          self?.sendEvent(name: "sheet.presented", data: ["name": name])
-        }
-      }
-    } else {
-      if vc.presentedViewController is NativiteSheetViewController {
-        vc.dismiss(animated: true)
-      }
-    }
+    chromeState?.updateSheet(name: name, state: state)
   }
 
   // ── Tab Bottom Accessory ────────────────────────────────────────────────
@@ -1131,9 +790,8 @@ ${applyInitialStateMethod}
       tabBottomAccessoryVC?.receiveMessage(from: "main", payload: payload)
       return
     }
-    guard let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController,
-          sheetVC.instanceName == name else { return }
-    sheetVC.receiveMessage(from: "main", payload: payload)
+    guard let webView = chromeState?.childWebViews[name] else { return }
+    deliverMessage(to: webView, from: "main", payload: payload)
   }
 
   /// Broadcasts a message to all webview instances (main + all children).
@@ -1143,9 +801,11 @@ ${applyInitialStateMethod}
     if sender != "main" {
       sendEvent(name: "message", data: ["from": sender, "payload": payload ?? NSNull()])
     }
-    // Forward to all presented child webviews
-    if let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController {
-      sheetVC.receiveMessage(from: sender, payload: payload)
+    // Forward to all child webviews registered in chromeState except the sender
+    if let children = chromeState?.childWebViews {
+      for (name, webView) in children where name != sender {
+        deliverMessage(to: webView, from: sender, payload: payload)
+      }
     }
     tabBottomAccessoryVC?.receiveMessage(from: sender, payload: payload)
   }
@@ -1155,9 +815,10 @@ ${applyInitialStateMethod}
   /// child originated an incoming message.
   func instanceName(for webView: WKWebView?) -> String {
     guard let webView else { return "unknown" }
-    if let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController,
-       sheetVC.webView === webView {
-      return sheetVC.instanceName
+    if let children = chromeState?.childWebViews {
+      for (name, wv) in children where wv === webView {
+        return name
+      }
     }
     if let accessoryVC = tabBottomAccessoryVC, accessoryVC.webView === webView {
       return "tabBottomAccessory"
@@ -1165,63 +826,14 @@ ${applyInitialStateMethod}
     return "unknown"
   }
 
-  /// Maps a JS detent name to a UISheetPresentationController.Detent.
-  /// "small" and "full" are custom detents (25 % and 100 %);
-  /// "medium" and "large" use the system detents.
-  private func sheetDetent(from string: String) -> UISheetPresentationController.Detent? {
-    switch string {
-    case "small":  return smallDetent()
-    case "medium": return .medium()
-    case "large":  return .large()
-    case "full":   return fullDetent()
-    default:       return nil
-    }
-  }
-
-  private func sheetDetentIdentifier(
-    from string: String
-  ) -> UISheetPresentationController.Detent.Identifier? {
-    switch string {
-    case "small":  return smallDetentIdentifier()
-    case "medium": return .medium
-    case "large":  return .large
-    case "full":   return fullDetentIdentifier()
-    default:       return nil
-    }
-  }
-
-  private func fullDetent() -> UISheetPresentationController.Detent? {
-    if #available(iOS 16.0, *) {
-      return UISheetPresentationController.Detent.custom(
-        identifier: UISheetPresentationController.Detent.Identifier("nativite.full")
-      ) { context in
-        context.maximumDetentValue
-      }
-    }
-    return .large()
-  }
-
-  private func fullDetentIdentifier() -> UISheetPresentationController.Detent.Identifier? {
-    if #available(iOS 16.0, *) {
-      return UISheetPresentationController.Detent.Identifier("nativite.full")
-    }
-    return .large
-  }
-
-  private func smallDetent() -> UISheetPresentationController.Detent? {
-    if #available(iOS 16.0, *) {
-      return UISheetPresentationController.Detent.custom(identifier: nativiteSmallDetentIdentifier) { context in
-        max(120, context.maximumDetentValue * 0.25)
-      }
-    }
-    return .medium()
-  }
-
-  private func smallDetentIdentifier() -> UISheetPresentationController.Detent.Identifier? {
-    if #available(iOS 16.0, *) {
-      return nativiteSmallDetentIdentifier
-    }
-    return .medium
+  private func deliverMessage(to webView: WKWebView, from sender: String, payload: Any?) {
+    let data: [String: Any] = ["from": sender, "payload": payload ?? NSNull()]
+    let message: [String: Any] = ["id": NSNull(), "type": "event", "event": "message", "data": data]
+    guard JSONSerialization.isValidJSONObject(message),
+      let msgData = try? JSONSerialization.data(withJSONObject: message),
+      let json = String(data: msgData, encoding: .utf8)
+    else { return }
+    webView.evaluateJavaScript("window.nativiteReceive(\\(json))", completionHandler: nil)
   }
 
   // ── Area cleanup ───────────────────────────────────────────────────────────
@@ -1243,24 +855,11 @@ ${applyInitialStateMethod}
     }
   }
 
-  /// Clears the title bar — hides the navigation bar, removes bar button
-  /// items, search controller, and purges the title-bar item cache.
+  /// Resets the title bar to defaults — delegates to NativiteChromeState
+  /// so the SwiftUI modifiers observe the cleared values.
   private func resetTitleBar() {
-    guard let vc = viewController,
-          let navController = vc.navigationController else { return }
-    let navItem = vc.navigationItem
-    navItem.title = nil
-    navItem.prompt = nil
-    navItem.backButtonTitle = nil
-    navItem.largeTitleDisplayMode = .automatic
-    navController.navigationBar.prefersLargeTitles = false
-    navItem.setLeftBarButtonItems(nil, animated: true)
-    navItem.setRightBarButtonItems(nil, animated: true)
-    navItem.searchController = nil
-    navController.setNavigationBarHidden(true, animated: true)
-    // Purge title-bar cache entries (left/right positions).
-    barItemCache = barItemCache.filter { key, _ in
-      !key.hasPrefix("left:") && !key.hasPrefix("right:")
+    withAnimation(.easeInOut(duration: 0.3)) {
+      chromeState?.resetTitleBar()
     }
   }
 
@@ -1268,6 +867,7 @@ ${applyInitialStateMethod}
   /// vc.view, removes the UITabBarController (iOS 18+), resets the
   /// tab fingerprint, and hides the legacy tab bar.
   private func resetNavigation() {
+    chromeState?.resetNavigation()
     if #available(iOS 18.0, *) {
       parkWebView()
       if let tbc = tabBarController {
@@ -1287,33 +887,26 @@ ${applyInitialStateMethod}
     lastNonSearchTabId = nil
   }
 
-  /// Hides the bottom toolbar and purges the toolbar item cache.
+  /// Resets the toolbar to defaults — delegates to NativiteChromeState
+  /// so the SwiftUI modifier observes the cleared values.
   private func resetToolbar() {
-    guard let vc = viewController,
-          let navController = vc.navigationController else { return }
-    vc.setToolbarItems(nil, animated: true)
-    navController.setToolbarHidden(true, animated: true)
-    // Purge toolbar cache entries.
-    barItemCache = barItemCache.filter { key, _ in !key.hasPrefix("toolbar:") }
+    withAnimation(.easeInOut(duration: 0.3)) {
+      chromeState?.resetToolbar()
+    }
   }
 
   private func resetStatusBar() {
-    guard let vc = viewController else { return }
-    vc.statusBarStyle = .default
-    vc.statusBarHidden = false
-    vc.setNeedsStatusBarAppearanceUpdate()
+    chromeState?.resetStatusBar()
+    viewController?.setNeedsStatusBarAppearanceUpdate()
   }
 
   private func resetHomeIndicator() {
-    guard let vc = viewController else { return }
-    vc.homeIndicatorHidden = false
-    vc.setNeedsUpdateOfHomeIndicatorAutoHidden()
+    chromeState?.resetHomeIndicator()
+    viewController?.setNeedsUpdateOfHomeIndicatorAutoHidden()
   }
 
   private func resetSheets() {
-    if viewController?.presentedViewController is NativiteSheetViewController {
-      viewController?.dismiss(animated: true)
-    }
+    chromeState?.resetSheets()
   }
 ${sendEventMethod}
 }
@@ -1455,319 +1048,6 @@ extension NativiteChrome: UISearchResultsUpdating {
   func updateSearchResults(for searchController: UISearchController) {
     let text = searchController.searchBar.text ?? ""
     sendEvent(name: "navigation.searchChanged", data: ["value": text])
-  }
-}
-
-// ─── Supporting: NativiteSheetViewController ─────────────────────────────────
-// A modally-presented child webview that shares the same WKWebsiteDataStore
-// (and therefore localStorage, IndexedDB, cookies) as the primary webview.
-// Presented as a UISheetPresentationController with configurable detents.
-
-private class NativiteSheetViewController: UIViewController,
-  UISheetPresentationControllerDelegate,
-  WKNavigationDelegate
-{
-  weak var bridge: NativiteChrome?
-  weak var nativeBridge: NativiteBridge?
-  // The name given to sheet("name", ...) on the JS side. Injected as
-  // window.__nativekit_instance_name__ so the native message broker
-  // can correctly route postToParent/broadcast calls from this webview.
-  /// The JS-side name for this sheet instance (e.g. "settings").
-  /// Injected into the child webview as
-  /// window.__nativekit_instance_name__ so the native message broker
-  /// can route messages from this child back to the correct sheet.
-  var instanceName: String = "sheet"
-  private(set) var webView: NativiteWebView!
-  /// The last fully-resolved URL loaded into this webview. Used to
-  /// avoid re-loading the same page on every state update.
-  private var lastLoadedURL: URL?
-  /// If the load target is a file:// URL with an SPA route (e.g.
-  /// "/settings"), the route is stored here and injected via
-  /// history.replaceState after webView:didFinish:.
-  private var pendingSPARoute: String?
-
-  override func viewDidLoad() {
-    super.viewDidLoad()
-    view.backgroundColor = .systemBackground
-
-    let config = WKWebViewConfiguration()
-    // Using WKWebsiteDataStore.default() ensures this webview shares the same
-    // web process as the primary webview (iOS 15+), enabling shared storage
-    // (localStorage, IndexedDB, cookies) across instances.
-    config.websiteDataStore = WKWebsiteDataStore.default()
-    let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
-    config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"
-    // Identify this webview by its configured name so the native message broker
-    // can route postToParent/broadcast calls from this instance correctly.
-    // Also set data-nk-platform on the document element so CSS attribute selectors
-    // (e.g. [data-nk-platform="ios"]) work the same as in the primary webview.
-    config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nk-platform','\\(nkPlatform)');",
-      injectionTime: .atDocumentStart,
-      forMainFrameOnly: false
-    ))
-    if let nativeBridge {
-      config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")
-    }
-
-    webView = NativiteWebView(frame: view.bounds, configuration: config)
-    webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    // Mirror the primary webview blank-state behavior: keep the underlying
-    // dynamic system background visible while content bootstraps.
-    webView.isOpaque = false
-    webView.backgroundColor = .clear
-    webView.scrollView.backgroundColor = .clear
-    webView.lockRootScroll = false
-    webView.scrollView.contentInsetAdjustmentBehavior = .never
-    webView.scrollView.isScrollEnabled = true
-    webView.scrollView.bounces = false
-    webView.scrollView.alwaysBounceVertical = false
-    webView.scrollView.alwaysBounceHorizontal = false
-    webView.navigationDelegate = self
-    view.addSubview(webView)
-  }
-
-  deinit {
-    webView?.configuration.userContentController.removeScriptMessageHandler(forName: "nativite")
-  }
-
-  func loadURL(_ rawURL: String, relativeTo baseURL: URL?) {
-    loadViewIfNeeded()
-    guard let resolved = resolveURL(rawURL, relativeTo: baseURL) else { return }
-    let absoluteURL = resolved.absoluteURL
-    let nextSPARoute = pendingFileSPARoute(for: rawURL, resolvedURL: absoluteURL)
-    if absoluteURL == lastLoadedURL {
-      if let route = nextSPARoute {
-        applySPARoute(route)
-      }
-      return
-    }
-    pendingSPARoute = nextSPARoute
-    lastLoadedURL = absoluteURL
-
-    if absoluteURL.isFileURL {
-      let readAccessURL = fileReadAccessURL(for: absoluteURL, relativeTo: baseURL)
-      webView.loadFileURL(
-        absoluteURL,
-        allowingReadAccessTo: readAccessURL
-      )
-      return
-    }
-
-    webView.load(URLRequest(url: absoluteURL))
-  }
-
-  func receiveMessage(from sender: String, payload: Any?) {
-    loadViewIfNeeded()
-    let data: [String: Any] = ["from": sender, "payload": payload ?? NSNull()]
-    let message: [String: Any] = ["id": NSNull(), "type": "event", "event": "message", "data": data]
-    guard JSONSerialization.isValidJSONObject(message),
-      let msgData = try? JSONSerialization.data(withJSONObject: message),
-      let json = String(data: msgData, encoding: .utf8)
-    else { return }
-
-    webView.evaluateJavaScript("window.nativiteReceive(\\(json))", completionHandler: nil)
-  }
-
-  private func resolveURL(_ rawURL: String, relativeTo baseURL: URL?) -> URL? {
-    if let absoluteURL = URL(string: rawURL), absoluteURL.scheme != nil {
-      return absoluteURL
-    }
-
-    let effectiveBaseURL = baseURL ?? fallbackBaseURL()
-
-    if rawURL.hasPrefix("/") {
-      return resolveRootPath(rawURL, relativeTo: effectiveBaseURL)
-    }
-
-    if let effectiveBaseURL {
-      return URL(string: rawURL, relativeTo: effectiveBaseURL)
-    }
-    return nil
-  }
-
-  private func resolveRootPath(_ rawPath: String, relativeTo baseURL: URL?) -> URL? {
-    guard let baseURL else { return nil }
-
-    let baseScheme = baseURL.scheme?.lowercased()
-    if baseScheme == "file" {
-      if let explicitFileURL = explicitFilePathURL(rawPath, relativeTo: baseURL) {
-        return explicitFileURL
-      }
-      return bundleEntryURL(relativeTo: baseURL)
-    }
-
-    guard baseScheme == "http" || baseScheme == "https" else { return nil }
-    guard
-      let routeComponents = URLComponents(string: rawPath),
-      var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true)
-    else { return nil }
-
-    components.path = routeComponents.path.isEmpty ? rawPath : routeComponents.path
-    components.query = routeComponents.query
-    components.fragment = routeComponents.fragment
-    return components.url
-  }
-
-  private func explicitFilePathURL(_ rawPath: String, relativeTo baseURL: URL) -> URL? {
-    guard let routeComponents = URLComponents(string: rawPath) else { return nil }
-    guard routeComponents.query == nil && routeComponents.fragment == nil else { return nil }
-    let path = routeComponents.path
-    guard path.contains(".") else { return nil }
-
-    let relativePath = path.hasPrefix("/") ? String(path.dropFirst()) : path
-    return bundleRootURL(relativeTo: baseURL)?.appendingPathComponent(relativePath)
-  }
-
-  private func canonicalRoute(from rawPath: String) -> String {
-    guard let routeComponents = URLComponents(string: rawPath) else { return rawPath }
-
-    var route = routeComponents.path
-    if route.isEmpty {
-      route = "/"
-    }
-    if let query = routeComponents.query, !query.isEmpty {
-      route += "?\\(query)"
-    }
-    if let nestedFragment = routeComponents.fragment, !nestedFragment.isEmpty {
-      route += "#\\(nestedFragment)"
-    }
-    return route
-  }
-
-  private func pendingFileSPARoute(for rawPath: String, resolvedURL: URL) -> String? {
-    guard resolvedURL.isFileURL else { return nil }
-    guard rawPath.hasPrefix("/") else { return nil }
-    guard let routeComponents = URLComponents(string: rawPath) else { return nil }
-
-    if routeComponents.query == nil && routeComponents.fragment == nil && routeComponents.path.contains(".") {
-      return nil
-    }
-
-    return canonicalRoute(from: rawPath)
-  }
-
-  private func fallbackBaseURL() -> URL? {
-    #if DEBUG
-    if
-      let rawURL = UserDefaults.standard.string(forKey: "nativite.dev.url"),
-      let devURL = URL(string: rawURL)
-    {
-      return devURL
-    }
-    #endif
-
-    return Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist")
-  }
-
-  private func bundleEntryURL(relativeTo baseURL: URL) -> URL? {
-    if let bundled = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist") {
-      return bundled
-    }
-    if baseURL.lastPathComponent.lowercased() == "index.html" {
-      return baseURL
-    }
-    return baseURL.deletingLastPathComponent().appendingPathComponent("index.html")
-  }
-
-  private func bundleRootURL(relativeTo baseURL: URL) -> URL? {
-    return bundleEntryURL(relativeTo: baseURL)?.deletingLastPathComponent()
-  }
-
-  private func fileReadAccessURL(for targetURL: URL, relativeTo baseURL: URL?) -> URL {
-    if let baseURL, baseURL.isFileURL {
-      return baseURL.deletingLastPathComponent()
-    }
-    return targetURL.deletingLastPathComponent()
-  }
-
-  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-    guard let route = pendingSPARoute else { return }
-    pendingSPARoute = nil
-    applySPARoute(route)
-  }
-
-  func webView(
-    _ webView: WKWebView,
-    didFail navigation: WKNavigation!,
-    withError error: Error
-  ) {
-    emitLoadFailed(error, currentURL: webView.url)
-  }
-
-  func webView(
-    _ webView: WKWebView,
-    didFailProvisionalNavigation navigation: WKNavigation!,
-    withError error: Error
-  ) {
-    emitLoadFailed(error, currentURL: webView.url)
-  }
-
-  private func applySPARoute(_ route: String) {
-    let payload: [String: Any] = ["route": route]
-    guard
-      let data = try? JSONSerialization.data(withJSONObject: payload),
-      let json = String(data: data, encoding: .utf8)
-    else { return }
-
-    let js = """
-    (() => {
-      const payload = \\(json);
-      try {
-        window.history.replaceState(window.history.state ?? null, "", payload.route);
-        window.dispatchEvent(new PopStateEvent("popstate"));
-      } catch (_) {}
-    })();
-    """
-    webView.evaluateJavaScript(js, completionHandler: nil)
-  }
-
-  /// Emits a sheet.loadFailed event to JS with the error details.
-  private func emitLoadFailed(_ error: Error, currentURL: URL?) {
-    let nsError = error as NSError
-    let failingURL =
-      (nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String) ??
-      currentURL?.absoluteString
-    var payload: [String: Any] = [
-      "name": instanceName,
-      "message": nsError.localizedDescription,
-      "code": nsError.code,
-    ]
-    if let failingURL {
-      payload["url"] = failingURL
-    }
-    bridge?.sendEvent(name: "sheet.loadFailed", data: payload)
-  }
-
-  /// Emits a sheet.detentChanged event when the user drags the sheet
-  /// to a different detent (small / medium / large / full).
-  func sheetPresentationControllerDidChangeSelectedDetentIdentifier(
-    _ controller: UISheetPresentationController
-  ) {
-    let detent: String
-    if #available(iOS 16.0, *), controller.selectedDetentIdentifier == nativiteSmallDetentIdentifier {
-      detent = "small"
-    } else if #available(iOS 16.0, *),
-              controller.selectedDetentIdentifier == UISheetPresentationController.Detent.Identifier("nativite.full") {
-      detent = "full"
-    } else {
-      switch controller.selectedDetentIdentifier {
-      case .medium: detent = "medium"
-      case .large:  detent = "large"
-      default:      detent = "large"
-      }
-    }
-    bridge?.sendEvent(name: "sheet.detentChanged", data: ["name": instanceName, "detent": detent])
-  }
-
-  // UIAdaptivePresentationControllerDelegate — fires only when the sheet is
-  // actually dismissed (user swipe or programmatic dismiss), never when another
-  // VC is merely presented on top of the sheet.  viewDidDisappear was wrong
-  // because it fires for any view-disappearance (e.g. alert over the sheet).
-  // UISheetPresentationControllerDelegate inherits UIAdaptivePresentationControllerDelegate,
-  // and sheet.delegate = sheetVC is set in applySheet(), so UIKit routes this call correctly.
-  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-    bridge?.sendEvent(name: "sheet.dismissed", data: ["name": instanceName])
   }
 }
 
@@ -2060,6 +1340,9 @@ class NativiteChrome: NSObject {
 
   weak var viewController: ViewController?
   weak var vars: NativiteVars?
+  // SwiftUI @Observable model — receives state updates for areas migrated to
+  // SwiftUI (sheets, alerts). Set by ViewController.
+  var chromeState: NativiteChromeState?
 
   // Track built menu item actions for target-action dispatch.
   private var menuActions: [String: String] = [:] // tag → id
@@ -2079,9 +1362,14 @@ class NativiteChrome: NSObject {
   private var pendingToolbarItems: [[String: Any]]?
   private var pendingSearchBar: [String: Any]?
 
-  // ── NSTabView state ──────────────────────────────────────────────────────
-  private var tabView: NSTabView?
+  // ── Navigation state ─────────────────────────────────────────────────────
+  private var navigationSegmentedControl: NSSegmentedControl?
+  private var navigationContainerView: NSView?
+  private var navigationWebViewTopConstraint: NSLayoutConstraint?
   private var navigationItems: [[String: Any]] = []
+  private var pendingNavigationItems: [[String: Any]]?
+  private var pendingNavigationActiveItem: String?
+  private var pendingNavigationHidden: Bool = false
 
   // ── NSSplitViewController state ──────────────────────────────────────────
   private var splitViewController: NSSplitViewController?
@@ -2091,7 +1379,6 @@ class NativiteChrome: NSObject {
   private var sidebarActiveItemId: String?
 
   // ── Child webview registries ─────────────────────────────────────────────
-  private var activeSheets: [String: NSPanel] = [:]
   private var activeDrawerItems: [String: NSSplitViewItem] = [:]
   private var activeAppWindows: [String: NSWindow] = [:]
   private var activePopovers: [String: NSPopover] = [:]
@@ -2105,6 +1392,14 @@ class NativiteChrome: NSObject {
 
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
+
+      // Wire the event callback so SwiftUI views can route user
+      // interactions back to the JS bridge (future use on macOS).
+      if self.chromeState?.onChromeEvent == nil {
+        self.chromeState?.onChromeEvent = { [weak self] name, data in
+          self?.sendEvent(name: name, data: data)
+        }
+      }
 
       // Reset areas that were previously applied but are now absent.
       let currentAreas = Set(state.keys)
@@ -2165,11 +1460,11 @@ class NativiteChrome: NSObject {
     guard let window = viewController?.view.window else { return }
     let titlebarHeight = window.frame.height - window.contentLayoutRect.height
     let hasToolbar = toolbar != nil
-    let hasTabView = tabView != nil && !(tabView?.isHidden ?? true)
-    let tabHeight: CGFloat = hasTabView ? 28 : 0
+    let hasNavigation = navigationContainerView != nil && !(navigationContainerView?.isHidden ?? true)
+    let tabHeight: CGFloat = hasNavigation ? 36 : 0
     vars?.updateChrome(
       navHeight: titlebarHeight, navVisible: true,
-      tabHeight: tabHeight, tabVisible: hasTabView,
+      tabHeight: tabHeight, tabVisible: hasNavigation,
       toolbarHeight: nil, toolbarVisible: hasToolbar
     )
   }
@@ -2213,6 +1508,9 @@ ${applyInitialStateMethod}
   // ── Title Bar (macOS window + NSToolbar) ──────────────────────────────────
 
   private func applyTitleBar(_ state: [String: Any]) {
+    // Sync to SwiftUI observable model for future SwiftUI-driven title bar.
+    chromeState?.updateTitleBar(state)
+
     guard let window = viewController?.view.window else { return }
 
     if let title = state["title"] as? String {
@@ -2251,6 +1549,8 @@ ${applyInitialStateMethod}
   // ── Toolbar ──────────────────────────────────────────────────────────────
 
   private func applyToolbar(_ state: [String: Any]) {
+    // Sync to SwiftUI observable model for future SwiftUI-driven toolbar.
+    chromeState?.updateToolbar(state)
     pendingToolbarItems = state["items"] as? [[String: Any]]
   }
 
@@ -2261,8 +1561,9 @@ ${applyInitialStateMethod}
     let hasTrailing = pendingTrailingItems != nil
     let hasToolbar = pendingToolbarItems != nil
     let hasSearch = pendingSearchBar != nil
+    let hasNavigation = pendingNavigationItems != nil
 
-    guard hasLeading || hasTrailing || hasToolbar || hasSearch else {
+    guard hasLeading || hasTrailing || hasToolbar || hasSearch || hasNavigation else {
       // No toolbar-related state — remove toolbar if it exists.
       if toolbar != nil {
         viewController?.view.window?.toolbar = nil
@@ -2271,6 +1572,18 @@ ${applyInitialStateMethod}
         toolbarItems = [:]
         toolbarItemActions = [:]
         toolbarMenuActions = [:]
+        navigationSegmentedControl = nil
+        navigationItems = []
+        if let container = navigationContainerView {
+          container.removeFromSuperview()
+          navigationContainerView = nil
+          navigationWebViewTopConstraint?.isActive = false
+          navigationWebViewTopConstraint = nil
+          if let vc = viewController {
+            vc.webView.autoresizingMask = [.width, .height]
+            vc.webView.frame = vc.view.bounds
+          }
+        }
       }
       return
     }
@@ -2369,11 +1682,80 @@ ${applyInitialStateMethod}
     toolbar?.delegate = nil
     toolbar?.delegate = self
 
-    // Clear pending state.
+    // Clear pending toolbar state.
     pendingLeadingItems = nil
     pendingTrailingItems = nil
     pendingToolbarItems = nil
     pendingSearchBar = nil
+
+    // ── Navigation segmented control (below the toolbar) ──────────────────
+    if let navItems = pendingNavigationItems {
+      let hidden = pendingNavigationHidden
+      let activeItem = pendingNavigationActiveItem
+      navigationItems = navItems
+
+      if !navItems.isEmpty {
+        let seg: NSSegmentedControl
+        if let existing = navigationSegmentedControl {
+          seg = existing
+        } else {
+          seg = NSSegmentedControl()
+          seg.segmentStyle = .capsule
+          seg.trackingMode = .selectOne
+          seg.target = self
+          seg.action = #selector(navigationSegmentTapped(_:))
+          seg.translatesAutoresizingMaskIntoConstraints = false
+          navigationSegmentedControl = seg
+        }
+
+        seg.segmentCount = navItems.count
+        for (index, item) in navItems.enumerated() {
+          seg.setLabel(item["label"] as? String ?? "", forSegment: index)
+          if let icon = item["icon"] as? String,
+             let image = NSImage(systemSymbolName: icon, accessibilityDescription: item["label"] as? String) {
+            seg.setImage(image, forSegment: index)
+          }
+          let itemId = item["id"] as? String ?? ""
+          if itemId == activeItem {
+            seg.selectedSegment = index
+          }
+        }
+
+        // Create the container if it doesn't exist.
+        if navigationContainerView == nil {
+          let container = NSView()
+          container.translatesAutoresizingMaskIntoConstraints = false
+          container.addSubview(seg)
+          NSLayoutConstraint.activate([
+            seg.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            seg.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            container.heightAnchor.constraint(equalToConstant: 36),
+          ])
+          navigationContainerView = container
+          if let vc = viewController {
+            installNavigationContainer(container, in: vc)
+          }
+        }
+      } else {
+        // Empty items — remove the container.
+        navigationSegmentedControl = nil
+        if let container = navigationContainerView {
+          container.removeFromSuperview()
+          navigationContainerView = nil
+          navigationWebViewTopConstraint?.isActive = false
+          navigationWebViewTopConstraint = nil
+          if let vc = viewController {
+            vc.webView.autoresizingMask = [.width, .height]
+            vc.webView.frame = vc.view.bounds
+          }
+        }
+      }
+
+      navigationContainerView?.isHidden = hidden
+
+      pendingNavigationItems = nil
+      pendingNavigationActiveItem = nil
+    }
   }
 
   private func makeToolbarItem(_ state: [String: Any], position: String) -> NSToolbarItem? {
@@ -2468,96 +1850,58 @@ ${applyInitialStateMethod}
     sendEvent(name: "titleBar.menuItemPressed", data: ["id": id])
   }
 
-  // ── Navigation (NSTabView) ────────────────────────────────────────────────
+  // ── Navigation ───────────────────────────────────────────────────────────
 
   private func applyNavigation(_ state: [String: Any]) {
-    guard let items = state["items"] as? [[String: Any]] else { return }
-    navigationItems = items
+    // Sync to SwiftUI observable model.
+    chromeState?.updateNavigation(state)
 
-    let hidden = (state["hidden"] as? Bool) ?? false
+    let style = (state["style"] as? String) ?? "auto"
+    // "sidebar" style is handled by sidebarPanel — ignore here.
+    if style == "sidebar" { return }
 
-    // Lazily create NSTabView
-    if tabView == nil {
-      let tv = NSTabView()
-      tv.tabViewType = .topTabsBezelBorder
-      tv.delegate = self
-      tv.translatesAutoresizingMaskIntoConstraints = false
-      tabView = tv
-
-      // Insert the tab view into the view hierarchy. If a split view controller
-      // exists, the tab view wraps the content area. Otherwise add it directly
-      // to the ViewController's view.
-      installTabView(tv)
-    }
-
-    guard let tv = tabView else { return }
-
-    // Rebuild tabs if the set of items has changed.
-    let currentIds = tv.tabViewItems.compactMap { $0.identifier as? String }
-    let newIds = items.compactMap { $0["id"] as? String }
-
-    if currentIds != newIds {
-      // Remove all existing tabs
-      for item in tv.tabViewItems.reversed() {
-        tv.removeTabViewItem(item)
-      }
-      // Add new tabs
-      for itemState in items {
-        guard let id = itemState["id"] as? String else { continue }
-        let tabItem = NSTabViewItem(identifier: id)
-        tabItem.label = itemState["label"] as? String ?? ""
-        if let symbolName = itemState["icon"] as? String {
-          tabItem.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
-        }
-        tv.addTabViewItem(tabItem)
-      }
-    } else {
-      // Update labels and icons in-place.
-      for (index, itemState) in items.enumerated() where index < tv.tabViewItems.count {
-        let tabItem = tv.tabViewItems[index]
-        if let label = itemState["label"] as? String { tabItem.label = label }
-        if let symbolName = itemState["icon"] as? String {
-          tabItem.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
-        }
-      }
-    }
-
-    // Selection
-    if let activeId = state["activeItem"] as? String {
-      if let idx = tv.tabViewItems.firstIndex(where: { ($0.identifier as? String) == activeId }) {
-        tv.selectTabViewItem(at: idx)
-      }
-    }
-
-    tv.isHidden = hidden
+    pendingNavigationItems = state["items"] as? [[String: Any]]
+    pendingNavigationActiveItem = state["activeItem"] as? String
+    pendingNavigationHidden = (state["hidden"] as? Bool) ?? false
   }
 
-  private func installTabView(_ tv: NSTabView) {
-    guard let vc = viewController else { return }
-    if let split = splitViewController {
-      // Tab view goes into the detail area
-      let detailItem = split.splitViewItems.last
-      detailItem?.viewController.view.addSubview(tv)
-      if let parentView = detailItem?.viewController.view {
-        NSLayoutConstraint.activate([
-          tv.topAnchor.constraint(equalTo: parentView.topAnchor),
-          tv.leadingAnchor.constraint(equalTo: parentView.leadingAnchor),
-          tv.trailingAnchor.constraint(equalTo: parentView.trailingAnchor),
-        ])
-      }
-    } else {
-      vc.view.addSubview(tv)
-      NSLayoutConstraint.activate([
-        tv.topAnchor.constraint(equalTo: vc.view.topAnchor),
-        tv.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
-        tv.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor),
-      ])
+  @objc private func navigationSegmentTapped(_ sender: NSSegmentedControl) {
+    let index = sender.selectedSegment
+    guard index >= 0 && index < navigationItems.count else { return }
+    if let id = navigationItems[index]["id"] as? String {
+      sendEvent(name: "navigation.itemPressed", data: ["id": id])
     }
+  }
+
+  /// Installs the navigation container view between the top of the given
+  /// view controller's view and the webview, pushing the webview down.
+  private func installNavigationContainer(_ container: NSView, in vc: ViewController) {
+    let parent = vc.view
+    parent.addSubview(container)
+
+    // Switch webview from autoresizing to Auto Layout so we can pin its
+    // top anchor below the navigation container.
+    vc.webView.translatesAutoresizingMaskIntoConstraints = false
+
+    let topConstraint = vc.webView.topAnchor.constraint(equalTo: container.bottomAnchor)
+    navigationWebViewTopConstraint = topConstraint
+
+    NSLayoutConstraint.activate([
+      container.topAnchor.constraint(equalTo: parent.topAnchor),
+      container.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
+      container.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
+      topConstraint,
+      vc.webView.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
+      vc.webView.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
+      vc.webView.bottomAnchor.constraint(equalTo: parent.bottomAnchor),
+    ])
   }
 
   // ── Menu Bar ────────────────────────────────────────────────────────────────
 
   private func applyMenuBar(_ state: [String: Any]) {
+    // Sync to SwiftUI observable model.
+    chromeState?.updateMenuBar(state)
     guard let menus = state["menus"] as? [[String: Any]] else { return }
 
     let mainMenu = NSMenu(title: "MainMenu")
@@ -2635,6 +1979,8 @@ ${applyInitialStateMethod}
   // ── Sidebar Panel (NSSplitViewController + NSOutlineView) ──────────────────
 
   private func applySidebarPanel(_ state: [String: Any]) {
+    // Sync to SwiftUI observable model.
+    chromeState?.updateSidebarPanel(state)
     guard let items = state["items"] as? [[String: Any]] else { return }
 
     let visible = (state["visible"] as? Bool) ?? true
@@ -2694,10 +2040,12 @@ ${applyInitialStateMethod}
       sidebarOutlineView = outlineView
       sidebarScrollView = scrollView
 
-      // If a tab view was already installed, reparent it into the detail area.
-      if let tv = tabView {
-        tv.removeFromSuperview()
-        installTabView(tv)
+      // If navigation was already installed, reparent it into the detail area.
+      if let container = navigationContainerView {
+        container.removeFromSuperview()
+        navigationWebViewTopConstraint?.isActive = false
+        navigationWebViewTopConstraint = nil
+        installNavigationContainer(container, in: vc)
       }
     }
 
@@ -2732,83 +2080,19 @@ ${applyInitialStateMethod}
     return nil
   }
 
-  // ── Sheet (NSPanel) ────────────────────────────────────────────────────────
+  // ── Sheet ──────────────────────────────────────────────────────────────────
 
+  /// Delegates sheet presentation to the SwiftUI NativiteSheetModifier
+  /// via the @Observable NativiteChromeState model.
   private func applySheet(name: String, state: [String: Any]) {
-    guard let vc = viewController, let window = vc.view.window else { return }
-    let presented = state["presented"] as? Bool ?? false
-
-    if presented {
-      if let existing = activeSheets[name] {
-        // Update existing sheet
-        updateChildWebView(in: existing.contentViewController!, state: state, name: name, relativeTo: vc.webView.url)
-        return
-      }
-
-      // Create new sheet panel
-      let width: CGFloat = 480
-      let height: CGFloat = resolveSheetHeight(state, windowHeight: window.frame.height)
-      let panel = NSPanel(
-        contentRect: NSRect(x: 0, y: 0, width: width, height: height),
-        styleMask: [.titled, .closable, .resizable],
-        backing: .buffered,
-        defer: false
-      )
-      panel.isFloatingPanel = false
-
-      if let hex = state["backgroundColor"] as? String {
-        panel.backgroundColor = NSColor(hex: hex)
-      }
-
-      let childVC = NativiteChildWebViewController()
-      childVC.instanceName = name
-      childVC.chrome = self
-      childVC.nativeBridge = vc.nativiteBridgeHandler()
-      panel.contentViewController = childVC
-      childVC.loadViewIfNeeded()
-
-      if let rawURL = state["url"] as? String {
-        childVC.loadURL(rawURL, relativeTo: vc.webView.url)
-      }
-
-      childWebViews[name] = childVC.webView
-      activeSheets[name] = panel
-
-      let dismissible = state["dismissible"] as? Bool ?? true
-      if !dismissible {
-        panel.styleMask.remove(.closable)
-      }
-
-      window.beginSheet(panel) { [weak self] _ in
-        self?.activeSheets.removeValue(forKey: name)
-        self?.childWebViews.removeValue(forKey: name)
-        self?.sendEvent(name: "sheet.dismissed", data: ["name": name])
-      }
-      sendEvent(name: "sheet.presented", data: ["name": name])
-    } else {
-      if let panel = activeSheets[name] {
-        window.endSheet(panel)
-      }
-    }
-  }
-
-  private func resolveSheetHeight(_ state: [String: Any], windowHeight: CGFloat) -> CGFloat {
-    if let detents = state["detents"] as? [String],
-       let active = state["activeDetent"] as? String ?? detents.first {
-      switch active {
-      case "small":  return max(120, windowHeight * 0.25)
-      case "medium": return windowHeight * 0.5
-      case "large":  return windowHeight * 0.75
-      case "full":   return windowHeight
-      default: break
-      }
-    }
-    return windowHeight * 0.5
+    chromeState?.updateSheet(name: name, state: state)
   }
 
   // ── Drawer (NSSplitViewItem) ──────────────────────────────────────────────
 
   private func applyDrawer(name: String, state: [String: Any]) {
+    // Sync to SwiftUI observable model.
+    chromeState?.updateDrawer(name: name, state: state)
     guard let vc = viewController else { return }
     let presented = state["presented"] as? Bool ?? false
 
@@ -2885,6 +2169,8 @@ ${applyInitialStateMethod}
   // ── App Window (NSWindow) ──────────────────────────────────────────────────
 
   private func applyAppWindow(name: String, state: [String: Any]) {
+    // Sync to SwiftUI observable model.
+    chromeState?.updateAppWindow(name: name, state: state)
     guard let vc = viewController else { return }
     let presented = state["presented"] as? Bool ?? false
 
@@ -2961,6 +2247,8 @@ ${applyInitialStateMethod}
   // ── Popover (NSPopover) ───────────────────────────────────────────────────
 
   private func applyPopover(name: String, state: [String: Any]) {
+    // Sync to SwiftUI observable model.
+    chromeState?.updatePopover(name: name, state: state)
     guard let vc = viewController else { return }
     let presented = state["presented"] as? Bool ?? false
 
@@ -3053,6 +2341,7 @@ ${applyInitialStateMethod}
   }
 
   private func resetTitleBar() {
+    chromeState?.resetTitleBar()
     guard let window = viewController?.view.window else { return }
     window.title = ""
     window.subtitle = ""
@@ -3065,6 +2354,7 @@ ${applyInitialStateMethod}
   }
 
   private func resetToolbar() {
+    chromeState?.resetToolbar()
     pendingToolbarItems = nil
     if !lastAppliedAreas.contains("titleBar") {
       // Only remove the toolbar if titleBar is also gone.
@@ -3078,20 +2368,31 @@ ${applyInitialStateMethod}
   }
 
   private func resetNavigation() {
-    if let tv = tabView {
-      tv.removeFromSuperview()
-      tabView = nil
+    chromeState?.resetNavigation()
+    navigationWebViewTopConstraint?.isActive = false
+    navigationWebViewTopConstraint = nil
+    if let container = navigationContainerView {
+      container.removeFromSuperview()
+      navigationContainerView = nil
     }
+    navigationSegmentedControl = nil
     navigationItems = []
+    // Restore webview to fill the parent using autoresizing.
+    if let vc = viewController {
+      vc.webView.autoresizingMask = [.width, .height]
+      vc.webView.frame = vc.view.bounds
+    }
   }
 
   private func resetMenuBar() {
+    chromeState?.resetMenuBar()
     NSApp.mainMenu = nil
     menuActions.removeAll()
   }
 
   private func resetSidebarPanel() {
-    if let split = splitViewController, let vc = viewController, let window = vc.view.window {
+    chromeState?.resetSidebarPanel()
+    if splitViewController != nil, let vc = viewController, let window = vc.view.window {
       // Remove the split view and restore the VC directly.
       window.contentViewController = vc
       splitViewController = nil
@@ -3099,24 +2400,22 @@ ${applyInitialStateMethod}
       sidebarScrollView = nil
       sidebarItems = []
 
-      // Reinstall tab view if present
-      if let tv = tabView {
-        tv.removeFromSuperview()
-        installTabView(tv)
+      // Reinstall navigation if present
+      if let container = navigationContainerView {
+        container.removeFromSuperview()
+        navigationWebViewTopConstraint?.isActive = false
+        navigationWebViewTopConstraint = nil
+        installNavigationContainer(container, in: vc)
       }
     }
   }
 
   private func resetSheets() {
-    guard let window = viewController?.view.window else { return }
-    for (name, panel) in activeSheets {
-      window.endSheet(panel)
-      childWebViews.removeValue(forKey: name)
-    }
-    activeSheets.removeAll()
+    chromeState?.resetSheets()
   }
 
   private func resetDrawers() {
+    chromeState?.resetDrawers()
     guard let split = splitViewController else { return }
     for (name, item) in activeDrawerItems {
       split.removeSplitViewItem(item)
@@ -3126,6 +2425,7 @@ ${applyInitialStateMethod}
   }
 
   private func resetAppWindows() {
+    chromeState?.resetAppWindows()
     for (name, win) in activeAppWindows {
       if win.isSheet {
         viewController?.view.window?.endSheet(win)
@@ -3138,6 +2438,7 @@ ${applyInitialStateMethod}
   }
 
   private func resetPopovers() {
+    chromeState?.resetPopovers()
     for (name, popover) in activePopovers {
       popover.performClose(nil)
       childWebViews.removeValue(forKey: name)
@@ -3188,14 +2489,6 @@ extension NativiteChrome: NSSearchFieldDelegate {
   }
 }
 
-// ─── NSTabViewDelegate ──────────────────────────────────────────────────────
-
-extension NativiteChrome: NSTabViewDelegate {
-  func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
-    guard let id = tabViewItem?.identifier as? String else { return }
-    sendEvent(name: "navigation.itemPressed", data: ["id": id])
-  }
-}
 
 // ─── NSOutlineViewDataSource + Delegate (sidebar) ────────────────────────────
 
