@@ -90,6 +90,7 @@ class NativiteChrome: NSObject {
   /// True while the UISearchTab search session is active. Prevents
   /// applyNavigationModern from rebuilding tabs mid-search.
   private var isNavigationSearchActive = false
+  private var tabBottomAccessoryVC: NativiteTabBottomAccessoryController?
   private var lastAppliedAreas: Set<String> = []
   /// Cache of bar button items keyed by "{position}:{id}" for identity-based
   /// reuse. Preserving the same UIBarButtonItem object reference lets UIKit
@@ -138,6 +139,9 @@ class NativiteChrome: NSObject {
       // We pass the dict directly; NativiteKeyboard handles missing/null sub-keys.
       if let keyboardState = state["keyboard"] as? [String: Any] {
         self.keyboard?.applyState(keyboardState)
+      }
+      if let tabBottomAccessory = state["tabBottomAccessory"] as? [String: Any] {
+        self.applyTabBottomAccessory(tabBottomAccessory)
       }
 
       // Push updated chrome geometry to CSS variables after all state is applied.
@@ -263,24 +267,27 @@ ${applyInitialStateMethod}
 
     // ── Reuse cached item ──────────────────────────────────────────────────
     // Preserving the same UIBarButtonItem object reference lets UIKit animate
-    // transitions and morph liquid-glass capsules on iOS 26+. We only reuse
-    // when the menu-presence hasn't changed, because menu vs non-menu items
-    // use different init paths with incompatible event handling.
-    if let cached = barItemCache[cacheKey] {
+    // transitions and morph liquid-glass capsules on iOS 26+.
+    //
+    // Items with menus are NEVER reused. Setting UIBarButtonItem.menu on a
+    // cached item does not reliably re-wire the new UIAction handlers — the
+    // old closures may be retained internally, causing events to silently
+    // fail. Always recreate menu-bearing items so the UIBarButtonItem is
+    // initialised with the fresh UIMenu from the start.
+    if !hasMenu, let cached = barItemCache[cacheKey] {
       let cachedHasMenu: Bool
       if #available(iOS 14.0, *) { cachedHasMenu = cached.menu != nil }
       else { cachedHasMenu = false }
 
-      if cachedHasMenu == hasMenu {
+      if !cachedHasMenu {
         cached.image = image
         cached.title = label
         cached.style = style
         cached.tintColor = isDestructive ? .systemRed : nil
         cached.isEnabled = isEnabled
-        if #available(iOS 14.0, *) { cached.menu = menu }
         return cached
       }
-      // Menu presence changed — fall through to create a new item.
+      // Cached item had a menu but new state does not — fall through.
     }
 
     // ── Create new item ────────────────────────────────────────────────────
@@ -775,7 +782,105 @@ ${applyInitialStateMethod}
     }
   }
 
+  // ── Tab Bottom Accessory ────────────────────────────────────────────────
+
+  private func applyTabBottomAccessory(_ state: [String: Any]) {
+    guard let vc = viewController else { return }
+
+    let presented = state["presented"] as? Bool ?? false
+
+    if presented {
+      let accessoryVC: NativiteTabBottomAccessoryController
+      let shouldInstall: Bool
+
+      if let existing = tabBottomAccessoryVC {
+        accessoryVC = existing
+        accessoryVC.bridge = self
+        shouldInstall = false
+      } else {
+        let created = NativiteTabBottomAccessoryController()
+        created.bridge = self
+        accessoryVC = created
+        shouldInstall = true
+      }
+
+      accessoryVC.nativeBridge = vc.nativiteBridgeHandler()
+      if let hex = state["backgroundColor"] as? String {
+        accessoryVC.view.backgroundColor = UIColor(hex: hex)
+      }
+      if let rawURL = state["url"] as? String {
+        accessoryVC.loadURL(rawURL, relativeTo: vc.webView.url)
+      }
+
+      if shouldInstall {
+        if #available(iOS 26.0, *), let tbc = tabBarController {
+          // Use the native UITabAccessory API — the system provides liquid
+          // glass styling, rounded capsule shape, and scroll-to-minimize.
+          // Skip addChild/didMove — UITabAccessory places the view in the
+          // tab bar controller's own hierarchy, not vc.view, so UIKit's
+          // containment check would fail.
+          let accessory = UITabAccessory(contentView: accessoryVC.view)
+          tbc.setBottomAccessory(accessory, animated: true)
+        } else {
+          // Fallback: manually position above the tab bar.
+          vc.addChild(accessoryVC)
+          accessoryVC.view.translatesAutoresizingMaskIntoConstraints = false
+          vc.view.addSubview(accessoryVC.view)
+
+          let bottomAnchor: NSLayoutYAxisAnchor
+          if #available(iOS 18.0, *), let tbc = tabBarController {
+            bottomAnchor = tbc.tabBar.topAnchor
+          } else if tabBar.superview != nil {
+            bottomAnchor = tabBar.topAnchor
+          } else {
+            bottomAnchor = vc.view.safeAreaLayoutGuide.bottomAnchor
+          }
+
+          NSLayoutConstraint.activate([
+            accessoryVC.view.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
+            accessoryVC.view.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor),
+            accessoryVC.view.bottomAnchor.constraint(equalTo: bottomAnchor),
+            accessoryVC.view.heightAnchor.constraint(equalToConstant: 44),
+          ])
+          accessoryVC.didMove(toParent: vc)
+        }
+
+        tabBottomAccessoryVC = accessoryVC
+        sendEvent(name: "tabBottomAccessory.presented", data: [:])
+      }
+    } else {
+      if let accessoryVC = tabBottomAccessoryVC {
+        if #available(iOS 26.0, *), let tbc = tabBarController {
+          tbc.setBottomAccessory(nil, animated: true)
+        } else {
+          accessoryVC.willMove(toParent: nil)
+          accessoryVC.view.removeFromSuperview()
+          accessoryVC.removeFromParent()
+        }
+        tabBottomAccessoryVC = nil
+        sendEvent(name: "tabBottomAccessory.dismissed", data: [:])
+      }
+    }
+  }
+
+  private func resetTabBottomAccessory() {
+    if let accessoryVC = tabBottomAccessoryVC {
+      if #available(iOS 26.0, *), let tbc = tabBarController {
+        tbc.setBottomAccessory(nil, animated: false)
+      } else {
+        accessoryVC.willMove(toParent: nil)
+        accessoryVC.view.removeFromSuperview()
+        accessoryVC.removeFromParent()
+      }
+      tabBottomAccessoryVC = nil
+    }
+  }
+
   func postMessageToChild(name: String, payload: Any?) {
+    if name == "tabBottomAccessory" {
+      tabBottomAccessoryVC?.receiveMessage(from: "main", payload: payload)
+      return
+    }
     guard let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController,
           sheetVC.instanceName == name else { return }
     sheetVC.receiveMessage(from: "main", payload: payload)
@@ -790,6 +895,7 @@ ${applyInitialStateMethod}
     if let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController {
       sheetVC.receiveMessage(from: sender, payload: payload)
     }
+    tabBottomAccessoryVC?.receiveMessage(from: sender, payload: payload)
   }
 
   func instanceName(for webView: WKWebView?) -> String {
@@ -797,6 +903,9 @@ ${applyInitialStateMethod}
     if let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController,
        sheetVC.webView === webView {
       return sheetVC.instanceName
+    }
+    if let accessoryVC = tabBottomAccessoryVC, accessoryVC.webView === webView {
+      return "tabBottomAccessory"
     }
     return "unknown"
   }
@@ -866,8 +975,9 @@ ${applyInitialStateMethod}
     case "toolbar":       resetToolbar()
     case "statusBar":     resetStatusBar()
     case "homeIndicator": resetHomeIndicator()
-    case "sheets":        resetSheets()
-    case "keyboard":      keyboard?.applyState(["accessory": NSNull()])
+    case "sheets":                resetSheets()
+    case "keyboard":              keyboard?.applyState(["accessory": NSNull()])
+    case "tabBottomAccessory":    resetTabBottomAccessory()
     default: break
     }
   }
@@ -1353,6 +1463,258 @@ private class NativiteSheetViewController: UIViewController,
   // and sheet.delegate = sheetVC is set in applySheet(), so UIKit routes this call correctly.
   func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
     bridge?.sendEvent(name: "sheet.dismissed", data: ["name": instanceName])
+  }
+}
+
+// ─── Tab Bottom Accessory Controller ──────────────────────────────────────────
+
+private class NativiteTabBottomAccessoryController: UIViewController, WKNavigationDelegate {
+  weak var bridge: NativiteChrome?
+  weak var nativeBridge: NativiteBridge?
+  private(set) var webView: NativiteWebView!
+  private var lastLoadedURL: URL?
+  private var pendingSPARoute: String?
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    view.backgroundColor = .systemBackground
+
+    let config = WKWebViewConfiguration()
+    config.websiteDataStore = WKWebsiteDataStore.default()
+    let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+    config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"
+    config.userContentController.addUserScript(WKUserScript(
+      source: "window.__nativekit_instance_name__ = \\"tabBottomAccessory\\";document.documentElement.setAttribute('data-nk-platform','\\(nkPlatform)');",
+      injectionTime: .atDocumentStart,
+      forMainFrameOnly: false
+    ))
+    if let nativeBridge {
+      config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")
+    }
+
+    webView = NativiteWebView(frame: view.bounds, configuration: config)
+    webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    webView.isOpaque = false
+    webView.backgroundColor = .clear
+    webView.scrollView.backgroundColor = .clear
+    webView.lockRootScroll = false
+    webView.scrollView.contentInsetAdjustmentBehavior = .never
+    webView.scrollView.isScrollEnabled = false
+    webView.scrollView.bounces = false
+    webView.scrollView.alwaysBounceVertical = false
+    webView.scrollView.alwaysBounceHorizontal = false
+    webView.navigationDelegate = self
+    view.addSubview(webView)
+  }
+
+  deinit {
+    webView?.configuration.userContentController.removeScriptMessageHandler(forName: "nativite")
+  }
+
+  func loadURL(_ rawURL: String, relativeTo baseURL: URL?) {
+    loadViewIfNeeded()
+    guard let resolved = resolveURL(rawURL, relativeTo: baseURL) else { return }
+    let absoluteURL = resolved.absoluteURL
+    let nextSPARoute = pendingFileSPARoute(for: rawURL, resolvedURL: absoluteURL)
+    if absoluteURL == lastLoadedURL {
+      if let route = nextSPARoute {
+        applySPARoute(route)
+      }
+      return
+    }
+    pendingSPARoute = nextSPARoute
+    lastLoadedURL = absoluteURL
+
+    if absoluteURL.isFileURL {
+      let readAccessURL = fileReadAccessURL(for: absoluteURL, relativeTo: baseURL)
+      webView.loadFileURL(
+        absoluteURL,
+        allowingReadAccessTo: readAccessURL
+      )
+      return
+    }
+
+    webView.load(URLRequest(url: absoluteURL))
+  }
+
+  func receiveMessage(from sender: String, payload: Any?) {
+    loadViewIfNeeded()
+    let data: [String: Any] = ["from": sender, "payload": payload ?? NSNull()]
+    let message: [String: Any] = ["id": NSNull(), "type": "event", "event": "message", "data": data]
+    guard JSONSerialization.isValidJSONObject(message),
+      let msgData = try? JSONSerialization.data(withJSONObject: message),
+      let json = String(data: msgData, encoding: .utf8)
+    else { return }
+
+    webView.evaluateJavaScript("window.nativiteReceive(\\(json))", completionHandler: nil)
+  }
+
+  private func resolveURL(_ rawURL: String, relativeTo baseURL: URL?) -> URL? {
+    if let absoluteURL = URL(string: rawURL), absoluteURL.scheme != nil {
+      return absoluteURL
+    }
+
+    let effectiveBaseURL = baseURL ?? fallbackBaseURL()
+
+    if rawURL.hasPrefix("/") {
+      return resolveRootPath(rawURL, relativeTo: effectiveBaseURL)
+    }
+
+    if let effectiveBaseURL {
+      return URL(string: rawURL, relativeTo: effectiveBaseURL)
+    }
+    return nil
+  }
+
+  private func resolveRootPath(_ rawPath: String, relativeTo baseURL: URL?) -> URL? {
+    guard let baseURL else { return nil }
+
+    let baseScheme = baseURL.scheme?.lowercased()
+    if baseScheme == "file" {
+      if let explicitFileURL = explicitFilePathURL(rawPath, relativeTo: baseURL) {
+        return explicitFileURL
+      }
+      return bundleEntryURL(relativeTo: baseURL)
+    }
+
+    guard baseScheme == "http" || baseScheme == "https" else { return nil }
+    guard
+      let routeComponents = URLComponents(string: rawPath),
+      var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true)
+    else { return nil }
+
+    components.path = routeComponents.path.isEmpty ? rawPath : routeComponents.path
+    components.query = routeComponents.query
+    components.fragment = routeComponents.fragment
+    return components.url
+  }
+
+  private func explicitFilePathURL(_ rawPath: String, relativeTo baseURL: URL) -> URL? {
+    guard let routeComponents = URLComponents(string: rawPath) else { return nil }
+    guard routeComponents.query == nil && routeComponents.fragment == nil else { return nil }
+    let path = routeComponents.path
+    guard path.contains(".") else { return nil }
+
+    let relativePath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+    return bundleRootURL(relativeTo: baseURL)?.appendingPathComponent(relativePath)
+  }
+
+  private func canonicalRoute(from rawPath: String) -> String {
+    guard let routeComponents = URLComponents(string: rawPath) else { return rawPath }
+
+    var route = routeComponents.path
+    if route.isEmpty {
+      route = "/"
+    }
+    if let query = routeComponents.query, !query.isEmpty {
+      route += "?\\(query)"
+    }
+    if let nestedFragment = routeComponents.fragment, !nestedFragment.isEmpty {
+      route += "#\\(nestedFragment)"
+    }
+    return route
+  }
+
+  private func pendingFileSPARoute(for rawPath: String, resolvedURL: URL) -> String? {
+    guard resolvedURL.isFileURL else { return nil }
+    guard rawPath.hasPrefix("/") else { return nil }
+    guard let routeComponents = URLComponents(string: rawPath) else { return nil }
+
+    if routeComponents.query == nil && routeComponents.fragment == nil && routeComponents.path.contains(".") {
+      return nil
+    }
+
+    return canonicalRoute(from: rawPath)
+  }
+
+  private func fallbackBaseURL() -> URL? {
+    #if DEBUG
+    if
+      let rawURL = UserDefaults.standard.string(forKey: "nativite.dev.url"),
+      let devURL = URL(string: rawURL)
+    {
+      return devURL
+    }
+    #endif
+
+    return Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist")
+  }
+
+  private func bundleEntryURL(relativeTo baseURL: URL) -> URL? {
+    if let bundled = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist") {
+      return bundled
+    }
+    if baseURL.lastPathComponent.lowercased() == "index.html" {
+      return baseURL
+    }
+    return baseURL.deletingLastPathComponent().appendingPathComponent("index.html")
+  }
+
+  private func bundleRootURL(relativeTo baseURL: URL) -> URL? {
+    return bundleEntryURL(relativeTo: baseURL)?.deletingLastPathComponent()
+  }
+
+  private func fileReadAccessURL(for targetURL: URL, relativeTo baseURL: URL?) -> URL {
+    if let baseURL, baseURL.isFileURL {
+      return baseURL.deletingLastPathComponent()
+    }
+    return targetURL.deletingLastPathComponent()
+  }
+
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    guard let route = pendingSPARoute else { return }
+    pendingSPARoute = nil
+    applySPARoute(route)
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    didFail navigation: WKNavigation!,
+    withError error: Error
+  ) {
+    emitLoadFailed(error, currentURL: webView.url)
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    didFailProvisionalNavigation navigation: WKNavigation!,
+    withError error: Error
+  ) {
+    emitLoadFailed(error, currentURL: webView.url)
+  }
+
+  private func applySPARoute(_ route: String) {
+    let payload: [String: Any] = ["route": route]
+    guard
+      let data = try? JSONSerialization.data(withJSONObject: payload),
+      let json = String(data: data, encoding: .utf8)
+    else { return }
+
+    let js = """
+    (() => {
+      const payload = \\(json);
+      try {
+        window.history.replaceState(window.history.state ?? null, "", payload.route);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      } catch (_) {}
+    })();
+    """
+    webView.evaluateJavaScript(js, completionHandler: nil)
+  }
+
+  private func emitLoadFailed(_ error: Error, currentURL: URL?) {
+    let nsError = error as NSError
+    let failingURL =
+      (nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String) ??
+      currentURL?.absoluteString
+    var payload: [String: Any] = [
+      "message": nsError.localizedDescription,
+      "code": nsError.code,
+    ]
+    if let failingURL {
+      payload["url"] = failingURL
+    }
+    bridge?.sendEvent(name: "tabBottomAccessory.loadFailed", data: payload)
   }
 }
 

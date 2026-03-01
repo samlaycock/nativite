@@ -49,6 +49,7 @@ import {
   sheet,
   sidebarPanel,
   statusBar,
+  tabBottomAccessory,
   titleBar,
   toolbar,
 } from "../index.ts";
@@ -158,6 +159,12 @@ describe("factory functions", () => {
   it("menuBar() returns a ChromeElement with _area 'menuBar'", () => {
     const el = menuBar({ menus: [] });
     expect(el._area).toBe("menuBar");
+  });
+
+  it("tabBottomAccessory() returns a ChromeElement with _area 'tabBottomAccessory'", () => {
+    const el = tabBottomAccessory({ url: "/now-playing", presented: true });
+    expect(el._area).toBe("tabBottomAccessory");
+    expect(el._config).toEqual({ url: "/now-playing", presented: true });
   });
 
   it("sheet() returns a ChromeElement with _area 'sheet' and _name", () => {
@@ -438,6 +445,40 @@ describe("chrome()", () => {
     const state = lastState() as Record<string, unknown>;
     const nav = state["navigation"] as { items: { subtitle: string }[] };
     expect(nav.items[0]!.subtitle).toBe("Main page");
+  });
+
+  it("sends tabBottomAccessory directly in state (singleton)", () => {
+    chrome(tabBottomAccessory({ url: "/now-playing", presented: true }));
+    _drainFlush();
+    expect(lastState()).toEqual({
+      tabBottomAccessory: { url: "/now-playing", presented: true },
+    });
+  });
+
+  it("tabBottomAccessory coexists with navigation", () => {
+    chrome(
+      navigation({ items: [{ id: "home", label: "Home", icon: "house" }] }),
+      tabBottomAccessory({ url: "/now-playing", presented: true }),
+    );
+    _drainFlush();
+    const state = lastState() as Record<string, unknown>;
+    expect(state["navigation"]).toMatchObject({ items: [{ id: "home" }] });
+    expect(state["tabBottomAccessory"]).toEqual({ url: "/now-playing", presented: true });
+  });
+
+  it("cleanup of tabBottomAccessory layer restores outer layer value", () => {
+    chrome(tabBottomAccessory({ url: "/now-playing", presented: false }));
+    const cleanup = chrome(tabBottomAccessory({ url: "/now-playing", presented: true }));
+    _drainFlush();
+    postMessage.mockClear();
+    nativeMessages = [];
+
+    cleanup();
+    _drainFlush();
+    expect((lastState() as Record<string, unknown>)["tabBottomAccessory"]).toEqual({
+      url: "/now-playing",
+      presented: false,
+    });
   });
 
   // ─── Flush coalescing ────────────────────────────────────────────────────
@@ -740,6 +781,38 @@ describe("child webview events", () => {
     const unsub = chrome.on("popover.presented", handler);
     simulateEvent("popover.presented", { name: "ctx" });
     expect(handler).toHaveBeenCalledWith({ type: "popover.presented", name: "ctx" });
+    unsub();
+  });
+});
+
+// ─── tabBottomAccessory events ───────────────────────────────────────────
+
+describe("tabBottomAccessory events", () => {
+  it("tabBottomAccessory.presented fires", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("tabBottomAccessory.presented", handler);
+    simulateEvent("tabBottomAccessory.presented", {});
+    expect(handler).toHaveBeenCalledWith({ type: "tabBottomAccessory.presented" });
+    unsub();
+  });
+
+  it("tabBottomAccessory.dismissed fires", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("tabBottomAccessory.dismissed", handler);
+    simulateEvent("tabBottomAccessory.dismissed", {});
+    expect(handler).toHaveBeenCalledWith({ type: "tabBottomAccessory.dismissed" });
+    unsub();
+  });
+
+  it("tabBottomAccessory.loadFailed fires with message and code", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("tabBottomAccessory.loadFailed", handler);
+    simulateEvent("tabBottomAccessory.loadFailed", { message: "Not found", code: 404 });
+    expect(handler).toHaveBeenCalledWith({
+      type: "tabBottomAccessory.loadFailed",
+      message: "Not found",
+      code: 404,
+    });
     unsub();
   });
 });

@@ -179,6 +179,24 @@ describe("nativiteChromeTemplate", () => {
       const output = nativiteChromeTemplate(baseConfig);
       expect(output).toContain('"toolbar.menuItemPressed"');
     });
+
+    it("fires titleBar.menuItemPressed for title bar menu items", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain('"titleBar.menuItemPressed"');
+    });
+
+    it("never reuses cached UIBarButtonItem for menu-bearing buttons", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("// ── Reuse cached item");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("// ── Create new item", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      // Menu-bearing items must never be reused from the cache because setting
+      // UIBarButtonItem.menu on a cached item does not reliably re-wire the
+      // new UIAction handlers.
+      expect(body).toContain("!hasMenu");
+      expect(body).not.toContain("cached.menu = menu");
+    });
   });
 
   describe("title bar cleanup", () => {
@@ -500,6 +518,132 @@ describe("nativiteChromeTemplate", () => {
       expect(output).toContain('"fixed-space"');
       expect(output).not.toContain('"flexibleSpace"');
       expect(output).not.toContain('"fixedSpace"');
+    });
+  });
+
+  describe("tab bottom accessory", () => {
+    it("applyState handles tabBottomAccessory key", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain('state["tabBottomAccessory"] as? [String: Any]');
+      expect(output).toContain("self.applyTabBottomAccessory(tabBottomAccessory)");
+    });
+
+    it("applyTabBottomAccessory reads presented, url, and backgroundColor from state", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyTabBottomAccessory");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  private func resetTabBottomAccessory", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain('state["presented"] as? Bool');
+      expect(body).toContain('state["url"] as? String');
+      expect(body).toContain('state["backgroundColor"] as? String');
+    });
+
+    it("installs accessory as child VC with auto layout constraints", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyTabBottomAccessory");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  private func resetTabBottomAccessory", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("vc.addChild(accessoryVC)");
+      expect(body).toContain("translatesAutoresizingMaskIntoConstraints = false");
+      expect(body).toContain("vc.view.addSubview(accessoryVC.view)");
+      expect(body).toContain("accessoryVC.didMove(toParent: vc)");
+    });
+
+    it("positions accessory above tab bar when available", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyTabBottomAccessory");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  private func resetTabBottomAccessory", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("tbc.tabBar.topAnchor");
+      expect(body).toContain("tabBar.topAnchor");
+      expect(body).toContain("vc.view.safeAreaLayoutGuide.bottomAnchor");
+    });
+
+    it("emits tabBottomAccessory.presented event", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain('sendEvent(name: "tabBottomAccessory.presented", data: [:])');
+    });
+
+    it("emits tabBottomAccessory.dismissed event when removing", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain('sendEvent(name: "tabBottomAccessory.dismissed", data: [:])');
+    });
+
+    it("tears down child VC when presented is false", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyTabBottomAccessory");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  private func resetTabBottomAccessory", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("willMove(toParent: nil)");
+      expect(body).toContain("removeFromSuperview()");
+      expect(body).toContain("removeFromParent()");
+      expect(body).toContain("tabBottomAccessoryVC = nil");
+    });
+
+    it("resetArea handles tabBottomAccessory case", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func resetArea");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  private func resetTitleBar", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain('"tabBottomAccessory"');
+      expect(body).toContain("resetTabBottomAccessory()");
+    });
+
+    it("postMessageToChild routes to tab bottom accessory when name matches", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func postMessageToChild");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  func broadcastMessage", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain('"tabBottomAccessory"');
+      expect(body).toContain("tabBottomAccessoryVC?.receiveMessage");
+    });
+
+    it("broadcastMessage forwards to tab bottom accessory", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func broadcastMessage");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  func instanceName(for", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("tabBottomAccessoryVC?.receiveMessage");
+    });
+
+    it("instanceName(for:) recognises tab bottom accessory webview", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func instanceName(for");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  private func sheetDetent", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("tabBottomAccessoryVC");
+      expect(body).toContain('"tabBottomAccessory"');
+    });
+
+    it("NativiteTabBottomAccessoryController hosts a WKWebView with shared data store", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain("class NativiteTabBottomAccessoryController: UIViewController");
+      expect(output).toContain("WKNavigationDelegate");
+    });
+
+    it("tab bottom accessory emits loadFailed event with message and code", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      expect(output).toContain(
+        'bridge?.sendEvent(name: "tabBottomAccessory.loadFailed", data: payload)',
+      );
+    });
+
+    it("tab bottom accessory webview disables scrolling", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      // Find the TabBottomAccessoryController section specifically
+      const start = output.indexOf("class NativiteTabBottomAccessoryController");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("// ─── UIColor hex extension", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      expect(body).toContain("webView.scrollView.isScrollEnabled = false");
     });
   });
 

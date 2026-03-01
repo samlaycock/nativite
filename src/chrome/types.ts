@@ -230,6 +230,8 @@ export interface PopoverConfig extends ChildWebviewBase {
   readonly anchorElementId?: string;
 }
 
+export interface TabBottomAccessoryConfig extends ChildWebviewBase {}
+
 // ─── ChromeState ──────────────────────────────────────────────────────────────
 
 export interface ChromeState {
@@ -241,6 +243,7 @@ export interface ChromeState {
   readonly statusBar?: StatusBarConfig;
   readonly homeIndicator?: HomeIndicatorConfig;
   readonly menuBar?: MenuBarConfig;
+  readonly tabBottomAccessory?: TabBottomAccessoryConfig;
   readonly sheets?: Readonly<Record<string, SheetConfig>>;
   readonly drawers?: Readonly<Record<string, DrawerConfig>>;
   readonly appWindows?: Readonly<Record<string, AppWindowConfig>>;
@@ -281,6 +284,13 @@ export type ChromeEvent =
   | { readonly type: "appWindow.dismissed"; readonly name: string }
   | { readonly type: "popover.presented"; readonly name: string }
   | { readonly type: "popover.dismissed"; readonly name: string }
+  | { readonly type: "tabBottomAccessory.presented" }
+  | { readonly type: "tabBottomAccessory.dismissed" }
+  | {
+      readonly type: "tabBottomAccessory.loadFailed";
+      readonly message: string;
+      readonly code: number;
+    }
   | { readonly type: "message"; readonly from: "main" | (string & {}); readonly payload: unknown }
   | {
       readonly type: "safeArea.changed";
@@ -307,6 +317,7 @@ export type ChromeElement =
   | { readonly _area: "homeIndicator"; readonly _config: HomeIndicatorConfig }
   | { readonly _area: "keyboard"; readonly _config: KeyboardConfig }
   | { readonly _area: "menuBar"; readonly _config: MenuBarConfig }
+  | { readonly _area: "tabBottomAccessory"; readonly _config: TabBottomAccessoryConfig }
   | { readonly _area: "sheet"; readonly _name: string; readonly _config: SheetConfig }
   | { readonly _area: "drawer"; readonly _name: string; readonly _config: DrawerConfig }
   | { readonly _area: "appWindow"; readonly _name: string; readonly _config: AppWindowConfig }

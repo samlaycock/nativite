@@ -22,6 +22,7 @@ import type {
   SheetConfig,
   SidebarPanelConfig,
   StatusBarConfig,
+  TabBottomAccessoryConfig,
   TitleBarConfig,
   ToolbarConfig,
   Unsubscribe,
@@ -318,6 +319,10 @@ export function keyboard(config: KeyboardConfig): ChromeElement {
 
 export function menuBar(config: MenuBarConfig): ChromeElement {
   return { _area: "menuBar", _config: config };
+}
+
+export function tabBottomAccessory(config: TabBottomAccessoryConfig): ChromeElement {
+  return { _area: "tabBottomAccessory", _config: config };
 }
 
 // ─── Child Webview Factory Functions ─────────────────────────────────────────
