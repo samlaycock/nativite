@@ -12,9 +12,9 @@ export function nativiteChromeTemplate(config: NativiteConfig): string {
   const applyInitialStateMethod = defaultChromeJson
     ? `
   // ── Default Chrome ──────────────────────────────────────────────────────────
-  // Called from ViewController.viewDidLoad() when a defaultChrome was set in
-  // nativite.config.ts. Applies the initial chrome state before the WebView
-  // has loaded so the native UI is correct from the very first frame.
+  // Called from ViewController.viewDidLoad() when a defaultChrome config was
+  // provided. Applies the initial chrome state before the WebView has loaded
+  // so the native UI is correct from the very first frame.
 
   func applyInitialState() {
     let jsonString = ${JSON.stringify(defaultChromeJson)}
@@ -46,29 +46,30 @@ export function nativiteChromeTemplate(config: NativiteConfig): string {
 import UIKit
 import WebKit
 
-// NativiteChrome reconciles declarative chrome state from JS onto UIKit.
-// Registered as a bridge handler under "__chrome_set_state__".
-private let nativiteSmallDetentIdentifier = UISheetPresentationController.Detent.Identifier("nativite.small")
+// MARK: - NativiteChrome
 
-/// A view that only intercepts touches on the UITabBar, passing all others
-/// through to sibling views below (the WKWebView).
-private class PassThroughView: UIView {
-  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    let result = super.hitTest(point, with: event)
-    guard let result else { return nil }
-    // Pass through if the hit landed on this wrapper itself (empty space).
-    if result === self { return nil }
-    // Intercept if the hit target or any of its ancestors is a UIControl
-    // (buttons, text fields, tab bar items, search fields, etc.).
-    var current: UIView? = result
-    while let v = current, v !== self {
-      if v is UIControl { return result }
-      current = v.superview
-    }
-    // Not a control — pass through to the web view below.
-    return nil
-  }
-}
+/// Reconciles declarative "chrome" state from JavaScript onto UIKit.
+///
+/// The JS layer sends a full state snapshot via the "__chrome_set_state__"
+/// bridge handler. applyState(_:) diffs that snapshot against the
+/// previously-applied areas and maps each area key to the corresponding UIKit
+/// API (UINavigationItem, UITabBarController, UIToolbar, etc.).
+///
+/// ## Ownership hierarchy
+///
+///     ViewController
+///       └─ NativiteChrome  (this class)
+///            ├─ UITabBarController   (iOS 18+ tabs)
+///            ├─ UITabBar             (< iOS 18 legacy tabs)
+///            ├─ NativiteSheetViewController  (child webview sheets)
+///            └─ NativiteTabBottomAccessoryController
+///
+/// ## Threading
+///
+/// All UIKit work is dispatched to the main queue inside applyState(_:).
+/// Public helpers like postMessageToChild(name:payload:) must be called
+/// from the main thread.
+private let nativiteSmallDetentIdentifier = UISheetPresentationController.Detent.Identifier("nativite.small")
 
 class NativiteChrome: NSObject {
 
@@ -83,13 +84,15 @@ class NativiteChrome: NSObject {
   /// iOS 18+ tab bar controller — used for UITab/UISearchTab support.
   /// Lazily created on the first applyNavigationModern call.
   private var tabBarController: UITabBarController?
-  /// Pass-through wrapper installed into vc.view on the iOS 18+ path.
-  private var tabBarWrapperView: PassThroughView?
   /// Stored search bar config applied when UISearchTab search activates.
   private var pendingSearchBarConfig: [String: Any]?
   /// True while the UISearchTab search session is active. Prevents
   /// applyNavigationModern from rebuilding tabs mid-search.
   private var isNavigationSearchActive = false
+  /// Structural fingerprint of the current tabs — an array of
+  /// "{id}:{role}" strings. Compared on each applyNavigationModern call
+  /// to avoid rebuilding UITab objects when only mutable properties changed.
+  private var tabFingerprint: [String] = []
   private var tabBottomAccessoryVC: NativiteTabBottomAccessoryController?
   private var lastAppliedAreas: Set<String> = []
   /// Cache of bar button items keyed by "{position}:{id}" for identity-based
@@ -99,9 +102,23 @@ class NativiteChrome: NSObject {
   /// Suppresses animation on the very first applyState() call so
   /// defaultChrome renders instantly before the WebView has loaded.
   private var isInitialApply = true
+  /// Active Auto Layout constraints pinning the WKWebView into the
+  /// selected tab's VC view. Tracked explicitly so they can be
+  /// deactivated before new ones are activated, avoiding duplicates.
+  private var webViewReparentConstraints: [NSLayoutConstraint] = []
+  /// True while a deferred reparent is pending (DispatchQueue.main.async).
+  /// Prevents duplicate dispatch when reparentWebView is called multiple
+  /// times before UIKit has created the selected tab's VC.
+  private var hasPendingReparent = false
 
   // ── Entry point ────────────────────────────────────────────────────────────
 
+  /// Main entry point — called by the bridge when JS sends a new chrome state.
+  ///
+  /// The args dictionary is keyed by area name ("titleBar",
+  /// "navigation", "toolbar", etc.). Each present key is forwarded to
+  /// the corresponding apply... method. Areas that were present in the
+  /// previous call but are now absent are reset to defaults.
   func applyState(_ args: Any?) {
     guard let state = args as? [String: Any] else { return }
 
@@ -135,8 +152,9 @@ class NativiteChrome: NSObject {
           self.applySheet(name: name, state: sheetState)
         }
       }
-      // keyboard key — forward to NativiteKeyboard when the key is present.
-      // We pass the dict directly; NativiteKeyboard handles missing/null sub-keys.
+      // Forward the keyboard config to NativiteKeyboard (input accessory bar,
+      // dismiss mode). We pass the raw dict; NativiteKeyboard handles missing
+      // or null sub-keys internally.
       if let keyboardState = state["keyboard"] as? [String: Any] {
         self.keyboard?.applyState(keyboardState)
       }
@@ -150,8 +168,10 @@ class NativiteChrome: NSObject {
     }
   }
 
-  // Read live UIKit geometry and forward to NativiteVars.
-  // Called from the main-thread DispatchQueue block in applyState(_:).
+  /// Reads live UIKit geometry (nav bar, tab bar, toolbar heights and
+  /// visibility) and forwards them to NativiteVars so the CSS custom
+  /// properties (--nk-nav-height, --nk-tab-height, etc.) stay in
+  /// sync with the current UIKit state.
   private func pushVarUpdates() {
     guard let vc = viewController else { return }
     let navController  = vc.navigationController
@@ -179,6 +199,14 @@ class NativiteChrome: NSObject {
 ${applyInitialStateMethod}
   // ── Title Bar ──────────────────────────────────────────────────────────────
 
+  /// Applies the titleBar area — maps onto the UINavigationController's
+  /// navigation bar (title, subtitle, large-title mode, bar button items,
+  /// search bar, and visibility).
+  ///
+  /// On iOS 26+ title/subtitle changes are animated inside
+  /// UIView.animate so the liquid-glass navigation bar morphs smoothly.
+  /// The animation is skipped on the very first apply (isInitialApply)
+  /// to avoid a flash during launch.
   private func applyTitleBar(_ state: [String: Any]) {
     guard let vc = viewController,
           let navController = vc.navigationController else { return }
@@ -186,6 +214,7 @@ ${applyInitialStateMethod}
     let navItem = vc.navigationItem
 
     if let title = state["title"] as? String {
+      // Animate on iOS 26+ for liquid-glass morph; skip on first apply.
       if #available(iOS 26.0, *), !isInitialApply {
         UIView.animate(withDuration: 0.35) { navItem.title = title }
       } else {
@@ -228,6 +257,11 @@ ${applyInitialStateMethod}
     }
   }
 
+  /// Maps the JS largeTitleMode string to a UIKit display mode.
+  ///
+  /// - "large"  → .always  (always show the large title)
+  /// - "inline" → .never   (always show the inline/small title)
+  /// - anything else → .automatic (UIKit decides based on scroll)
   private func largeTitleDisplayMode(from string: String) -> UINavigationItem.LargeTitleDisplayMode {
     switch string {
     case "large": return .always
@@ -236,6 +270,15 @@ ${applyInitialStateMethod}
     }
   }
 
+  /// Creates or reuses a UIBarButtonItem for the given JS button state.
+  ///
+  /// - Parameter position: Cache namespace ("left", "right", or
+  ///   "toolbar"). Combined with the item's id to form the cache key.
+  ///
+  /// Cached items are reused by identity so UIKit can animate transitions
+  /// (and morph liquid-glass capsules on iOS 26+). Items with menus are
+  /// always recreated because resetting UIBarButtonItem.menu does not
+  /// reliably re-wire the new UIAction closures.
   private func barButtonItem(_ state: [String: Any], position: String) -> UIBarButtonItem? {
     guard let id = state["id"] as? String else { return nil }
     let cacheKey = "\\(position):\\(id)"
@@ -316,6 +359,7 @@ ${applyInitialStateMethod}
     return item
   }
 
+  /// Builds a UIMenu from the JS menu config (title + items array).
   @available(iOS 14.0, *)
   private func barButtonMenu(_ state: [String: Any], position: String) -> UIMenu? {
     let menuTitle = state["title"] as? String ?? ""
@@ -325,6 +369,8 @@ ${applyInitialStateMethod}
     return UIMenu(title: menuTitle, children: children)
   }
 
+  /// Recursively builds a single UIMenuElement — either a UIAction
+  /// leaf or a nested UIMenu sub-group (when children is present).
   @available(iOS 14.0, *)
   private func barButtonMenuElement(_ itemState: [String: Any], position: String) -> UIMenuElement? {
     if let childrenStates = itemState["children"] as? [[String: Any]] {
@@ -365,6 +411,9 @@ ${applyInitialStateMethod}
     }
   }
 
+  /// Target-action handler for bar button items on < iOS 14 (where
+  /// UIAction-based menus are unavailable). The item's position and ID
+  /// are encoded in its accessibilityIdentifier as "position:id".
   @objc private func barButtonTapped(_ sender: UIBarButtonItem) {
     guard let identifier = sender.accessibilityIdentifier else { return }
     let parts = identifier.split(separator: ":", maxSplits: 1).map(String.init)
@@ -390,6 +439,9 @@ ${applyInitialStateMethod}
   /// restored when the user cancels the search.
   private var lastNonSearchTabId: String?
 
+  /// Routes the navigation area to either the modern (iOS 18+) or legacy
+  /// path. The modern path uses UITabBarController with UITab /
+  /// UISearchTab; the legacy path manages a standalone UITabBar.
   private func applyNavigation(_ state: [String: Any]) {
     guard let vc = viewController else { return }
     if #available(iOS 18.0, *) {
@@ -401,6 +453,12 @@ ${applyInitialStateMethod}
 
   // ── Navigation: Legacy Path (< iOS 18) ──────────────────────────────────
 
+  /// Applies the navigation area on iOS < 18 using a standalone
+  /// UITabBar pinned to the bottom of vc.view.
+  ///
+  /// Search-role items are handled by lazily creating a
+  /// UISearchController and attaching it to the navigation item
+  /// when the search tab is tapped.
   private func applyNavigationLegacy(_ state: [String: Any], vc: ViewController) {
     // Lazily install the owned tab bar into vc.view on first use.
     if tabBar.superview == nil {
@@ -482,9 +540,28 @@ ${applyInitialStateMethod}
   }
 
   // ── Navigation: Modern Path (iOS 18+) ───────────────────────────────────
-  // Uses UITabBarController with UITab/UISearchTab for native tab bar
-  // behaviour, floating design on iOS 26+, and automatic sidebar adaptation.
 
+  /// Applies the navigation area on iOS 18+ using a child
+  /// UITabBarController with UITab / UISearchTab.
+  ///
+  /// This gives us the native floating tab bar on iOS 26+, automatic
+  /// sidebar adaptation on iPad, and system-managed search integration.
+  ///
+  /// ## Tab fingerprinting
+  ///
+  /// To avoid tearing down and recreating every UITab on each state
+  /// update (which would reset scroll position, cancel animations, and
+  /// lose the search session), the method computes a structural
+  /// "fingerprint" — an array of "{id}:{role}" strings. Only when the
+  /// fingerprint changes are tabs fully rebuilt; otherwise, mutable
+  /// properties (title, image, subtitle, badge) are patched in-place.
+  ///
+  /// ## WKWebView reparenting
+  ///
+  /// The primary WKWebView is moved into the selected tab's placeholder
+  /// view controller so UIKit can observe its UIScrollView for
+  /// tab-bar auto-minimise on iOS 26+. See reparentWebView(to:)
+  /// and parkWebView() for details.
   @available(iOS 18.0, *)
   private func applyNavigationModern(_ state: [String: Any], vc: ViewController) {
     // Lazily create UITabBarController and install into vc.view.
@@ -493,31 +570,18 @@ ${applyInitialStateMethod}
       tbc.delegate = self
       tbc.view.backgroundColor = .clear
 
-      let wrapper = PassThroughView()
-      wrapper.translatesAutoresizingMaskIntoConstraints = false
-      wrapper.backgroundColor = .clear
-
-      tbc.view.translatesAutoresizingMaskIntoConstraints = false
-      wrapper.addSubview(tbc.view)
-      NSLayoutConstraint.activate([
-        tbc.view.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
-        tbc.view.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
-        tbc.view.topAnchor.constraint(equalTo: wrapper.topAnchor),
-        tbc.view.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
-      ])
-
       vc.addChild(tbc)
-      vc.view.addSubview(wrapper)
+      tbc.view.translatesAutoresizingMaskIntoConstraints = false
+      vc.view.addSubview(tbc.view)
       NSLayoutConstraint.activate([
-        wrapper.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
-        wrapper.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor),
-        wrapper.topAnchor.constraint(equalTo: vc.view.topAnchor),
-        wrapper.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor),
+        tbc.view.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
+        tbc.view.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor),
+        tbc.view.topAnchor.constraint(equalTo: vc.view.topAnchor),
+        tbc.view.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor),
       ])
       tbc.didMove(toParent: vc)
 
       tabBarController = tbc
-      tabBarWrapperView = wrapper
     }
 
     guard let tbc = tabBarController else { return }
@@ -530,7 +594,10 @@ ${applyInitialStateMethod}
       return
     }
 
-    // Map NavigationConfig.style to UITabBarController.Mode.
+    // Map NavigationConfig.style → UITabBarController.Mode:
+    //   "tabs"    → .tabBar     (always show bottom tab bar)
+    //   "sidebar" → .tabSidebar (iPad sidebar / tab bar on iPhone)
+    //    default  → .automatic  (UIKit decides based on trait collection)
     if let styleStr = state["style"] as? String {
       switch styleStr {
       case "tabs":    tbc.mode = .tabBar
@@ -541,71 +608,130 @@ ${applyInitialStateMethod}
       tbc.mode = .automatic
     }
 
-    // Build UITab/UISearchTab array from items.
-    navigationSearchItemId = nil
-
-    if let items = state["items"] as? [[String: Any]] {
-      var tabs: [UITab] = []
-
-      for itemState in items {
-        guard let id = itemState["id"] as? String,
-              let label = itemState["label"] as? String else { continue }
-
-        let role = itemState["role"] as? String
-        let icon = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
-        let subtitle = itemState["subtitle"] as? String
-
-        if role == "search" {
-          navigationSearchItemId = id
-          let searchImage = icon ?? UIImage(systemName: "magnifyingglass")
-          let hasSearchBar = state["searchBar"] is [String: Any]
-          let searchTab = UISearchTab(viewControllerProvider: { [weak self] _ in
-            let placeholder = UIViewController()
-            placeholder.view.backgroundColor = .clear
-            if hasSearchBar {
-              let sc = UISearchController(searchResultsController: nil)
-              sc.obscuresBackgroundDuringPresentation = false
-              sc.searchResultsUpdater = self
-              sc.searchBar.delegate = self
-              placeholder.navigationItem.searchController = sc
-              let nav = UINavigationController(rootViewController: placeholder)
-              nav.isNavigationBarHidden = true
-              nav.view.backgroundColor = .clear
-              return nav
-            }
-            return placeholder
-          })
-          searchTab.title = label
-          searchTab.image = searchImage
-          if let subtitle { searchTab.subtitle = subtitle }
-          if #available(iOS 26.0, *), hasSearchBar {
-            searchTab.automaticallyActivatesSearch = true
-          }
-          tabs.append(searchTab)
-        } else {
-          let tab = UITab(title: label, image: icon, identifier: id) { _ in
-            let placeholder = UIViewController()
-            placeholder.view.backgroundColor = .clear
-            return placeholder
-          }
-          if let subtitle { tab.subtitle = subtitle }
-
-          if let badge = itemState["badge"] as? String {
-            tab.badgeValue = badge
-          } else if let badge = itemState["badge"] as? Int {
-            tab.badgeValue = String(badge)
-          } else if itemState["badge"] is NSNull {
-            tab.badgeValue = nil
-          }
-
-          tabs.append(tab)
+    // Map NavigationConfig.minimizeBehavior → UITabBarController.MinimizeBehavior (iOS 26+):
+    //   "never"        → .never        (tab bar always fully visible)
+    //   "onScrollDown" → .onScrollDown (minimise when scrolling down)
+    //   "onScrollUp"   → .onScrollUp   (minimise when scrolling up)
+    //    default       → .automatic    (UIKit decides based on context)
+    if #available(iOS 26.0, *) {
+      if let behavior = state["minimizeBehavior"] as? String {
+        switch behavior {
+        case "never":        tbc.tabBarMinimizeBehavior = .never
+        case "onScrollDown": tbc.tabBarMinimizeBehavior = .onScrollDown
+        case "onScrollUp":   tbc.tabBarMinimizeBehavior = .onScrollUp
+        default:             tbc.tabBarMinimizeBehavior = .automatic
         }
+      } else {
+        tbc.tabBarMinimizeBehavior = .automatic
       }
-
-      tbc.tabs = tabs
     }
 
-    // Active item selection.
+    // ── Tab management ───────────────────────────────────────────────────
+    // Only rebuild UITab objects when the structural identity of the tab
+    // list changes (IDs, roles, search-bar presence). Mutable properties
+    // like labels, badges and subtitles are updated in-place.
+
+    var didRebuildTabs = false
+
+    if let items = state["items"] as? [[String: Any]] {
+      let hasSearchBar = state["searchBar"] is [String: Any]
+      let newFingerprint: [String] = items.compactMap { item in
+        guard let id = item["id"] as? String else { return nil }
+        let role = item["role"] as? String ?? ""
+        return role == "search" ? "\\(id):\\(role):\\(hasSearchBar)" : "\\(id):\\(role)"
+      }
+
+      if newFingerprint != tabFingerprint {
+        // Structure changed — full rebuild.
+        parkWebView()
+        navigationSearchItemId = nil
+
+        var tabs: [UITab] = []
+        for itemState in items {
+          guard let id = itemState["id"] as? String,
+                let label = itemState["label"] as? String else { continue }
+
+          let role = itemState["role"] as? String
+          let icon = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
+          let subtitle = itemState["subtitle"] as? String
+
+          if role == "search" {
+            navigationSearchItemId = id
+            let searchImage = icon ?? UIImage(systemName: "magnifyingglass")
+            let searchTab = UISearchTab(viewControllerProvider: { [weak self] _ in
+              let placeholder = UIViewController()
+              placeholder.view.backgroundColor = .clear
+              if hasSearchBar {
+                let sc = UISearchController(searchResultsController: nil)
+                sc.obscuresBackgroundDuringPresentation = false
+                sc.searchResultsUpdater = self
+                sc.searchBar.delegate = self
+                placeholder.navigationItem.searchController = sc
+                let nav = UINavigationController(rootViewController: placeholder)
+                nav.isNavigationBarHidden = true
+                nav.view.backgroundColor = .clear
+                return nav
+              }
+              return placeholder
+            })
+            searchTab.title = label
+            searchTab.image = searchImage
+            if let subtitle { searchTab.subtitle = subtitle }
+            if #available(iOS 26.0, *), hasSearchBar {
+              searchTab.automaticallyActivatesSearch = true
+            }
+            tabs.append(searchTab)
+          } else {
+            let tab = UITab(title: label, image: icon, identifier: id) { _ in
+              let placeholder = UIViewController()
+              placeholder.view.backgroundColor = .clear
+              return placeholder
+            }
+            if let subtitle { tab.subtitle = subtitle }
+            if let badge = itemState["badge"] as? String {
+              tab.badgeValue = badge
+            } else if let badge = itemState["badge"] as? Int {
+              tab.badgeValue = String(badge)
+            } else if itemState["badge"] is NSNull {
+              tab.badgeValue = nil
+            }
+            tabs.append(tab)
+          }
+        }
+
+        tbc.tabs = tabs
+        tabFingerprint = newFingerprint
+        didRebuildTabs = true
+      } else {
+        // Structure unchanged — update mutable properties in-place.
+        for tab in tbc.tabs {
+          let itemState: [String: Any]?
+          if tab is UISearchTab {
+            itemState = items.first { ($0["role"] as? String) == "search" }
+          } else {
+            itemState = items.first { ($0["id"] as? String) == tab.identifier }
+          }
+          guard let itemState else { continue }
+
+          if let label = itemState["label"] as? String { tab.title = label }
+          let icon = (itemState["icon"] as? String).flatMap { UIImage(systemName: $0) }
+          tab.image = (tab is UISearchTab) ? (icon ?? UIImage(systemName: "magnifyingglass")) : icon
+          if let subtitle = itemState["subtitle"] as? String { tab.subtitle = subtitle }
+          if !(tab is UISearchTab) {
+            if let badge = itemState["badge"] as? String { tab.badgeValue = badge }
+            else if let badge = itemState["badge"] as? Int { tab.badgeValue = String(badge) }
+            else if itemState["badge"] is NSNull { tab.badgeValue = nil }
+          }
+        }
+      }
+    }
+
+    // ── Selection ─────────────────────────────────────────────────────────
+    let selectionBefore: String? = {
+      guard let sel = tbc.selectedTab else { return nil }
+      return sel is UISearchTab ? navigationSearchItemId : sel.identifier
+    }()
+
     if let activeId = state["activeItem"] as? String {
       let tab: UITab?
       if activeId == navigationSearchItemId {
@@ -621,11 +747,105 @@ ${applyInitialStateMethod}
       }
     }
 
+    let selectionAfter: String? = {
+      guard let sel = tbc.selectedTab else { return nil }
+      return sel is UISearchTab ? navigationSearchItemId : sel.identifier
+    }()
+
+    // Reparent when tab VCs were recreated or the selection moved.
+    if didRebuildTabs || selectionAfter != selectionBefore {
+      reparentWebView(to: tbc)
+    }
+
     // Hidden state.
     tbc.tabBar.isHidden = (state["hidden"] as? Bool) ?? false
 
     // Store search bar config for application when UISearchTab activates.
     pendingSearchBarConfig = state["searchBar"] as? [String: Any]
+  }
+
+  /// Moves the WKWebView back into vc.view using frame-based layout.
+  /// Called before tearing down or rebuilding tab VCs so the webview is
+  /// not lost when old view controllers are removed from the hierarchy.
+  @available(iOS 18.0, *)
+  private func parkWebView() {
+    guard let webView = viewController?.webView, let vc = viewController,
+          webView.superview !== vc.view else { return }
+    NSLayoutConstraint.deactivate(webViewReparentConstraints)
+    webViewReparentConstraints = []
+    webView.translatesAutoresizingMaskIntoConstraints = true
+    vc.view.insertSubview(webView, at: 0)
+    webView.frame = vc.view.bounds
+    webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+  }
+
+  /// Moves the primary WKWebView into the selected tab's view controller
+  /// so UIKit can observe its scroll view for tab-bar auto-minimize.
+  ///
+  /// UITab creates its view controller lazily via the
+  /// viewControllerProvider closure.  After a full tab rebuild
+  /// (tbc.tabs = ...) the selected tab's VC may not exist yet because
+  /// UIKit has not laid out the tab bar controller.  When this happens
+  /// the webview is temporarily placed inside tbc.view (behind the
+  /// content area but in front of vc.view) so it remains visible, and
+  /// a single deferred retry is scheduled on the next run loop
+  /// iteration — by which time UIKit will have created the VC.
+  @available(iOS 18.0, *)
+  private func reparentWebView(to tbc: UITabBarController) {
+    guard let webView = viewController?.webView else { return }
+    guard let selectedVC = tbc.selectedTab?.viewController else {
+      // VC not available yet — park inside tbc.view so the webview is
+      // visible through the transparent content area while we wait.
+      NSLayoutConstraint.deactivate(webViewReparentConstraints)
+      webViewReparentConstraints = []
+      if webView.superview !== tbc.view {
+        webView.translatesAutoresizingMaskIntoConstraints = true
+        tbc.view.insertSubview(webView, at: 0)
+        webView.frame = tbc.view.bounds
+        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      }
+      // Schedule exactly one deferred retry.
+      if !hasPendingReparent {
+        hasPendingReparent = true
+        DispatchQueue.main.async { [weak self] in
+          guard let self else { return }
+          self.hasPendingReparent = false
+          guard let tbc = self.tabBarController else { return }
+          self.reparentWebView(to: tbc)
+        }
+      }
+      return
+    }
+
+    // UISearchTab wraps its VC in a UINavigationController — walk to the leaf.
+    let target: UIViewController
+    if let nav = selectedVC as? UINavigationController {
+      target = nav.topViewController ?? selectedVC
+    } else {
+      target = selectedVC
+    }
+
+    // Deactivate previous constraints to avoid duplicates.
+    NSLayoutConstraint.deactivate(webViewReparentConstraints)
+
+    // Move the webview into the target if it isn't already there.
+    if webView.superview !== target.view {
+      target.view.insertSubview(webView, at: 0)
+    }
+
+    // Pin the webview to the target's edges.  Using Auto Layout instead
+    // of frame + autoresizingMask handles the case where the target VC's
+    // view still has zero bounds when first created by the
+    // viewControllerProvider.
+    webView.translatesAutoresizingMaskIntoConstraints = false
+    let constraints = [
+      webView.leadingAnchor.constraint(equalTo: target.view.leadingAnchor),
+      webView.trailingAnchor.constraint(equalTo: target.view.trailingAnchor),
+      webView.topAnchor.constraint(equalTo: target.view.topAnchor),
+      webView.bottomAnchor.constraint(equalTo: target.view.bottomAnchor),
+    ]
+    NSLayoutConstraint.activate(constraints)
+    webViewReparentConstraints = constraints
   }
 
   /// Returns true when the given search bar belongs to the navigation search
@@ -638,6 +858,8 @@ ${applyInitialStateMethod}
 
   // ── Toolbar ────────────────────────────────────────────────────────────────
 
+  /// Applies the toolbar area — maps items onto the
+  /// UINavigationController's bottom toolbar (setToolbarItems).
   private func applyToolbar(_ state: [String: Any]) {
     guard let vc = viewController,
           let navController = vc.navigationController else { return }
@@ -652,6 +874,9 @@ ${applyInitialStateMethod}
     }
   }
 
+  /// Converts a single toolbar-item state dict into a UIBarButtonItem.
+  /// Handles the special "flexible-space" and "fixed-space" types
+  /// directly; everything else delegates to barButtonItem(_:position:).
   private func toolbarItem(_ state: [String: Any], position: String = "toolbar") -> UIBarButtonItem? {
     switch state["type"] as? String {
     case "flexible-space":
@@ -667,6 +892,8 @@ ${applyInitialStateMethod}
 
   // ── Status Bar ─────────────────────────────────────────────────────────────
 
+  /// Applies the statusBar area — sets the status bar style
+  /// ("light" / "dark" / default) and visibility.
   private func applyStatusBar(_ state: [String: Any]) {
     guard let vc = viewController else { return }
 
@@ -685,6 +912,8 @@ ${applyInitialStateMethod}
 
   // ── Home Indicator ─────────────────────────────────────────────────────────
 
+  /// Applies the homeIndicator area — controls whether the home
+  /// indicator (the bottom swipe affordance) should auto-hide.
   private func applyHomeIndicator(_ state: [String: Any]) {
     guard let vc = viewController else { return }
 
@@ -696,6 +925,11 @@ ${applyInitialStateMethod}
 
   // ── Search Bar ────────────────────────────────────────────────────────────
 
+  /// Applies a search bar to the title bar's navigation item.
+  ///
+  /// This is used when titleBar.searchBar is set (independent of the
+  /// navigation search-role tab). Lazily creates a UISearchController
+  /// and attaches it to vc.navigationItem.
   private func applySearchBar(_ state: [String: Any], to vc: ViewController) {
     // Lazily create and attach a UISearchController to the navigation item
     if vc.navigationItem.searchController == nil {
@@ -722,6 +956,12 @@ ${applyInitialStateMethod}
 
   // ── Sheet ──────────────────────────────────────────────────────────────────
 
+  /// Presents or updates a child webview sheet.
+  ///
+  /// When presented is true the method either reuses an existing
+  /// NativiteSheetViewController or creates a new one, configures its
+  /// detents, grab handle, corner radius, background colour, and URL, then
+  /// presents it modally. When presented is false the sheet is dismissed.
   private func applySheet(name: String, state: [String: Any]) {
     guard let vc = viewController else { return }
 
@@ -784,6 +1024,12 @@ ${applyInitialStateMethod}
 
   // ── Tab Bottom Accessory ────────────────────────────────────────────────
 
+  /// Presents or removes a tab-bottom accessory — a small child webview
+  /// docked above the tab bar.
+  ///
+  /// On iOS 26+ this uses the native UITabAccessory API for liquid-glass
+  /// styling. On older versions a manually-constrained UIViewController
+  /// is added above the tab bar.
   private func applyTabBottomAccessory(_ state: [String: Any]) {
     guard let vc = viewController else { return }
 
@@ -863,6 +1109,7 @@ ${applyInitialStateMethod}
     }
   }
 
+  /// Tears down the tab-bottom accessory (if any) without sending events.
   private func resetTabBottomAccessory() {
     if let accessoryVC = tabBottomAccessoryVC {
       if #available(iOS 26.0, *), let tbc = tabBarController {
@@ -876,6 +1123,9 @@ ${applyInitialStateMethod}
     }
   }
 
+  /// Routes a message from the main webview to a named child webview
+  /// (sheet or tab-bottom accessory). Called by the bridge handler for
+  /// "__chrome_messaging_post_to_child__".
   func postMessageToChild(name: String, payload: Any?) {
     if name == "tabBottomAccessory" {
       tabBottomAccessoryVC?.receiveMessage(from: "main", payload: payload)
@@ -886,6 +1136,8 @@ ${applyInitialStateMethod}
     sheetVC.receiveMessage(from: "main", payload: payload)
   }
 
+  /// Broadcasts a message to all webview instances (main + all children).
+  /// The sender's own instance is excluded to avoid echo.
   func broadcastMessage(from sender: String, payload: Any?) {
     // Forward to primary webview (via sendEvent) unless sender is "main"
     if sender != "main" {
@@ -898,6 +1150,9 @@ ${applyInitialStateMethod}
     tabBottomAccessoryVC?.receiveMessage(from: sender, payload: payload)
   }
 
+  /// Resolves the instance name ("sheet", "tabBottomAccessory", etc.)
+  /// for a given WKWebView reference. Used by the bridge to identify which
+  /// child originated an incoming message.
   func instanceName(for webView: WKWebView?) -> String {
     guard let webView else { return "unknown" }
     if let sheetVC = viewController?.presentedViewController as? NativiteSheetViewController,
@@ -910,6 +1165,9 @@ ${applyInitialStateMethod}
     return "unknown"
   }
 
+  /// Maps a JS detent name to a UISheetPresentationController.Detent.
+  /// "small" and "full" are custom detents (25 % and 100 %);
+  /// "medium" and "large" use the system detents.
   private func sheetDetent(from string: String) -> UISheetPresentationController.Detent? {
     switch string {
     case "small":  return smallDetent()
@@ -968,6 +1226,9 @@ ${applyInitialStateMethod}
 
   // ── Area cleanup ───────────────────────────────────────────────────────────
 
+  /// Resets a single chrome area to its default (hidden/empty) state.
+  /// Called for any area that was present in the previous applyState
+  /// call but is now absent from the incoming state snapshot.
   private func resetArea(_ area: String) {
     switch area {
     case "titleBar":      resetTitleBar()
@@ -982,6 +1243,8 @@ ${applyInitialStateMethod}
     }
   }
 
+  /// Clears the title bar — hides the navigation bar, removes bar button
+  /// items, search controller, and purges the title-bar item cache.
   private func resetTitleBar() {
     guard let vc = viewController,
           let navController = vc.navigationController else { return }
@@ -1001,18 +1264,22 @@ ${applyInitialStateMethod}
     }
   }
 
+  /// Tears down the navigation area — parks the webview back into
+  /// vc.view, removes the UITabBarController (iOS 18+), resets the
+  /// tab fingerprint, and hides the legacy tab bar.
   private func resetNavigation() {
     if #available(iOS 18.0, *) {
+      parkWebView()
       if let tbc = tabBarController {
         tbc.willMove(toParent: nil)
         tbc.view.removeFromSuperview()
         tbc.removeFromParent()
         tabBarController = nil
       }
-      tabBarWrapperView?.removeFromSuperview()
-      tabBarWrapperView = nil
+      tabFingerprint = []
       pendingSearchBarConfig = nil
       isNavigationSearchActive = false
+      hasPendingReparent = false
     }
     tabBar.isHidden = true
     navigationSearchItemId = nil
@@ -1020,6 +1287,7 @@ ${applyInitialStateMethod}
     lastNonSearchTabId = nil
   }
 
+  /// Hides the bottom toolbar and purges the toolbar item cache.
   private func resetToolbar() {
     guard let vc = viewController,
           let navController = vc.navigationController else { return }
@@ -1050,7 +1318,10 @@ ${applyInitialStateMethod}
 ${sendEventMethod}
 }
 
-// ─── UITabBarDelegate ─────────────────────────────────────────────────────────
+// ─── UITabBarDelegate (legacy < iOS 18) ──────────────────────────────────────
+// Handles tab selection on the standalone UITabBar used before iOS 18.
+// Search-role tabs are special-cased: selecting one attaches the search
+// controller to the navigation item and activates it programmatically.
 
 extension NativiteChrome: UITabBarDelegate {
   func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
@@ -1073,9 +1344,14 @@ extension NativiteChrome: UITabBarDelegate {
 }
 
 // ─── UITabBarControllerDelegate (iOS 18+) ─────────────────────────────────────
+// Handles tab selection, search begin, and search end on the modern
+// UITabBarController path. The WKWebView is reparented into the newly
+// selected tab's VC on each selection change.
 
 @available(iOS 18.0, *)
 extension NativiteChrome: UITabBarControllerDelegate {
+  /// Called when the user taps a different tab — reparents the WKWebView
+  /// into the newly-selected tab VC and emits a JS event.
   func tabBarController(
     _ tabBarController: UITabBarController,
     didSelectTab selectedTab: UITab,
@@ -1090,9 +1366,13 @@ extension NativiteChrome: UITabBarControllerDelegate {
     if id != navigationSearchItemId {
       lastNonSearchTabId = id
     }
+    reparentWebView(to: tabBarController)
     sendEvent(name: "navigation.itemPressed", data: ["id": id])
   }
 
+  /// Fires when the UISearchTab's search session starts. Sets a guard
+  /// flag so applyNavigationModern won't rebuild tabs mid-search
+  /// (which would cancel the search and cause focus loss).
   func tabBarController(
     _ tabBarController: UITabBarController,
     willBeginSearch searchController: UISearchController
@@ -1113,14 +1393,16 @@ extension NativiteChrome: UITabBarControllerDelegate {
     }
   }
 
+  /// Fires when the user cancels the UISearchTab search. State changes
+  /// (clearing the active flag, restoring the previous tab selection,
+  /// reparenting the webview) are deferred to the next run-loop turn
+  /// because UIKit's end-of-search transition is still in progress at
+  /// this point — mutating state synchronously conflicts with it.
   func tabBarController(
     _ tabBarController: UITabBarController,
     willEndSearch searchController: UISearchController
   ) {
     sendEvent(name: "navigation.searchCancelled", data: [:])
-    // Defer state changes until after UIKit finishes its end-of-search
-    // transition. Clearing isNavigationSearchActive or setting selectedTab
-    // synchronously here conflicts with the in-progress transition.
     let prevId = lastNonSearchTabId
     DispatchQueue.main.async { [weak self, weak tabBarController] in
       self?.isNavigationSearchActive = false
@@ -1129,11 +1411,16 @@ extension NativiteChrome: UITabBarControllerDelegate {
          let tab = tbc.tabs.first(where: { $0.identifier == prevId }) {
         tbc.selectedTab = tab
       }
+      if let tbc = tabBarController {
+        self?.reparentWebView(to: tbc)
+      }
     }
   }
 }
 
 // ─── UISearchBarDelegate (navigation search) ─────────────────────────────────
+// Handles text changes, submit, and cancel for both the legacy (< iOS 18)
+// search controller and the modern UISearchTab search bar.
 
 extension NativiteChrome: UISearchBarDelegate {
   func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
@@ -1160,6 +1447,9 @@ extension NativiteChrome: UISearchBarDelegate {
 }
 
 // ─── UISearchResultsUpdating (iOS 18+ navigation search) ──────────────────────
+// On the modern path, UISearchResultsUpdating is preferred over
+// UISearchBarDelegate for real-time text updates because UIKit wires it
+// automatically when the UISearchTab activates.
 
 extension NativiteChrome: UISearchResultsUpdating {
   func updateSearchResults(for searchController: UISearchController) {
@@ -1169,6 +1459,9 @@ extension NativiteChrome: UISearchResultsUpdating {
 }
 
 // ─── Supporting: NativiteSheetViewController ─────────────────────────────────
+// A modally-presented child webview that shares the same WKWebsiteDataStore
+// (and therefore localStorage, IndexedDB, cookies) as the primary webview.
+// Presented as a UISheetPresentationController with configurable detents.
 
 private class NativiteSheetViewController: UIViewController,
   UISheetPresentationControllerDelegate,
@@ -1179,9 +1472,18 @@ private class NativiteSheetViewController: UIViewController,
   // The name given to sheet("name", ...) on the JS side. Injected as
   // window.__nativekit_instance_name__ so the native message broker
   // can correctly route postToParent/broadcast calls from this webview.
+  /// The JS-side name for this sheet instance (e.g. "settings").
+  /// Injected into the child webview as
+  /// window.__nativekit_instance_name__ so the native message broker
+  /// can route messages from this child back to the correct sheet.
   var instanceName: String = "sheet"
   private(set) var webView: NativiteWebView!
+  /// The last fully-resolved URL loaded into this webview. Used to
+  /// avoid re-loading the same page on every state update.
   private var lastLoadedURL: URL?
+  /// If the load target is a file:// URL with an SPA route (e.g.
+  /// "/settings"), the route is stored here and injected via
+  /// history.replaceState after webView:didFinish:.
   private var pendingSPARoute: String?
 
   override func viewDidLoad() {
@@ -1420,6 +1722,7 @@ private class NativiteSheetViewController: UIViewController,
     webView.evaluateJavaScript(js, completionHandler: nil)
   }
 
+  /// Emits a sheet.loadFailed event to JS with the error details.
   private func emitLoadFailed(_ error: Error, currentURL: URL?) {
     let nsError = error as NSError
     let failingURL =
@@ -1436,6 +1739,8 @@ private class NativiteSheetViewController: UIViewController,
     bridge?.sendEvent(name: "sheet.loadFailed", data: payload)
   }
 
+  /// Emits a sheet.detentChanged event when the user drags the sheet
+  /// to a different detent (small / medium / large / full).
   func sheetPresentationControllerDidChangeSelectedDetentIdentifier(
     _ controller: UISheetPresentationController
   ) {
@@ -1467,6 +1772,10 @@ private class NativiteSheetViewController: UIViewController,
 }
 
 // ─── Tab Bottom Accessory Controller ──────────────────────────────────────────
+// A small child webview docked above the tab bar. On iOS 26+ it is installed
+// as a native UITabAccessory for liquid-glass styling; on older versions it
+// is manually constrained above the tab bar. Shares the same URL resolution
+// and SPA routing logic as NativiteSheetViewController.
 
 private class NativiteTabBottomAccessoryController: UIViewController, WKNavigationDelegate {
   weak var bridge: NativiteChrome?
@@ -1719,6 +2028,9 @@ private class NativiteTabBottomAccessoryController: UIViewController, WKNavigati
 }
 
 // ─── UIColor hex extension ────────────────────────────────────────────────────
+// Parses CSS-style hex colour strings ("#RRGGBB" or "#RRGGBBAA")
+// into UIColor. Used by applySheet and applyTabBottomAccessory for
+// the backgroundColor property.
 
 private extension UIColor {
   convenience init(hex: String) {

@@ -147,6 +147,16 @@ export interface NavigationConfig {
    * Only meaningful when one of the items has role: "search".
    */
   readonly searchBar?: SearchBarConfig;
+  /**
+   * Controls whether the tab bar auto-minimizes into a compact pill on scroll.
+   * iOS 26+ only — ignored on earlier versions.
+   *
+   * "automatic"    — the system decides (default)
+   * "never"        — the tab bar always stays fully visible
+   * "onScrollDown" — minimizes when the user scrolls down
+   * "onScrollUp"   — minimizes when the user scrolls up
+   */
+  readonly minimizeBehavior?: "automatic" | "never" | "onScrollDown" | "onScrollUp";
 }
 
 export interface ToolbarConfig {
