@@ -56,7 +56,7 @@ describe("pbxprojTemplate (plugins)", () => {
       },
     };
 
-    const pbxproj = pbxprojTemplate(baseConfig, resolvedPlugins, "/tmp/demo/.nativite/ios");
+    const pbxproj = pbxprojTemplate(baseConfig, resolvedPlugins, "/tmp/demo/.nativite/ios", "ios");
     expect(pbxproj).toContain("NativitePluginRegistrant.swift");
     expect(pbxproj).toContain('path = "../../native/ios/CameraPlugin.swift"');
     expect(pbxproj).toContain("AVFoundation.framework");
@@ -90,9 +90,16 @@ describe("pbxprojTemplate (plugins)", () => {
       },
     };
 
-    const pbxproj = pbxprojTemplate(config, resolvedPlugins, "/tmp/demo/.nativite/ios");
-    expect(pbxproj).toContain("PRODUCT_BUNDLE_IDENTIFIER = com.example.testapp.ios;");
-    expect(pbxproj).toContain("PRODUCT_BUNDLE_IDENTIFIER = com.example.testapp.macos;");
+    const iosPbxproj = pbxprojTemplate(config, resolvedPlugins, "/tmp/demo/.nativite/ios", "ios");
+    expect(iosPbxproj).toContain("PRODUCT_BUNDLE_IDENTIFIER = com.example.testapp.ios;");
+
+    const macosPbxproj = pbxprojTemplate(
+      config,
+      resolvedPlugins,
+      "/tmp/demo/.nativite/macos",
+      "macos",
+    );
+    expect(macosPbxproj).toContain("PRODUCT_BUNDLE_IDENTIFIER = com.example.testapp.macos;");
   });
 
   it("copies .nativite/dev.json into the app bundle during the copy phase", () => {
@@ -104,7 +111,7 @@ describe("pbxprojTemplate (plugins)", () => {
       },
     };
 
-    const pbxproj = pbxprojTemplate(baseConfig, resolvedPlugins, "/tmp/demo/.nativite/ios");
+    const pbxproj = pbxprojTemplate(baseConfig, resolvedPlugins, "/tmp/demo/.nativite/ios", "ios");
     expect(pbxproj).toContain('DEV_JSON_SRC=\\"$SRCROOT/../dev.json\\"');
     expect(pbxproj).toContain('DEV_JSON_DEST=\\"$CODESIGNING_FOLDER_PATH/dev.json\\"');
   });

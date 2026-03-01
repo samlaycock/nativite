@@ -551,6 +551,12 @@ ${loadContentMethod}
 ${assertEmbeddedBundlePlatformMethod}
 ${resolveDevURLMethod}
 ${sendToWebViewMethod}
+
+  // Expose the bridge handler so sibling native controllers (e.g. sheet-hosted
+  // webviews) can register the same native JS bridge channel.
+  func nativiteBridgeHandler() -> NativiteBridge {
+    bridge
+  }
 }
 
 extension ViewController: WKNavigationDelegate {

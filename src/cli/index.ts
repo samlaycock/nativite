@@ -181,11 +181,15 @@ program
     await server.listen();
 
     printBanner(version);
-    const simulatorName = options.simulator ?? platformConfig.dev?.simulator ?? "iPhone 16 Pro";
-    const launchTarget =
-      (options.target as "simulator" | "device" | undefined) ??
-      platformConfig.dev?.target ??
-      "simulator";
+    const isDesktopPlatform = platform === "macos";
+    const simulatorName = isDesktopPlatform
+      ? undefined
+      : (options.simulator ?? platformConfig.dev?.simulator ?? "iPhone 16 Pro");
+    const launchTarget = isDesktopPlatform
+      ? undefined
+      : ((options.target as "simulator" | "device" | undefined) ??
+        platformConfig.dev?.target ??
+        "simulator");
     printServerUrls(server.resolvedUrls, platform, simulatorName);
 
     const shortcuts = createNativiteShortcuts({

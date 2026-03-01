@@ -229,6 +229,13 @@ extension NativiteKeyboard {
     sendItemPressed(id: id)
   }
 }
+#elseif os(macOS)
+import Cocoa
+import WebKit
+
+// On macOS there is no software keyboard and therefore no inputAccessoryView
+// override needed. NativiteWebView is a plain WKWebView alias.
+typealias NativiteWebView = WKWebView
 #endif
 `;
 }

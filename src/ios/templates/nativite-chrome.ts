@@ -2049,10 +2049,13 @@ private extension UIColor {
 
   const macosChrome = `#elseif os(macOS)
 import Cocoa
+import WebKit
 
 // NativiteChrome reconciles declarative chrome state from JS onto AppKit.
-// Handles window title bar, menu bar, and sidebar — macOS equivalents of the
-// iOS navigation bar, tab bar, etc.
+// Manages: titleBar (NSToolbar), navigation (NSTabView), sidebarPanel
+// (NSSplitViewController + NSOutlineView), menuBar, sheets (NSPanel),
+// drawers (NSSplitViewItem), appWindows (NSWindow), popovers (NSPopover),
+// and inter-webview messaging.
 class NativiteChrome: NSObject {
 
   weak var viewController: ViewController?
@@ -2061,6 +2064,39 @@ class NativiteChrome: NSObject {
   // Track built menu item actions for target-action dispatch.
   private var menuActions: [String: String] = [:] // tag → id
   private var lastAppliedAreas: Set<String> = []
+
+  // ── NSToolbar state ──────────────────────────────────────────────────────
+  private var toolbar: NSToolbar?
+  private var toolbarItemIdentifiers: [NSToolbarItem.Identifier] = []
+  private var toolbarItems: [NSToolbarItem.Identifier: NSToolbarItem] = [:]
+  // Maps toolbar item identifiers to their JS id for event dispatch.
+  private var toolbarItemActions: [NSToolbarItem.Identifier: String] = [:]
+  // Menus attached to toolbar buttons, keyed by JS id.
+  private var toolbarMenuActions: [String: String] = [:]
+  // Pending toolbar state to merge titleBar items + toolbar items.
+  private var pendingLeadingItems: [[String: Any]]?
+  private var pendingTrailingItems: [[String: Any]]?
+  private var pendingToolbarItems: [[String: Any]]?
+  private var pendingSearchBar: [String: Any]?
+
+  // ── NSTabView state ──────────────────────────────────────────────────────
+  private var tabView: NSTabView?
+  private var navigationItems: [[String: Any]] = []
+
+  // ── NSSplitViewController state ──────────────────────────────────────────
+  private var splitViewController: NSSplitViewController?
+  private var sidebarItems: [SidebarNode] = []
+  private var sidebarOutlineView: NSOutlineView?
+  private var sidebarScrollView: NSScrollView?
+  private var sidebarActiveItemId: String?
+
+  // ── Child webview registries ─────────────────────────────────────────────
+  private var activeSheets: [String: NSPanel] = [:]
+  private var activeDrawerItems: [String: NSSplitViewItem] = [:]
+  private var activeAppWindows: [String: NSWindow] = [:]
+  private var activePopovers: [String: NSPopover] = [:]
+  // All child webviews indexed by instance name for messaging.
+  private var childWebViews: [String: WKWebView] = [:]
 
   // ── Entry point ────────────────────────────────────────────────────────────
 
@@ -2080,24 +2116,101 @@ class NativiteChrome: NSObject {
       if let titleBarState = state["titleBar"] as? [String: Any] {
         self.applyTitleBar(titleBarState)
       }
+      if let toolbarState = state["toolbar"] as? [String: Any] {
+        self.applyToolbar(toolbarState)
+      }
+      if let navigationState = state["navigation"] as? [String: Any] {
+        self.applyNavigation(navigationState)
+      }
       if let menuBarState = state["menuBar"] as? [String: Any] {
         self.applyMenuBar(menuBarState)
       }
       if let sidebarPanelState = state["sidebarPanel"] as? [String: Any] {
         self.applySidebarPanel(sidebarPanelState)
       }
+      if let sheets = state["sheets"] as? [String: [String: Any]] {
+        for (name, sheetState) in sheets {
+          self.applySheet(name: name, state: sheetState)
+        }
+      }
+      if let drawers = state["drawers"] as? [String: [String: Any]] {
+        for (name, drawerState) in drawers {
+          self.applyDrawer(name: name, state: drawerState)
+        }
+      }
+      if let appWindows = state["appWindows"] as? [String: [String: Any]] {
+        for (name, windowState) in appWindows {
+          self.applyAppWindow(name: name, state: windowState)
+        }
+      }
+      if let popovers = state["popovers"] as? [String: [String: Any]] {
+        for (name, popoverState) in popovers {
+          self.applyPopover(name: name, state: popoverState)
+        }
+      }
 
-      // Silently ignore iOS-only keys: navigation, toolbar,
-      // statusBar, homeIndicator, sheets, keyboard
+      // Rebuild the unified NSToolbar after both titleBar and toolbar areas
+      // have been processed so all items are merged into a single toolbar.
+      self.rebuildToolbarIfNeeded()
+
+      // Push updated chrome geometry to CSS variables.
+      self.pushVarUpdates()
+
+      // iOS-only areas are no-ops: statusBar, homeIndicator, keyboard,
+      // tabBottomAccessory
     }
   }
 
-  // iOS-only in this phase.
-  func postMessageToChild(name: String, payload: Any?) { _ = name; _ = payload }
-  func broadcastMessage(from sender: String, payload: Any?) { _ = sender; _ = payload }
-  func instanceName(for webView: WKWebView?) -> String { _ = webView; return "unknown" }
+  private func pushVarUpdates() {
+    guard let window = viewController?.view.window else { return }
+    let titlebarHeight = window.frame.height - window.contentLayoutRect.height
+    let hasToolbar = toolbar != nil
+    let hasTabView = tabView != nil && !(tabView?.isHidden ?? true)
+    let tabHeight: CGFloat = hasTabView ? 28 : 0
+    vars?.updateChrome(
+      navHeight: titlebarHeight, navVisible: true,
+      tabHeight: tabHeight, tabVisible: hasTabView,
+      toolbarHeight: nil, toolbarVisible: hasToolbar
+    )
+  }
+
+  // ── Inter-webview messaging ────────────────────────────────────────────────
+
+  func postMessageToChild(name: String, payload: Any?) {
+    guard let webView = childWebViews[name] else { return }
+    deliverMessage(to: webView, from: "main", payload: payload)
+  }
+
+  func broadcastMessage(from sender: String, payload: Any?) {
+    // Forward to primary webview unless sender is main
+    if sender != "main" {
+      sendEvent(name: "message", data: ["from": sender, "payload": payload ?? NSNull()])
+    }
+    // Forward to all child webviews except the sender
+    for (name, webView) in childWebViews where name != sender {
+      deliverMessage(to: webView, from: sender, payload: payload)
+    }
+  }
+
+  func instanceName(for webView: WKWebView?) -> String {
+    guard let webView else { return "unknown" }
+    for (name, wv) in childWebViews where wv === webView {
+      return name
+    }
+    return "unknown"
+  }
+
+  private func deliverMessage(to webView: WKWebView, from sender: String, payload: Any?) {
+    let data: [String: Any] = ["from": sender, "payload": payload ?? NSNull()]
+    let message: [String: Any] = ["id": NSNull(), "type": "event", "event": "message", "data": data]
+    guard JSONSerialization.isValidJSONObject(message),
+      let msgData = try? JSONSerialization.data(withJSONObject: message),
+      let json = String(data: msgData, encoding: .utf8)
+    else { return }
+    webView.evaluateJavaScript("window.nativiteReceive(\\(json))", completionHandler: nil)
+  }
 ${applyInitialStateMethod}
-  // ── Title Bar (macOS window) ─────────────────────────────────────────────────
+  // ── Title Bar (macOS window + NSToolbar) ──────────────────────────────────
 
   private func applyTitleBar(_ state: [String: Any]) {
     guard let window = viewController?.view.window else { return }
@@ -2129,13 +2242,317 @@ ${applyInitialStateMethod}
       window.titleVisibility = hidden ? .hidden : .visible
     }
 
-    // Push titlebar height to CSS vars
-    let titlebarHeight = window.frame.height - window.contentLayoutRect.height
-    vars?.updateChrome(
-      navHeight: titlebarHeight, navVisible: true,
-      tabHeight: nil, tabVisible: nil,
-      toolbarHeight: nil, toolbarVisible: nil
-    )
+    // Store leading/trailing items for the unified toolbar rebuild.
+    pendingLeadingItems = state["leadingItems"] as? [[String: Any]]
+    pendingTrailingItems = state["trailingItems"] as? [[String: Any]]
+    pendingSearchBar = state["searchBar"] as? [String: Any]
+  }
+
+  // ── Toolbar ──────────────────────────────────────────────────────────────
+
+  private func applyToolbar(_ state: [String: Any]) {
+    pendingToolbarItems = state["items"] as? [[String: Any]]
+  }
+
+  // ── Unified NSToolbar rebuild ────────────────────────────────────────────
+
+  private func rebuildToolbarIfNeeded() {
+    let hasLeading = pendingLeadingItems != nil
+    let hasTrailing = pendingTrailingItems != nil
+    let hasToolbar = pendingToolbarItems != nil
+    let hasSearch = pendingSearchBar != nil
+
+    guard hasLeading || hasTrailing || hasToolbar || hasSearch else {
+      // No toolbar-related state — remove toolbar if it exists.
+      if toolbar != nil {
+        viewController?.view.window?.toolbar = nil
+        toolbar = nil
+        toolbarItemIdentifiers = []
+        toolbarItems = [:]
+        toolbarItemActions = [:]
+        toolbarMenuActions = [:]
+      }
+      return
+    }
+
+    guard let window = viewController?.view.window else { return }
+
+    // Lazily create the toolbar.
+    if toolbar == nil {
+      let tb = NSToolbar(identifier: "NativiteToolbar")
+      tb.delegate = self
+      tb.displayMode = .iconAndLabel
+      tb.allowsUserCustomization = false
+      window.toolbar = tb
+      toolbar = tb
+    }
+
+    // Build the ordered identifier list:
+    // [leading items] [flexible space] [toolbar items] [flexible space] [trailing items]
+    var identifiers: [NSToolbarItem.Identifier] = []
+    var items: [NSToolbarItem.Identifier: NSToolbarItem] = [:]
+    var actions: [NSToolbarItem.Identifier: String] = [:]
+
+    toolbarMenuActions.removeAll()
+
+    // Leading items from titleBar
+    if let leadingItems = pendingLeadingItems {
+      for itemState in leadingItems {
+        if let item = makeToolbarItem(itemState, position: "leading") {
+          identifiers.append(item.itemIdentifier)
+          items[item.itemIdentifier] = item
+          if let id = itemState["id"] as? String {
+            actions[item.itemIdentifier] = id
+          }
+        }
+      }
+    }
+
+    identifiers.append(.flexibleSpace)
+
+    // Center toolbar items
+    if let toolbarItemStates = pendingToolbarItems {
+      for itemState in toolbarItemStates {
+        if let type = itemState["type"] as? String, type == "flexible-space" {
+          identifiers.append(.flexibleSpace)
+          continue
+        }
+        if let type = itemState["type"] as? String, type == "fixed-space" {
+          identifiers.append(.space)
+          continue
+        }
+        if let item = makeToolbarItem(itemState, position: "toolbar") {
+          identifiers.append(item.itemIdentifier)
+          items[item.itemIdentifier] = item
+          if let id = itemState["id"] as? String {
+            actions[item.itemIdentifier] = id
+          }
+        }
+      }
+    }
+
+    identifiers.append(.flexibleSpace)
+
+    // Search bar item
+    if let searchState = pendingSearchBar {
+      let searchId = NSToolbarItem.Identifier("nativite.search")
+      let searchItem = NSSearchToolbarItem(itemIdentifier: searchId)
+      if let placeholder = searchState["placeholder"] as? String {
+        searchItem.searchField.placeholderString = placeholder
+      }
+      if let value = searchState["value"] as? String {
+        searchItem.searchField.stringValue = value
+      }
+      searchItem.searchField.delegate = self
+      identifiers.append(searchId)
+      items[searchId] = searchItem
+    }
+
+    // Trailing items from titleBar
+    if let trailingItems = pendingTrailingItems {
+      for itemState in trailingItems {
+        if let item = makeToolbarItem(itemState, position: "trailing") {
+          identifiers.append(item.itemIdentifier)
+          items[item.itemIdentifier] = item
+          if let id = itemState["id"] as? String {
+            actions[item.itemIdentifier] = id
+          }
+        }
+      }
+    }
+
+    toolbarItemIdentifiers = identifiers
+    toolbarItems = items
+    toolbarItemActions = actions
+
+    // Force toolbar to re-query its items.
+    toolbar?.delegate = nil
+    toolbar?.delegate = self
+
+    // Clear pending state.
+    pendingLeadingItems = nil
+    pendingTrailingItems = nil
+    pendingToolbarItems = nil
+    pendingSearchBar = nil
+  }
+
+  private func makeToolbarItem(_ state: [String: Any], position: String) -> NSToolbarItem? {
+    guard let id = state["id"] as? String else { return nil }
+    let identifier = NSToolbarItem.Identifier("nativite.\\(position).\\(id)")
+
+    // Check for attached menu
+    if let menuConfig = state["menu"] as? [String: Any],
+       let menuItems = menuConfig["items"] as? [[String: Any]] {
+      let item = NSMenuToolbarItem(itemIdentifier: identifier)
+      let label = state["label"] as? String ?? ""
+      item.label = label
+      item.toolTip = label
+      if let symbolName = state["icon"] as? String {
+        item.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: label)
+      }
+      let menu = NSMenu(title: menuConfig["title"] as? String ?? "")
+      for menuItemState in menuItems {
+        guard let menuItemLabel = menuItemState["label"] as? String,
+              let menuItemId = menuItemState["id"] as? String else { continue }
+        let keyEquiv = menuItemState["keyEquivalent"] as? String ?? ""
+        let nsItem = NSMenuItem(title: menuItemLabel, action: #selector(toolbarMenuItemClicked(_:)), keyEquivalent: keyEquiv)
+        nsItem.target = self
+        nsItem.tag = toolbarMenuActions.count
+        toolbarMenuActions[String(nsItem.tag)] = menuItemId
+        if let symbolName = menuItemState["icon"] as? String {
+          nsItem.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+        }
+        if (menuItemState["disabled"] as? Bool) ?? false { nsItem.isEnabled = false }
+        if (menuItemState["checked"] as? Bool) ?? false { nsItem.state = .on }
+        if (menuItemState["style"] as? String) == "destructive" {
+          nsItem.attributedTitle = NSAttributedString(string: menuItemLabel, attributes: [.foregroundColor: NSColor.systemRed])
+        }
+        menu.addItem(nsItem)
+      }
+      item.menu = menu
+      item.isEnabled = !((state["disabled"] as? Bool) ?? false)
+      return item
+    }
+
+    let item = NSToolbarItem(itemIdentifier: identifier)
+    let label = state["label"] as? String ?? ""
+    item.label = label
+    item.toolTip = label
+    if let symbolName = state["icon"] as? String {
+      item.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: label)
+    }
+    item.target = self
+    item.action = #selector(toolbarItemClicked(_:))
+    item.isEnabled = !((state["disabled"] as? Bool) ?? false)
+
+    // Tint
+    if let tint = state["tint"] as? String {
+      let color = NSColor(hex: tint)
+      if let image = item.image {
+        let tinted = image.copy() as! NSImage
+        tinted.lockFocus()
+        color.set()
+        let imageRect = NSRect(origin: .zero, size: tinted.size)
+        imageRect.fill(using: .sourceAtop)
+        tinted.unlockFocus()
+        item.image = tinted
+      }
+    }
+
+    // Badge via title suffix
+    if let badge = state["badge"] as? String {
+      item.label = "\\(label) (\\(badge))"
+    } else if let badge = state["badge"] as? Int {
+      item.label = "\\(label) (\\(badge))"
+    }
+
+    return item
+  }
+
+  @objc private func toolbarItemClicked(_ sender: NSToolbarItem) {
+    guard let jsId = toolbarItemActions[sender.itemIdentifier] else { return }
+    // Determine which area's event to emit based on identifier prefix.
+    let idStr = sender.itemIdentifier.rawValue
+    if idStr.hasPrefix("nativite.leading.") {
+      sendEvent(name: "titleBar.leadingItemPressed", data: ["id": jsId])
+    } else if idStr.hasPrefix("nativite.trailing.") {
+      sendEvent(name: "titleBar.trailingItemPressed", data: ["id": jsId])
+    } else {
+      sendEvent(name: "toolbar.itemPressed", data: ["id": jsId])
+    }
+  }
+
+  @objc private func toolbarMenuItemClicked(_ sender: NSMenuItem) {
+    guard let id = toolbarMenuActions[String(sender.tag)] else { return }
+    // Determine parent area from the toolbar item that owns the menu.
+    sendEvent(name: "titleBar.menuItemPressed", data: ["id": id])
+  }
+
+  // ── Navigation (NSTabView) ────────────────────────────────────────────────
+
+  private func applyNavigation(_ state: [String: Any]) {
+    guard let items = state["items"] as? [[String: Any]] else { return }
+    navigationItems = items
+
+    let hidden = (state["hidden"] as? Bool) ?? false
+
+    // Lazily create NSTabView
+    if tabView == nil {
+      let tv = NSTabView()
+      tv.tabViewType = .topTabsBezelBorder
+      tv.delegate = self
+      tv.translatesAutoresizingMaskIntoConstraints = false
+      tabView = tv
+
+      // Insert the tab view into the view hierarchy. If a split view controller
+      // exists, the tab view wraps the content area. Otherwise add it directly
+      // to the ViewController's view.
+      installTabView(tv)
+    }
+
+    guard let tv = tabView else { return }
+
+    // Rebuild tabs if the set of items has changed.
+    let currentIds = tv.tabViewItems.compactMap { $0.identifier as? String }
+    let newIds = items.compactMap { $0["id"] as? String }
+
+    if currentIds != newIds {
+      // Remove all existing tabs
+      for item in tv.tabViewItems.reversed() {
+        tv.removeTabViewItem(item)
+      }
+      // Add new tabs
+      for itemState in items {
+        guard let id = itemState["id"] as? String else { continue }
+        let tabItem = NSTabViewItem(identifier: id)
+        tabItem.label = itemState["label"] as? String ?? ""
+        if let symbolName = itemState["icon"] as? String {
+          tabItem.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+        }
+        tv.addTabViewItem(tabItem)
+      }
+    } else {
+      // Update labels and icons in-place.
+      for (index, itemState) in items.enumerated() where index < tv.tabViewItems.count {
+        let tabItem = tv.tabViewItems[index]
+        if let label = itemState["label"] as? String { tabItem.label = label }
+        if let symbolName = itemState["icon"] as? String {
+          tabItem.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+        }
+      }
+    }
+
+    // Selection
+    if let activeId = state["activeItem"] as? String {
+      if let idx = tv.tabViewItems.firstIndex(where: { ($0.identifier as? String) == activeId }) {
+        tv.selectTabViewItem(at: idx)
+      }
+    }
+
+    tv.isHidden = hidden
+  }
+
+  private func installTabView(_ tv: NSTabView) {
+    guard let vc = viewController else { return }
+    if let split = splitViewController {
+      // Tab view goes into the detail area
+      let detailItem = split.splitViewItems.last
+      detailItem?.viewController.view.addSubview(tv)
+      if let parentView = detailItem?.viewController.view {
+        NSLayoutConstraint.activate([
+          tv.topAnchor.constraint(equalTo: parentView.topAnchor),
+          tv.leadingAnchor.constraint(equalTo: parentView.leadingAnchor),
+          tv.trailingAnchor.constraint(equalTo: parentView.trailingAnchor),
+        ])
+      }
+    } else {
+      vc.view.addSubview(tv)
+      NSLayoutConstraint.activate([
+        tv.topAnchor.constraint(equalTo: vc.view.topAnchor),
+        tv.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
+        tv.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor),
+      ])
+    }
   }
 
   // ── Menu Bar ────────────────────────────────────────────────────────────────
@@ -2215,27 +2632,406 @@ ${applyInitialStateMethod}
     sendEvent(name: "menuBar.itemPressed", data: ["id": id])
   }
 
-  // ── Sidebar Panel ────────────────────────────────────────────────────────────
+  // ── Sidebar Panel (NSSplitViewController + NSOutlineView) ──────────────────
 
   private func applySidebarPanel(_ state: [String: Any]) {
     guard let items = state["items"] as? [[String: Any]] else { return }
 
-    // Fire a sidebarPanel.itemPressed event with the full item list so the JS
-    // side can reconcile. The actual NSSplitViewController wiring is deferred to
-    // a later phase — for now we emit the event so the bridge contract is honoured.
-    var sidebarItems: [[String: Any]] = []
-    for itemState in items {
-      guard let id = itemState["id"] as? String,
-            let label = itemState["label"] as? String else { continue }
-      var item: [String: Any] = ["id": id, "label": label]
-      if let symbolName = itemState["icon"] as? String {
-        item["icon"] = symbolName
+    let visible = (state["visible"] as? Bool) ?? true
+
+    // Parse items into SidebarNode tree.
+    sidebarItems = items.compactMap { SidebarNode.from($0) }
+    sidebarActiveItemId = state["activeItem"] as? String
+
+    // Lazily create the split view controller.
+    if splitViewController == nil {
+      guard let vc = viewController, let window = vc.view.window else { return }
+
+      let split = NSSplitViewController()
+
+      // Sidebar item — contains the outline view
+      let sidebarVC = NSViewController()
+      sidebarVC.view = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 400))
+      let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarVC)
+      sidebarItem.minimumThickness = 180
+      sidebarItem.maximumThickness = 320
+      split.addSplitViewItem(sidebarItem)
+
+      // Detail item — wraps the existing ViewController
+      let detailItem = NSSplitViewItem(viewController: vc)
+      split.addSplitViewItem(detailItem)
+
+      // Swap window content
+      window.contentViewController = split
+      splitViewController = split
+
+      // Build outline view
+      let scrollView = NSScrollView()
+      scrollView.translatesAutoresizingMaskIntoConstraints = false
+      scrollView.hasVerticalScroller = true
+      scrollView.drawsBackground = false
+
+      let outlineView = NSOutlineView()
+      outlineView.headerView = nil
+      outlineView.indentationPerLevel = 16
+      outlineView.style = .sourceList
+      let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("sidebar"))
+      column.isEditable = false
+      outlineView.addTableColumn(column)
+      outlineView.outlineTableColumn = column
+      outlineView.dataSource = self
+      outlineView.delegate = self
+
+      scrollView.documentView = outlineView
+      sidebarVC.view.addSubview(scrollView)
+      NSLayoutConstraint.activate([
+        scrollView.topAnchor.constraint(equalTo: sidebarVC.view.topAnchor),
+        scrollView.leadingAnchor.constraint(equalTo: sidebarVC.view.leadingAnchor),
+        scrollView.trailingAnchor.constraint(equalTo: sidebarVC.view.trailingAnchor),
+        scrollView.bottomAnchor.constraint(equalTo: sidebarVC.view.bottomAnchor),
+      ])
+
+      sidebarOutlineView = outlineView
+      sidebarScrollView = scrollView
+
+      // If a tab view was already installed, reparent it into the detail area.
+      if let tv = tabView {
+        tv.removeFromSuperview()
+        installTabView(tv)
       }
-      sidebarItems.append(item)
     }
 
-    if let activeId = state["activeItem"] as? String {
-      sendEvent(name: "sidebarPanel.itemPressed", data: ["id": activeId, "items": sidebarItems])
+    sidebarOutlineView?.reloadData()
+
+    // Select the active item.
+    if let activeId = sidebarActiveItemId, let outlineView = sidebarOutlineView {
+      if let node = findSidebarNode(withId: activeId, in: sidebarItems) {
+        let row = outlineView.row(forItem: node)
+        if row >= 0 {
+          outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+      }
+    }
+
+    // Toggle sidebar visibility.
+    if let sidebarItem = splitViewController?.splitViewItems.first {
+      sidebarItem.isCollapsed = !visible
+    }
+
+    // Title
+    if let title = state["title"] as? String {
+      viewController?.view.window?.title = title
+    }
+  }
+
+  private func findSidebarNode(withId id: String, in nodes: [SidebarNode]) -> SidebarNode? {
+    for node in nodes {
+      if node.id == id { return node }
+      if let found = findSidebarNode(withId: id, in: node.children) { return found }
+    }
+    return nil
+  }
+
+  // ── Sheet (NSPanel) ────────────────────────────────────────────────────────
+
+  private func applySheet(name: String, state: [String: Any]) {
+    guard let vc = viewController, let window = vc.view.window else { return }
+    let presented = state["presented"] as? Bool ?? false
+
+    if presented {
+      if let existing = activeSheets[name] {
+        // Update existing sheet
+        updateChildWebView(in: existing.contentViewController!, state: state, name: name, relativeTo: vc.webView.url)
+        return
+      }
+
+      // Create new sheet panel
+      let width: CGFloat = 480
+      let height: CGFloat = resolveSheetHeight(state, windowHeight: window.frame.height)
+      let panel = NSPanel(
+        contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+        styleMask: [.titled, .closable, .resizable],
+        backing: .buffered,
+        defer: false
+      )
+      panel.isFloatingPanel = false
+
+      if let hex = state["backgroundColor"] as? String {
+        panel.backgroundColor = NSColor(hex: hex)
+      }
+
+      let childVC = NativiteChildWebViewController()
+      childVC.instanceName = name
+      childVC.chrome = self
+      childVC.nativeBridge = vc.nativiteBridgeHandler()
+      panel.contentViewController = childVC
+      childVC.loadViewIfNeeded()
+
+      if let rawURL = state["url"] as? String {
+        childVC.loadURL(rawURL, relativeTo: vc.webView.url)
+      }
+
+      childWebViews[name] = childVC.webView
+      activeSheets[name] = panel
+
+      let dismissible = state["dismissible"] as? Bool ?? true
+      if !dismissible {
+        panel.styleMask.remove(.closable)
+      }
+
+      window.beginSheet(panel) { [weak self] _ in
+        self?.activeSheets.removeValue(forKey: name)
+        self?.childWebViews.removeValue(forKey: name)
+        self?.sendEvent(name: "sheet.dismissed", data: ["name": name])
+      }
+      sendEvent(name: "sheet.presented", data: ["name": name])
+    } else {
+      if let panel = activeSheets[name] {
+        window.endSheet(panel)
+      }
+    }
+  }
+
+  private func resolveSheetHeight(_ state: [String: Any], windowHeight: CGFloat) -> CGFloat {
+    if let detents = state["detents"] as? [String],
+       let active = state["activeDetent"] as? String ?? detents.first {
+      switch active {
+      case "small":  return max(120, windowHeight * 0.25)
+      case "medium": return windowHeight * 0.5
+      case "large":  return windowHeight * 0.75
+      case "full":   return windowHeight
+      default: break
+      }
+    }
+    return windowHeight * 0.5
+  }
+
+  // ── Drawer (NSSplitViewItem) ──────────────────────────────────────────────
+
+  private func applyDrawer(name: String, state: [String: Any]) {
+    guard let vc = viewController else { return }
+    let presented = state["presented"] as? Bool ?? false
+
+    if presented {
+      if let existing = activeDrawerItems[name] {
+        updateChildWebView(in: existing.viewController, state: state, name: name, relativeTo: vc.webView.url)
+        return
+      }
+
+      // Ensure split view controller exists
+      if splitViewController == nil {
+        // Create a minimal split VC to host drawers
+        guard let window = vc.view.window else { return }
+        let split = NSSplitViewController()
+        let detailItem = NSSplitViewItem(viewController: vc)
+        split.addSplitViewItem(detailItem)
+        window.contentViewController = split
+        splitViewController = split
+      }
+
+      guard let split = splitViewController else { return }
+
+      let childVC = NativiteChildWebViewController()
+      childVC.instanceName = name
+      childVC.chrome = self
+      childVC.nativeBridge = vc.nativiteBridgeHandler()
+      childVC.loadViewIfNeeded()
+
+      let widthValue = state["width"]
+      let thickness: CGFloat
+      if let num = widthValue as? NSNumber {
+        thickness = CGFloat(truncating: num)
+      } else if let str = widthValue as? String {
+        switch str {
+        case "small": thickness = 200
+        case "large": thickness = 400
+        default: thickness = 300
+        }
+      } else {
+        thickness = 300
+      }
+
+      childVC.view.frame = NSRect(x: 0, y: 0, width: thickness, height: 400)
+
+      let side = state["side"] as? String ?? "trailing"
+      let drawerItem: NSSplitViewItem
+      if side == "leading" {
+        drawerItem = NSSplitViewItem(sidebarWithViewController: childVC)
+        split.insertSplitViewItem(drawerItem, at: 0)
+      } else {
+        drawerItem = NSSplitViewItem(inspectorWithViewController: childVC)
+        split.addSplitViewItem(drawerItem)
+      }
+      drawerItem.minimumThickness = thickness
+      drawerItem.preferredThicknessFraction = 0.25
+
+      if let rawURL = state["url"] as? String {
+        childVC.loadURL(rawURL, relativeTo: vc.webView.url)
+      }
+
+      childWebViews[name] = childVC.webView
+      activeDrawerItems[name] = drawerItem
+      sendEvent(name: "drawer.presented", data: ["name": name])
+    } else {
+      if let drawerItem = activeDrawerItems[name] {
+        splitViewController?.removeSplitViewItem(drawerItem)
+        activeDrawerItems.removeValue(forKey: name)
+        childWebViews.removeValue(forKey: name)
+        sendEvent(name: "drawer.dismissed", data: ["name": name])
+      }
+    }
+  }
+
+  // ── App Window (NSWindow) ──────────────────────────────────────────────────
+
+  private func applyAppWindow(name: String, state: [String: Any]) {
+    guard let vc = viewController else { return }
+    let presented = state["presented"] as? Bool ?? false
+
+    if presented {
+      if let existing = activeAppWindows[name] {
+        // Update existing window
+        if let title = state["title"] as? String { existing.title = title }
+        updateChildWebView(in: existing.contentViewController!, state: state, name: name, relativeTo: vc.webView.url)
+        return
+      }
+
+      let width: CGFloat = (state["size"] as? [String: Any])?["width"] as? CGFloat ?? 600
+      let height: CGFloat = (state["size"] as? [String: Any])?["height"] as? CGFloat ?? 400
+      var mask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable]
+      if (state["resizable"] as? Bool) ?? true {
+        mask.insert(.resizable)
+      }
+
+      let win = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+        styleMask: mask,
+        backing: .buffered,
+        defer: false
+      )
+      win.title = state["title"] as? String ?? ""
+      win.center()
+
+      if let minSize = state["minSize"] as? [String: Any] {
+        let minW = minSize["width"] as? CGFloat ?? 200
+        let minH = minSize["height"] as? CGFloat ?? 200
+        win.minSize = NSSize(width: minW, height: minH)
+      }
+
+      let childVC = NativiteChildWebViewController()
+      childVC.instanceName = name
+      childVC.chrome = self
+      childVC.nativeBridge = vc.nativiteBridgeHandler()
+      win.contentViewController = childVC
+      childVC.loadViewIfNeeded()
+
+      if let rawURL = state["url"] as? String {
+        childVC.loadURL(rawURL, relativeTo: vc.webView.url)
+      }
+
+      childWebViews[name] = childVC.webView
+      activeAppWindows[name] = win
+
+      let isModal = (state["modal"] as? Bool) ?? false
+      if isModal {
+        vc.view.window?.beginSheet(win) { [weak self] _ in
+          self?.activeAppWindows.removeValue(forKey: name)
+          self?.childWebViews.removeValue(forKey: name)
+          self?.sendEvent(name: "appWindow.dismissed", data: ["name": name])
+        }
+      } else {
+        win.delegate = self
+        win.makeKeyAndOrderFront(nil)
+      }
+      sendEvent(name: "appWindow.presented", data: ["name": name])
+    } else {
+      if let win = activeAppWindows[name] {
+        if win.isSheet {
+          vc.view.window?.endSheet(win)
+        } else {
+          win.close()
+          activeAppWindows.removeValue(forKey: name)
+          childWebViews.removeValue(forKey: name)
+          sendEvent(name: "appWindow.dismissed", data: ["name": name])
+        }
+      }
+    }
+  }
+
+  // ── Popover (NSPopover) ───────────────────────────────────────────────────
+
+  private func applyPopover(name: String, state: [String: Any]) {
+    guard let vc = viewController else { return }
+    let presented = state["presented"] as? Bool ?? false
+
+    if presented {
+      if activePopovers[name] != nil { return }
+
+      let popover = NSPopover()
+      popover.behavior = .transient
+      popover.delegate = self
+
+      let width: CGFloat = (state["size"] as? [String: Any])?["width"] as? CGFloat ?? 320
+      let height: CGFloat = (state["size"] as? [String: Any])?["height"] as? CGFloat ?? 240
+      popover.contentSize = NSSize(width: width, height: height)
+
+      let childVC = NativiteChildWebViewController()
+      childVC.instanceName = name
+      childVC.chrome = self
+      childVC.nativeBridge = vc.nativiteBridgeHandler()
+      popover.contentViewController = childVC
+      childVC.loadViewIfNeeded()
+
+      if let rawURL = state["url"] as? String {
+        childVC.loadURL(rawURL, relativeTo: vc.webView.url)
+      }
+
+      childWebViews[name] = childVC.webView
+      activePopovers[name] = popover
+
+      // Determine anchor rect
+      if let anchorId = state["anchorElementId"] as? String {
+        let js = "(() => { const el = document.getElementById('\\(anchorId)'); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()"
+        vc.webView.evaluateJavaScript(js) { [weak self, weak popover, weak vc] result, _ in
+          guard let self, let popover, let vc else { return }
+          var rect = NSRect(x: 0, y: 0, width: 1, height: 1)
+          if let dict = result as? [String: Any] {
+            let x = dict["x"] as? CGFloat ?? 0
+            let y = dict["y"] as? CGFloat ?? 0
+            let w = dict["w"] as? CGFloat ?? 1
+            let h = dict["h"] as? CGFloat ?? 1
+            // Convert from web coordinates (top-left origin) to NSView (bottom-left)
+            let viewHeight = vc.webView.frame.height
+            rect = NSRect(x: x, y: viewHeight - y - h, width: w, height: h)
+          }
+          popover.show(relativeTo: rect, of: vc.webView, preferredEdge: .minY)
+          self.sendEvent(name: "popover.presented", data: ["name": name])
+        }
+      } else {
+        // No anchor — show at center of webview
+        let center = NSRect(x: vc.webView.bounds.midX - 1, y: vc.webView.bounds.midY - 1, width: 2, height: 2)
+        popover.show(relativeTo: center, of: vc.webView, preferredEdge: .minY)
+        sendEvent(name: "popover.presented", data: ["name": name])
+      }
+    } else {
+      if let popover = activePopovers[name] {
+        popover.performClose(nil)
+        activePopovers.removeValue(forKey: name)
+        childWebViews.removeValue(forKey: name)
+        sendEvent(name: "popover.dismissed", data: ["name": name])
+      }
+    }
+  }
+
+  // ── Child webview update helper ───────────────────────────────────────────
+
+  private func updateChildWebView(in viewController: NSViewController, state: [String: Any], name: String, relativeTo baseURL: URL?) {
+    guard let childVC = viewController as? NativiteChildWebViewController else { return }
+    if let rawURL = state["url"] as? String {
+      childVC.loadURL(rawURL, relativeTo: baseURL)
+    }
+    if let hex = state["backgroundColor"] as? String {
+      childVC.view.layer?.backgroundColor = NSColor(hex: hex).cgColor
     }
   }
 
@@ -2243,8 +3039,15 @@ ${applyInitialStateMethod}
 
   private func resetArea(_ area: String) {
     switch area {
-    case "titleBar": resetTitleBar()
-    case "menuBar":  resetMenuBar()
+    case "titleBar":      resetTitleBar()
+    case "toolbar":       resetToolbar()
+    case "navigation":    resetNavigation()
+    case "menuBar":       resetMenuBar()
+    case "sidebarPanel":  resetSidebarPanel()
+    case "sheets":        resetSheets()
+    case "drawers":       resetDrawers()
+    case "appWindows":    resetAppWindows()
+    case "popovers":      resetPopovers()
     default: break
     }
   }
@@ -2253,13 +3056,401 @@ ${applyInitialStateMethod}
     guard let window = viewController?.view.window else { return }
     window.title = ""
     window.subtitle = ""
+    window.titlebarSeparatorStyle = .automatic
+    window.titleVisibility = .visible
+    pendingLeadingItems = nil
+    pendingTrailingItems = nil
+    pendingSearchBar = nil
+    // Toolbar removal handled if toolbar area is also absent.
+  }
+
+  private func resetToolbar() {
+    pendingToolbarItems = nil
+    if !lastAppliedAreas.contains("titleBar") {
+      // Only remove the toolbar if titleBar is also gone.
+      viewController?.view.window?.toolbar = nil
+      toolbar = nil
+      toolbarItemIdentifiers = []
+      toolbarItems = [:]
+      toolbarItemActions = [:]
+      toolbarMenuActions = [:]
+    }
+  }
+
+  private func resetNavigation() {
+    if let tv = tabView {
+      tv.removeFromSuperview()
+      tabView = nil
+    }
+    navigationItems = []
   }
 
   private func resetMenuBar() {
     NSApp.mainMenu = nil
     menuActions.removeAll()
   }
+
+  private func resetSidebarPanel() {
+    if let split = splitViewController, let vc = viewController, let window = vc.view.window {
+      // Remove the split view and restore the VC directly.
+      window.contentViewController = vc
+      splitViewController = nil
+      sidebarOutlineView = nil
+      sidebarScrollView = nil
+      sidebarItems = []
+
+      // Reinstall tab view if present
+      if let tv = tabView {
+        tv.removeFromSuperview()
+        installTabView(tv)
+      }
+    }
+  }
+
+  private func resetSheets() {
+    guard let window = viewController?.view.window else { return }
+    for (name, panel) in activeSheets {
+      window.endSheet(panel)
+      childWebViews.removeValue(forKey: name)
+    }
+    activeSheets.removeAll()
+  }
+
+  private func resetDrawers() {
+    guard let split = splitViewController else { return }
+    for (name, item) in activeDrawerItems {
+      split.removeSplitViewItem(item)
+      childWebViews.removeValue(forKey: name)
+    }
+    activeDrawerItems.removeAll()
+  }
+
+  private func resetAppWindows() {
+    for (name, win) in activeAppWindows {
+      if win.isSheet {
+        viewController?.view.window?.endSheet(win)
+      } else {
+        win.close()
+      }
+      childWebViews.removeValue(forKey: name)
+    }
+    activeAppWindows.removeAll()
+  }
+
+  private func resetPopovers() {
+    for (name, popover) in activePopovers {
+      popover.performClose(nil)
+      childWebViews.removeValue(forKey: name)
+    }
+    activePopovers.removeAll()
+  }
 ${sendEventMethod}
+}
+
+// ─── NSToolbarDelegate ────────────────────────────────────────────────────────
+
+extension NativiteChrome: NSToolbarDelegate {
+  func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    toolbarItemIdentifiers
+  }
+
+  func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+    toolbarItemIdentifiers
+  }
+
+  func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+    toolbarItems[itemIdentifier]
+  }
+}
+
+// ─── NSSearchFieldDelegate (toolbar search bar) ──────────────────────────────
+
+extension NativiteChrome: NSSearchFieldDelegate {
+  func controlTextDidChange(_ obj: Notification) {
+    guard let field = obj.object as? NSSearchField else { return }
+    sendEvent(name: "titleBar.searchChanged", data: ["value": field.stringValue])
+  }
+
+  func searchFieldDidStartSearching(_ sender: NSSearchField) {}
+
+  func searchFieldDidEndSearching(_ sender: NSSearchField) {
+    sendEvent(name: "titleBar.searchCancelled", data: [:])
+  }
+
+  func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+    if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+      if let field = control as? NSSearchField {
+        sendEvent(name: "titleBar.searchSubmitted", data: ["value": field.stringValue])
+      }
+      return true
+    }
+    return false
+  }
+}
+
+// ─── NSTabViewDelegate ──────────────────────────────────────────────────────
+
+extension NativiteChrome: NSTabViewDelegate {
+  func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
+    guard let id = tabViewItem?.identifier as? String else { return }
+    sendEvent(name: "navigation.itemPressed", data: ["id": id])
+  }
+}
+
+// ─── NSOutlineViewDataSource + Delegate (sidebar) ────────────────────────────
+
+extension NativiteChrome: NSOutlineViewDataSource {
+  func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+    if let node = item as? SidebarNode { return node.children.count }
+    return sidebarItems.count
+  }
+
+  func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+    if let node = item as? SidebarNode { return node.children[index] }
+    return sidebarItems[index]
+  }
+
+  func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+    guard let node = item as? SidebarNode else { return false }
+    return !node.children.isEmpty
+  }
+}
+
+extension NativiteChrome: NSOutlineViewDelegate {
+  func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+    guard let node = item as? SidebarNode else { return nil }
+    let cellId = NSUserInterfaceItemIdentifier("SidebarCell")
+    let cell: NSTableCellView
+    if let reused = outlineView.makeView(withIdentifier: cellId, owner: self) as? NSTableCellView {
+      cell = reused
+    } else {
+      cell = NSTableCellView()
+      cell.identifier = cellId
+      let imgView = NSImageView()
+      imgView.translatesAutoresizingMaskIntoConstraints = false
+      cell.addSubview(imgView)
+      cell.imageView = imgView
+      let textField = NSTextField(labelWithString: "")
+      textField.translatesAutoresizingMaskIntoConstraints = false
+      cell.addSubview(textField)
+      cell.textField = textField
+      NSLayoutConstraint.activate([
+        imgView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+        imgView.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+        imgView.widthAnchor.constraint(equalToConstant: 16),
+        imgView.heightAnchor.constraint(equalToConstant: 16),
+        textField.leadingAnchor.constraint(equalTo: imgView.trailingAnchor, constant: 6),
+        textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+        textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+      ])
+    }
+    cell.textField?.stringValue = node.label
+    if let iconName = node.icon {
+      cell.imageView?.image = NSImage(systemSymbolName: iconName, accessibilityDescription: nil)
+    } else {
+      cell.imageView?.image = nil
+    }
+    return cell
+  }
+
+  func outlineViewSelectionDidChange(_ notification: Notification) {
+    guard let outlineView = notification.object as? NSOutlineView else { return }
+    let row = outlineView.selectedRow
+    guard row >= 0, let node = outlineView.item(atRow: row) as? SidebarNode else { return }
+    sendEvent(name: "sidebarPanel.itemPressed", data: ["id": node.id])
+  }
+}
+
+// ─── NSWindowDelegate (app windows) ──────────────────────────────────────────
+
+extension NativiteChrome: NSWindowDelegate {
+  func windowWillClose(_ notification: Notification) {
+    guard let win = notification.object as? NSWindow else { return }
+    for (name, appWin) in activeAppWindows where appWin === win {
+      activeAppWindows.removeValue(forKey: name)
+      childWebViews.removeValue(forKey: name)
+      sendEvent(name: "appWindow.dismissed", data: ["name": name])
+      break
+    }
+  }
+}
+
+// ─── NSPopoverDelegate ───────────────────────────────────────────────────────
+
+extension NativiteChrome: NSPopoverDelegate {
+  func popoverDidClose(_ notification: Notification) {
+    guard let popover = notification.object as? NSPopover else { return }
+    for (name, p) in activePopovers where p === popover {
+      activePopovers.removeValue(forKey: name)
+      childWebViews.removeValue(forKey: name)
+      sendEvent(name: "popover.dismissed", data: ["name": name])
+      break
+    }
+  }
+}
+
+// ─── SidebarNode ─────────────────────────────────────────────────────────────
+// Hierarchical data model for the NSOutlineView sidebar.
+
+private class SidebarNode: NSObject {
+  let id: String
+  let label: String
+  let icon: String?
+  let badge: String?
+  var children: [SidebarNode]
+
+  init(id: String, label: String, icon: String?, badge: String?, children: [SidebarNode]) {
+    self.id = id
+    self.label = label
+    self.icon = icon
+    self.badge = badge
+    self.children = children
+  }
+
+  static func from(_ dict: [String: Any]) -> SidebarNode? {
+    guard let id = dict["id"] as? String,
+          let label = dict["label"] as? String else { return nil }
+    let icon = dict["icon"] as? String
+    let badge: String?
+    if let b = dict["badge"] as? String { badge = b }
+    else if let b = dict["badge"] as? Int { badge = String(b) }
+    else { badge = nil }
+    let childDicts = dict["children"] as? [[String: Any]] ?? []
+    let children = childDicts.compactMap { SidebarNode.from($0) }
+    return SidebarNode(id: id, label: label, icon: icon, badge: badge, children: children)
+  }
+}
+
+// ─── NativiteChildWebViewController ──────────────────────────────────────────
+// Hosts a child WKWebView for sheets, drawers, app windows, and popovers.
+// Shares the same WKWebsiteDataStore as the primary webview.
+
+private class NativiteChildWebViewController: NSViewController, WKNavigationDelegate {
+  weak var chrome: NativiteChrome?
+  weak var nativeBridge: NativiteBridge?
+  var instanceName: String = "child"
+  private(set) var webView: WKWebView!
+  private var lastLoadedURL: URL?
+  private var pendingSPARoute: String?
+
+  override func loadView() {
+    view = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 400))
+    view.wantsLayer = true
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+
+    let config = WKWebViewConfiguration()
+    config.websiteDataStore = WKWebsiteDataStore.default()
+    config.applicationNameForUserAgent = "Nativite/macos/1.0"
+    config.userContentController.addUserScript(WKUserScript(
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nk-platform','macos');",
+      injectionTime: .atDocumentStart,
+      forMainFrameOnly: false
+    ))
+    if let nativeBridge {
+      config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")
+    }
+
+    webView = WKWebView(frame: view.bounds, configuration: config)
+    webView.autoresizingMask = [.width, .height]
+    webView.navigationDelegate = self
+    #if DEBUG
+    if #available(macOS 13.3, *) {
+      webView.isInspectable = true
+    }
+    #endif
+    view.addSubview(webView)
+  }
+
+  deinit {
+    webView?.configuration.userContentController.removeScriptMessageHandler(forName: "nativite")
+  }
+
+  func loadURL(_ rawURL: String, relativeTo baseURL: URL?) {
+    loadViewIfNeeded()
+    guard let resolved = resolveURL(rawURL, relativeTo: baseURL) else { return }
+    let absoluteURL = resolved.absoluteURL
+    let nextSPARoute = pendingFileSPARoute(for: rawURL, resolvedURL: absoluteURL)
+    if absoluteURL == lastLoadedURL {
+      if let route = nextSPARoute { applySPARoute(route) }
+      return
+    }
+    pendingSPARoute = nextSPARoute
+    lastLoadedURL = absoluteURL
+    if absoluteURL.isFileURL {
+      let readAccess = baseURL?.deletingLastPathComponent() ?? absoluteURL.deletingLastPathComponent()
+      webView.loadFileURL(absoluteURL, allowingReadAccessTo: readAccess)
+    } else {
+      webView.load(URLRequest(url: absoluteURL))
+    }
+  }
+
+  func receiveMessage(from sender: String, payload: Any?) {
+    loadViewIfNeeded()
+    let data: [String: Any] = ["from": sender, "payload": payload ?? NSNull()]
+    let message: [String: Any] = ["id": NSNull(), "type": "event", "event": "message", "data": data]
+    guard JSONSerialization.isValidJSONObject(message),
+      let msgData = try? JSONSerialization.data(withJSONObject: message),
+      let json = String(data: msgData, encoding: .utf8)
+    else { return }
+    webView.evaluateJavaScript("window.nativiteReceive(\\(json))", completionHandler: nil)
+  }
+
+  private func resolveURL(_ rawURL: String, relativeTo baseURL: URL?) -> URL? {
+    if let absoluteURL = URL(string: rawURL), absoluteURL.scheme != nil { return absoluteURL }
+    let base = baseURL ?? fallbackBaseURL()
+    if rawURL.hasPrefix("/"), let base {
+      if base.scheme?.lowercased() == "file" {
+        if let bundled = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist") {
+          return bundled
+        }
+        return base
+      }
+      guard var components = URLComponents(url: base, resolvingAgainstBaseURL: true) else { return nil }
+      if let routeComponents = URLComponents(string: rawURL) {
+        components.path = routeComponents.path
+        components.query = routeComponents.query
+        components.fragment = routeComponents.fragment
+      }
+      return components.url
+    }
+    if let base { return URL(string: rawURL, relativeTo: base) }
+    return nil
+  }
+
+  private func fallbackBaseURL() -> URL? {
+    #if DEBUG
+    if let raw = UserDefaults.standard.string(forKey: "nativite.dev.url"),
+       let url = URL(string: raw) { return url }
+    #endif
+    return Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist")
+  }
+
+  private func pendingFileSPARoute(for rawPath: String, resolvedURL: URL) -> String? {
+    guard resolvedURL.isFileURL, rawPath.hasPrefix("/") else { return nil }
+    guard let c = URLComponents(string: rawPath) else { return nil }
+    if c.query == nil && c.fragment == nil && c.path.contains(".") { return nil }
+    var route = c.path.isEmpty ? "/" : c.path
+    if let q = c.query, !q.isEmpty { route += "?\\(q)" }
+    if let f = c.fragment, !f.isEmpty { route += "#\\(f)" }
+    return route
+  }
+
+  private func applySPARoute(_ route: String) {
+    let payload: [String: Any] = ["route": route]
+    guard let data = try? JSONSerialization.data(withJSONObject: payload),
+          let json = String(data: data, encoding: .utf8) else { return }
+    let js = "(() => { const p = \\(json); try { window.history.replaceState(window.history.state ?? null, '', p.route); window.dispatchEvent(new PopStateEvent('popstate')); } catch(_){} })();"
+    webView.evaluateJavaScript(js, completionHandler: nil)
+  }
+
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    guard let route = pendingSPARoute else { return }
+    pendingSPARoute = nil
+    applySPARoute(route)
+  }
 }
 
 // ─── NSColor hex extension ────────────────────────────────────────────────────

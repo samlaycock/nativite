@@ -92,69 +92,41 @@ const UUID = {
   targetReleaseConfig: "EE0000000000000000000004",
   projectConfigList: "FF0000000000000000000001",
   targetConfigList: "FF0000000000000000000002",
-  // ── macOS-specific UUIDs (only used when platforms.macos is set) ───────────
-  macAppTarget: "222222222222222222222223",
-  macAppProduct: "666666666666666666666667",
-  macInfoPlistFile: "AA000000000000000000000B",
-  macAppDelegateBuildFile: "BB000000000000000000000A",
-  macViewControllerBuildFile: "BB000000000000000000000B",
-  macBridgeBuildFile: "BB000000000000000000000C",
-  macOtaUpdaterBuildFile: "BB000000000000000000000D",
-  macAssetsBuildFile: "BB000000000000000000000E",
-  macChromeBuildFile: "BB000000000000000000000F",
-  macVarsBuildFile: "BB0000000000000000000010",
-  macKeyboardBuildFile: "BB0000000000000000000011",
-  macPluginRegistrantBuildFile: "BB0000000000000000000013",
-  macWebKitBuildFile: "CC0000000000000000000003",
-  macSourcesBuildPhase: "DD0000000000000000000005",
-  macFrameworksBuildPhase: "DD0000000000000000000006",
-  macResourcesBuildPhase: "DD0000000000000000000007",
-  macCopyDistBuildPhase: "DD0000000000000000000008",
-  macTargetDebugConfig: "EE0000000000000000000005",
-  macTargetReleaseConfig: "EE0000000000000000000006",
-  macTargetConfigList: "FF0000000000000000000003",
 };
 
 export function pbxprojTemplate(
   config: NativiteConfig,
   resolvedPlugins: ResolvedNativitePlugins,
   projectRoot: string,
+  targetPlatform: "ios" | "macos",
 ): string {
   const appName = config.app.name;
-  const iosConfig = resolveConfigForPlatform(config, "ios");
-  const macosConfig = resolveConfigForPlatform(config, "macos");
-  const iosPlatformEntry = (config.platforms ?? []).find(
-    (platform) => platform.platform === "ios",
+  const platformConfig = resolveConfigForPlatform(config, targetPlatform);
+  const platformEntry = (config.platforms ?? []).find(
+    (platform) => platform.platform === targetPlatform,
   ) as { minimumVersion?: string } | undefined;
-  const macosPlatformEntry = (config.platforms ?? []).find(
-    (platform) => platform.platform === "macos",
-  ) as { minimumVersion?: string } | undefined;
-  const iosAppId = iosConfig.app.bundleId;
-  const macosAppId = macosConfig.app.bundleId;
+  const appId = platformConfig.app.bundleId;
   const hasOta = Boolean(config.updates);
-  const hasSplash = Boolean(config.splash);
-  const hasMacos = macosPlatformEntry !== undefined;
-  const iosDeploymentTarget = iosPlatformEntry?.minimumVersion ?? "17.0";
-  const macosDeploymentTarget = macosPlatformEntry?.minimumVersion ?? "14.0";
-  const iosMarketingVersion = iosConfig.app.version;
-  const macosMarketingVersion = macosConfig.app.version;
-  const iosBuildNumber = iosConfig.app.buildNumber;
-  const macosBuildNumber = macosConfig.app.buildNumber;
-  const iosTeamId = iosConfig.signing?.ios?.teamId;
-  const macosTeamId = macosConfig.signing?.ios?.teamId;
+  const hasSplash = Boolean(config.splash) && targetPlatform === "ios";
+  const marketingVersion = platformConfig.app.version;
+  const buildNumber = platformConfig.app.buildNumber;
+
+  const isMacos = targetPlatform === "macos";
+
+  const deploymentTarget = isMacos
+    ? (platformEntry?.minimumVersion ?? "14.0")
+    : (platformEntry?.minimumVersion ?? "17.0");
+
+  const teamId = isMacos
+    ? (platformConfig.signing?.macos?.teamId ?? platformConfig.signing?.ios?.teamId)
+    : platformConfig.signing?.ios?.teamId;
 
   // DEVELOPMENT_TEAM is only set when signing config is provided
-  const iosDevTeamSetting = iosTeamId ? `\n\t\t\t\tDEVELOPMENT_TEAM = ${iosTeamId};` : "";
-  const macosDevTeamSetting = macosTeamId ? `\n\t\t\t\tDEVELOPMENT_TEAM = ${macosTeamId};` : "";
+  const devTeamSetting = teamId ? `\n\t\t\t\tDEVELOPMENT_TEAM = ${teamId};` : "";
 
-  const iosPluginSources = resolvedPlugins.platforms.ios.sources;
-  const macosPluginSources = resolvedPlugins.platforms.macos.sources;
-  const iosPluginResources = resolvedPlugins.platforms.ios.resources;
-  const macosPluginResources = resolvedPlugins.platforms.macos.resources;
-  const iosFrameworkDeps = resolvedPlugins.platforms.ios.dependencies.filter(
-    (dep) => dep.name !== "WebKit",
-  );
-  const macosFrameworkDeps = resolvedPlugins.platforms.macos.dependencies.filter(
+  const pluginSources = resolvedPlugins.platforms[targetPlatform].sources;
+  const pluginResources = resolvedPlugins.platforms[targetPlatform].resources;
+  const frameworkDeps = resolvedPlugins.platforms[targetPlatform].dependencies.filter(
     (dep) => dep.name !== "WebKit",
   );
 
@@ -186,59 +158,34 @@ export function pbxprojTemplate(
     return ref;
   }
 
-  const pluginSourceBuildIds = {
-    ios: iosPluginSources.map((file) =>
-      deterministicUuid(`plugin:ios:source-build:${file.absolutePath}`),
-    ),
-    macos: macosPluginSources.map((file) =>
-      deterministicUuid(`plugin:macos:source-build:${file.absolutePath}`),
-    ),
-  };
+  const pluginSourceBuildIds = pluginSources.map((file) =>
+    deterministicUuid(`plugin:${targetPlatform}:source-build:${file.absolutePath}`),
+  );
 
-  const pluginResourceBuildIds = {
-    ios: iosPluginResources.map((file) =>
-      deterministicUuid(`plugin:ios:resource-build:${file.absolutePath}`),
-    ),
-    macos: macosPluginResources.map((file) =>
-      deterministicUuid(`plugin:macos:resource-build:${file.absolutePath}`),
-    ),
-  };
+  const pluginResourceBuildIds = pluginResources.map((file) =>
+    deterministicUuid(`plugin:${targetPlatform}:resource-build:${file.absolutePath}`),
+  );
 
   type FrameworkRef = {
     fileRef: string;
-    iosBuildFile?: string;
-    macosBuildFile?: string;
+    buildFile: string;
     dep: ResolvedNativiteFrameworkDependency;
   };
 
   const frameworkRefsByName = new Map<string, FrameworkRef>();
-  function ensureFrameworkRef(dep: ResolvedNativiteFrameworkDependency): FrameworkRef {
-    const existing = frameworkRefsByName.get(dep.name);
-    if (existing) return existing;
-    const frameworkRef: FrameworkRef = {
-      fileRef: deterministicUuid(`plugin:framework:file:${dep.name}`),
-      dep,
-    };
-    frameworkRefsByName.set(dep.name, frameworkRef);
-    return frameworkRef;
+  for (const dep of frameworkDeps) {
+    if (!frameworkRefsByName.has(dep.name)) {
+      frameworkRefsByName.set(dep.name, {
+        fileRef: deterministicUuid(`plugin:framework:file:${dep.name}`),
+        buildFile: deterministicUuid(
+          `plugin:framework:${targetPlatform}-build:${dep.name}:${dep.weak}`,
+        ),
+        dep,
+      });
+    }
   }
 
-  for (const dep of iosFrameworkDeps) {
-    const framework = ensureFrameworkRef(dep);
-    framework.iosBuildFile = deterministicUuid(
-      `plugin:framework:ios-build:${dep.name}:${dep.weak}`,
-    );
-    if (!dep.weak) framework.dep.weak = false;
-  }
-  for (const dep of macosFrameworkDeps) {
-    const framework = ensureFrameworkRef(dep);
-    framework.macosBuildFile = deterministicUuid(
-      `plugin:framework:macos-build:${dep.name}:${dep.weak}`,
-    );
-    if (!dep.weak) framework.dep.weak = false;
-  }
-
-  // ── iOS PBXBuildFile entries ──────────────────────────────────────────────
+  // ── PBXBuildFile entries ──────────────────────────────────────────────────
 
   const sourcesBuildFiles = [
     `\t\t${UUID.appDelegateBuildFile} /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.appDelegateFile} /* AppDelegate.swift */; };`,
@@ -253,39 +200,12 @@ export function pbxprojTemplate(
           `\t\t${UUID.otaUpdaterBuildFile} /* OTAUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.otaUpdaterFile} /* OTAUpdater.swift */; };`,
         ]
       : []),
-    ...iosPluginSources.map((file, index) => {
+    ...pluginSources.map((file, index) => {
       const fileRef = ensurePluginFileRef(file, "source");
-      const buildId = pluginSourceBuildIds.ios[index];
+      const buildId = pluginSourceBuildIds[index];
       return `\t\t${buildId} /* ${fileRef.displayName} in Sources */ = {isa = PBXBuildFile; fileRef = ${fileRef.id} /* ${fileRef.displayName} */; };`;
     }),
   ].join("\n");
-
-  // ── macOS PBXBuildFile entries (same file refs, different build file UUIDs) ─
-  // Each target needs its own PBXBuildFile entries referencing the shared
-  // PBXFileReference. NativiteKeyboard is included (the file itself has
-  // #if os(iOS) guards so it compiles as empty on macOS).
-
-  const macSourcesBuildFiles = hasMacos
-    ? [
-        `\t\t${UUID.macAppDelegateBuildFile} /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.appDelegateFile} /* AppDelegate.swift */; };`,
-        `\t\t${UUID.macViewControllerBuildFile} /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.viewControllerFile} /* ViewController.swift */; };`,
-        `\t\t${UUID.macBridgeBuildFile} /* NativiteBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.bridgeFile} /* NativiteBridge.swift */; };`,
-        `\t\t${UUID.macPluginRegistrantBuildFile} /* NativitePluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.pluginRegistrantFile} /* NativitePluginRegistrant.swift */; };`,
-        `\t\t${UUID.macChromeBuildFile} /* NativiteChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.chromeFile} /* NativiteChrome.swift */; };`,
-        `\t\t${UUID.macVarsBuildFile} /* NativiteVars.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.varsFile} /* NativiteVars.swift */; };`,
-        `\t\t${UUID.macKeyboardBuildFile} /* NativiteKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.keyboardFile} /* NativiteKeyboard.swift */; };`,
-        ...(hasOta
-          ? [
-              `\t\t${UUID.macOtaUpdaterBuildFile} /* OTAUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.otaUpdaterFile} /* OTAUpdater.swift */; };`,
-            ]
-          : []),
-        ...macosPluginSources.map((file, index) => {
-          const fileRef = ensurePluginFileRef(file, "source");
-          const buildId = pluginSourceBuildIds.macos[index];
-          return `\t\t${buildId} /* ${fileRef.displayName} in Sources */ = {isa = PBXBuildFile; fileRef = ${fileRef.id} /* ${fileRef.displayName} */; };`;
-        }),
-      ].join("\n")
-    : "";
 
   // ── PBXFileReference entries ──────────────────────────────────────────────
 
@@ -320,14 +240,13 @@ export function pbxprojTemplate(
     ...(hasOta ? [UUID.otaUpdaterFile] : []),
     ...(hasSplash ? [UUID.launchScreenFile] : []),
     UUID.infoPlistFile,
-    ...(hasMacos ? [UUID.macInfoPlistFile] : []),
     UUID.assetsFile,
     ...[...pluginFileRefsByPath.values()].map((ref) => ref.id),
   ]
     .map((id) => `\t\t\t\t${id},`)
     .join("\n");
 
-  // ── iOS Sources build phase files ─────────────────────────────────────────
+  // ── Sources build phase files ─────────────────────────────────────────────
 
   const sourcesPhaseFiles = [
     UUID.appDelegateBuildFile,
@@ -338,80 +257,38 @@ export function pbxprojTemplate(
     UUID.varsBuildFile,
     UUID.keyboardBuildFile,
     ...(hasOta ? [UUID.otaUpdaterBuildFile] : []),
-    ...pluginSourceBuildIds.ios,
+    ...pluginSourceBuildIds,
   ]
     .map((id) => `\t\t\t\t${id} /* .swift in Sources */,`)
     .join("\n");
 
-  // ── macOS Sources build phase files ───────────────────────────────────────
-
-  const macSourcesPhaseFiles = hasMacos
-    ? [
-        UUID.macAppDelegateBuildFile,
-        UUID.macViewControllerBuildFile,
-        UUID.macBridgeBuildFile,
-        UUID.macPluginRegistrantBuildFile,
-        UUID.macChromeBuildFile,
-        UUID.macVarsBuildFile,
-        UUID.macKeyboardBuildFile,
-        ...(hasOta ? [UUID.macOtaUpdaterBuildFile] : []),
-        ...pluginSourceBuildIds.macos,
-      ]
-        .map((id) => `\t\t\t\t${id} /* .swift in Sources */,`)
-        .join("\n")
-    : "";
-
   // ── Products group children ───────────────────────────────────────────────
 
-  const productsChildren = [
-    `\t\t\t\t${UUID.appProduct} /* ${appName}.app */,`,
-    ...(hasMacos ? [`\t\t\t\t${UUID.macAppProduct} /* ${appName}.app */,`] : []),
-  ].join("\n");
+  const productsChildren = `\t\t\t\t${UUID.appProduct} /* ${appName}.app */,`;
 
   // ── Project-level build settings ──────────────────────────────────────────
-  // When both platforms exist, SDKROOT and deployment target move to the
-  // target level so each target can set its own SDK.
 
-  const projectSdkSettings = hasMacos
-    ? ""
-    : `\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = ${iosDeploymentTarget};\n\t\t\t\tSDKROOT = iphoneos;\n`;
-
-  const iosTargetSdkSettings = `\n\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = ${iosDeploymentTarget};\n\t\t\t\tSDKROOT = iphoneos;`;
+  const projectSdkSettings = isMacos
+    ? `\t\t\t\tMACOSX_DEPLOYMENT_TARGET = ${deploymentTarget};\n\t\t\t\tSDKROOT = macosx;\n`
+    : `\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = ${deploymentTarget};\n\t\t\t\tSDKROOT = iphoneos;\n`;
 
   // ── Target attributes ─────────────────────────────────────────────────────
 
-  const targetAttributes = [
-    `\t\t\t\t\t${UUID.appTarget} = {\n\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;\n\t\t\t\t\t};`,
-    ...(hasMacos
-      ? [
-          `\t\t\t\t\t${UUID.macAppTarget} = {\n\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;\n\t\t\t\t\t};`,
-        ]
-      : []),
-  ].join("\n");
+  const targetAttributes = `\t\t\t\t\t${UUID.appTarget} = {\n\t\t\t\t\t\tCreatedOnToolsVersion = 16.0;\n\t\t\t\t\t};`;
 
   // ── Targets array ─────────────────────────────────────────────────────────
 
-  const targetsArray = [
-    `\t\t\t\t${UUID.appTarget} /* ${appName} */,`,
-    ...(hasMacos ? [`\t\t\t\t${UUID.macAppTarget} /* ${appName}-macOS */,`] : []),
-  ].join("\n");
+  const targetsArray = `\t\t\t\t${UUID.appTarget} /* ${appName} */,`;
 
   // ── Copy Web Bundle shell script ──────────────────────────────────────────
 
-  const copyIosDistScript =
-    '# Copy the iOS web bundle into the app bundle\\nDIST_SRC=\\"$SRCROOT/../../../dist-ios\\"\\nDIST_DEST=\\"$CODESIGNING_FOLDER_PATH/dist\\"\\nif [ ! -d \\"$DIST_SRC\\" ]; then\\n  if [ \\"$CONFIGURATION\\" = \\"Release\\" ]; then\\n    echo \\"error: Missing web bundle at $DIST_SRC. Run: npx nativite build --platform ios\\"\\n    exit 1\\n  fi\\n  echo \\"warning: Missing $DIST_SRC (skipping copy in $CONFIGURATION build)\\"\\n  exit 0\\nfi\\nrm -rf \\"$DIST_DEST\\"\\ncp -R \\"$DIST_SRC\\" \\"$DIST_DEST\\"\\nDEV_JSON_SRC=\\"$SRCROOT/../dev.json\\"\\nDEV_JSON_DEST=\\"$CODESIGNING_FOLDER_PATH/dev.json\\"\\nif [ -f \\"$DEV_JSON_SRC\\" ]; then\\n  cp \\"$DEV_JSON_SRC\\" \\"$DEV_JSON_DEST\\"\\nfi\\n';
-  const copyMacosDistScript =
-    '# Copy the macOS web bundle into the app bundle\\nDIST_SRC=\\"$SRCROOT/../../../dist-macos\\"\\nDIST_DEST=\\"$CODESIGNING_FOLDER_PATH/dist\\"\\nif [ ! -d \\"$DIST_SRC\\" ]; then\\n  if [ \\"$CONFIGURATION\\" = \\"Release\\" ]; then\\n    echo \\"error: Missing web bundle at $DIST_SRC. Run: npx nativite build --platform macos\\"\\n    exit 1\\n  fi\\n  echo \\"warning: Missing $DIST_SRC (skipping copy in $CONFIGURATION build)\\"\\n  exit 0\\nfi\\nrm -rf \\"$DIST_DEST\\"\\ncp -R \\"$DIST_SRC\\" \\"$DIST_DEST\\"\\nDEV_JSON_SRC=\\"$SRCROOT/../dev.json\\"\\nDEV_JSON_DEST=\\"$CODESIGNING_FOLDER_PATH/dev.json\\"\\nif [ -f \\"$DEV_JSON_SRC\\" ]; then\\n  cp \\"$DEV_JSON_SRC\\" \\"$DEV_JSON_DEST\\"\\nfi\\n';
+  const distDir = isMacos ? "dist-macos" : "dist-ios";
+  const platformLabel = isMacos ? "macOS" : "iOS";
+  const copyDistScript = `# Copy the ${platformLabel} web bundle into the app bundle\\nDIST_SRC=\\"$SRCROOT/../../../${distDir}\\"\\nDIST_DEST=\\"$CODESIGNING_FOLDER_PATH/dist\\"\\nif [ ! -d \\"$DIST_SRC\\" ]; then\\n  if [ \\"$CONFIGURATION\\" = \\"Release\\" ]; then\\n    echo \\"error: Missing web bundle at $DIST_SRC. Run: npx nativite build --platform ${targetPlatform}\\"\\n    exit 1\\n  fi\\n  echo \\"warning: Missing $DIST_SRC (skipping copy in $CONFIGURATION build)\\"\\n  exit 0\\nfi\\nrm -rf \\"$DIST_DEST\\"\\ncp -R \\"$DIST_SRC\\" \\"$DIST_DEST\\"\\nDEV_JSON_SRC=\\"$SRCROOT/../dev.json\\"\\nDEV_JSON_DEST=\\"$CODESIGNING_FOLDER_PATH/dev.json\\"\\nif [ -f \\"$DEV_JSON_SRC\\" ]; then\\n  cp \\"$DEV_JSON_SRC\\" \\"$DEV_JSON_DEST\\"\\nfi\\n`;
 
-  const iosPluginResourceBuildFiles = iosPluginResources.map((file, index) => {
+  const pluginResourceBuildFiles = pluginResources.map((file, index) => {
     const fileRef = ensurePluginFileRef(file, "resource");
-    const buildId = pluginResourceBuildIds.ios[index];
-    return `\t\t${buildId} /* ${fileRef.displayName} in Resources */ = {isa = PBXBuildFile; fileRef = ${fileRef.id} /* ${fileRef.displayName} */; };`;
-  });
-
-  const macosPluginResourceBuildFiles = macosPluginResources.map((file, index) => {
-    const fileRef = ensurePluginFileRef(file, "resource");
-    const buildId = pluginResourceBuildIds.macos[index];
+    const buildId = pluginResourceBuildIds[index];
     return `\t\t${buildId} /* ${fileRef.displayName} in Resources */ = {isa = PBXBuildFile; fileRef = ${fileRef.id} /* ${fileRef.displayName} */; };`;
   });
 
@@ -420,60 +297,73 @@ export function pbxprojTemplate(
     return `\t\t${framework.fileRef} /* ${frameworkName} */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ${quotedPbx(frameworkName)}; path = ${quotedPbx(`System/Library/Frameworks/${frameworkName}`)}; sourceTree = SDKROOT; };`;
   });
 
-  const iosFrameworkBuildFiles = [...frameworkRefsByName.values()]
-    .filter((framework) => framework.iosBuildFile !== undefined)
-    .map((framework) => {
-      const frameworkName = `${framework.dep.name}.framework`;
-      const settings = framework.dep.weak ? " settings = {ATTRIBUTES = (Weak, ); };" : "";
-      return `\t\t${framework.iosBuildFile!} /* ${frameworkName} in Frameworks */ = {isa = PBXBuildFile; fileRef = ${framework.fileRef} /* ${frameworkName} */;${settings} };`;
-    });
+  const frameworkBuildFiles = [...frameworkRefsByName.values()].map((framework) => {
+    const frameworkName = `${framework.dep.name}.framework`;
+    const settings = framework.dep.weak ? " settings = {ATTRIBUTES = (Weak, ); };" : "";
+    return `\t\t${framework.buildFile} /* ${frameworkName} in Frameworks */ = {isa = PBXBuildFile; fileRef = ${framework.fileRef} /* ${frameworkName} */;${settings} };`;
+  });
 
-  const macosFrameworkBuildFiles = [...frameworkRefsByName.values()]
-    .filter((framework) => framework.macosBuildFile !== undefined)
-    .map((framework) => {
-      const frameworkName = `${framework.dep.name}.framework`;
-      const settings = framework.dep.weak ? " settings = {ATTRIBUTES = (Weak, ); };" : "";
-      return `\t\t${framework.macosBuildFile!} /* ${frameworkName} in Frameworks */ = {isa = PBXBuildFile; fileRef = ${framework.fileRef} /* ${frameworkName} */;${settings} };`;
-    });
-
-  const iosFrameworkPhaseFiles = [
+  const frameworkPhaseFiles = [
     `\t\t\t\t${UUID.webKitBuildFile} /* WebKit.framework in Frameworks */,`,
-    ...[...frameworkRefsByName.values()]
-      .filter((framework) => framework.iosBuildFile !== undefined)
-      .map((framework) => {
-        const frameworkName = `${framework.dep.name}.framework`;
-        return `\t\t\t\t${framework.iosBuildFile!} /* ${frameworkName} in Frameworks */,`;
-      }),
+    ...[...frameworkRefsByName.values()].map((framework) => {
+      const frameworkName = `${framework.dep.name}.framework`;
+      return `\t\t\t\t${framework.buildFile} /* ${frameworkName} in Frameworks */,`;
+    }),
   ].join("\n");
 
-  const macosFrameworkPhaseFiles = [
-    `\t\t\t\t${UUID.macWebKitBuildFile} /* WebKit.framework in Frameworks */,`,
-    ...[...frameworkRefsByName.values()]
-      .filter((framework) => framework.macosBuildFile !== undefined)
-      .map((framework) => {
-        const frameworkName = `${framework.dep.name}.framework`;
-        return `\t\t\t\t${framework.macosBuildFile!} /* ${frameworkName} in Frameworks */,`;
-      }),
-  ].join("\n");
-
-  const iosResourcePhaseFiles = [
+  const resourcePhaseFiles = [
     `\t\t\t\t${UUID.assetsBuildFile} /* Assets.xcassets in Resources */,`,
     ...(hasSplash
       ? [`\t\t\t\t${UUID.launchScreenBuildFile} /* LaunchScreen.storyboard in Resources */,`]
       : []),
-    ...pluginResourceBuildIds.ios.map((id, index) => {
-      const fileRef = ensurePluginFileRef(iosPluginResources[index]!, "resource");
+    ...pluginResourceBuildIds.map((id, index) => {
+      const fileRef = ensurePluginFileRef(pluginResources[index]!, "resource");
       return `\t\t\t\t${id} /* ${fileRef.displayName} in Resources */,`;
     }),
   ].join("\n");
 
-  const macosResourcePhaseFiles = [
-    `\t\t\t\t${UUID.macAssetsBuildFile} /* Assets.xcassets in Resources */,`,
-    ...pluginResourceBuildIds.macos.map((id, index) => {
-      const fileRef = ensurePluginFileRef(macosPluginResources[index]!, "resource");
-      return `\t\t\t\t${id} /* ${fileRef.displayName} in Resources */,`;
-    }),
-  ].join("\n");
+  // ── Target-level build settings ──────────────────────────────────────────
+
+  const targetPlatformSettings = isMacos
+    ? `\t\t\t\tMACOSX_DEPLOYMENT_TARGET = ${deploymentTarget};
+\t\t\t\tSDKROOT = macosx;
+\t\t\t\tSUPPORTED_PLATFORMS = macosx;`
+    : `\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = ${deploymentTarget};
+\t\t\t\tSDKROOT = iphoneos;
+\t\t\t\tSUPPORTED_PLATFORMS = "iphoneos iphonesimulator";`;
+
+  const targetDeviceFamilySetting = isMacos ? "" : `\n\t\t\t\tTARGETED_DEVICE_FAMILY = "1,2";`;
+
+  const targetBuildSettings = `\t\t${UUID.targetDebugConfig} /* Debug */ = {
+\t\t\tisa = XCBuildConfiguration;
+\t\t\tbuildSettings = {
+\t\t\t\tCURRENT_PROJECT_VERSION = ${buildNumber};${devTeamSetting}
+\t\t\t\tGENERATE_INFOPLIST_FILE = NO;
+\t\t\t\tINFOPLIST_FILE = ${appName}/Info.plist;
+${targetPlatformSettings}
+\t\t\t\tMARKETING_VERSION = ${marketingVersion};
+\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = ${appId};
+\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
+\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
+\t\t\t\tSWIFT_VERSION = 5.0;${targetDeviceFamilySetting}
+\t\t\t};
+\t\t\tname = Debug;
+\t\t};
+\t\t${UUID.targetReleaseConfig} /* Release */ = {
+\t\t\tisa = XCBuildConfiguration;
+\t\t\tbuildSettings = {
+\t\t\t\tCURRENT_PROJECT_VERSION = ${buildNumber};${devTeamSetting}
+\t\t\t\tGENERATE_INFOPLIST_FILE = NO;
+\t\t\t\tINFOPLIST_FILE = ${appName}/Info.plist;
+${targetPlatformSettings}
+\t\t\t\tMARKETING_VERSION = ${marketingVersion};
+\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = ${appId};
+\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
+\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
+\t\t\t\tSWIFT_VERSION = 5.0;${targetDeviceFamilySetting}
+\t\t\t};
+\t\t\tname = Release;
+\t\t};`;
 
   // ── Assemble pbxproj ──────────────────────────────────────────────────────
 
@@ -489,18 +379,15 @@ export function pbxprojTemplate(
 ${sourcesBuildFiles}
 \t\t${UUID.assetsBuildFile} /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ${UUID.assetsFile} /* Assets.xcassets */; };
 ${hasSplash ? `\t\t${UUID.launchScreenBuildFile} /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = ${UUID.launchScreenFile} /* LaunchScreen.storyboard */; };` : ""}
-\n${iosPluginResourceBuildFiles.join("\n")}
+\n${pluginResourceBuildFiles.join("\n")}
 \t\t${UUID.webKitBuildFile} /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.webKitFileRef} /* WebKit.framework */; };
-${iosFrameworkBuildFiles.length > 0 ? `\n${iosFrameworkBuildFiles.join("\n")}` : ""}
-${hasMacos ? `${macSourcesBuildFiles}\n\t\t${UUID.macAssetsBuildFile} /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ${UUID.assetsFile} /* Assets.xcassets */; };\n${macosPluginResourceBuildFiles.join("\n")}\n\t\t${UUID.macWebKitBuildFile} /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.webKitFileRef} /* WebKit.framework */; };${macosFrameworkBuildFiles.length > 0 ? `\n${macosFrameworkBuildFiles.join("\n")}` : ""}` : ""}
+${frameworkBuildFiles.length > 0 ? `\n${frameworkBuildFiles.join("\n")}` : ""}
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 \t\t${UUID.appProduct} /* ${appName}.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "${appName}.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-${hasMacos ? `\t\t${UUID.macAppProduct} /* ${appName}.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "${appName}.app"; sourceTree = BUILT_PRODUCTS_DIR; };` : ""}
 ${sourceFileRefs}
 \t\t${UUID.infoPlistFile} /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-${hasMacos ? `\t\t${UUID.macInfoPlistFile} /* Info-macOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-macOS.plist"; sourceTree = "<group>"; };` : ""}
 \t\t${UUID.assetsFile} /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 ${hasSplash ? `\t\t${UUID.launchScreenFile} /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };` : ""}
 \t\t${UUID.webKitFileRef} /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
@@ -512,22 +399,10 @@ ${frameworkFileRefs.length > 0 ? frameworkFileRefs.join("\n") : ""}
 \t\t\tisa = PBXFrameworksBuildPhase;
 \t\t\tbuildActionMask = 2147483647;
 \t\t\tfiles = (
-${iosFrameworkPhaseFiles}
+${frameworkPhaseFiles}
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t};
-${
-  hasMacos
-    ? `\t\t${UUID.macFrameworksBuildPhase} /* Frameworks */ = {
-\t\t\tisa = PBXFrameworksBuildPhase;
-\t\t\tbuildActionMask = 2147483647;
-\t\t\tfiles = (
-${macosFrameworkPhaseFiles}
-\t\t\t);
-\t\t\trunOnlyForDeploymentPostprocessing = 0;
-\t\t};`
-    : ""
-}
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -576,28 +451,6 @@ ${sourcesGroupChildren}
 \t\t\tproductReference = ${UUID.appProduct} /* ${appName}.app */;
 \t\t\tproductType = "com.apple.product-type.application";
 \t\t};
-${
-  hasMacos
-    ? `\t\t${UUID.macAppTarget} /* ${appName}-macOS */ = {
-\t\t\tisa = PBXNativeTarget;
-\t\t\tbuildConfigurationList = ${UUID.macTargetConfigList} /* Build configuration list for PBXNativeTarget "${appName}-macOS" */;
-\t\t\tbuildPhases = (
-\t\t\t\t${UUID.macSourcesBuildPhase} /* Sources */,
-\t\t\t\t${UUID.macFrameworksBuildPhase} /* Frameworks */,
-\t\t\t\t${UUID.macResourcesBuildPhase} /* Resources */,
-\t\t\t\t${UUID.macCopyDistBuildPhase} /* Copy Web Bundle */,
-\t\t\t);
-\t\t\tbuildRules = (
-\t\t\t);
-\t\t\tdependencies = (
-\t\t\t);
-\t\t\tname = "${appName}-macOS";
-\t\t\tproductName = "${appName}";
-\t\t\tproductReference = ${UUID.macAppProduct} /* ${appName}.app */;
-\t\t\tproductType = "com.apple.product-type.application";
-\t\t};`
-    : ""
-}
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -634,22 +487,10 @@ ${targetsArray}
 \t\t\tisa = PBXResourcesBuildPhase;
 \t\t\tbuildActionMask = 2147483647;
 \t\t\tfiles = (
-${iosResourcePhaseFiles}
+${resourcePhaseFiles}
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t};
-${
-  hasMacos
-    ? `\t\t${UUID.macResourcesBuildPhase} /* Resources */ = {
-\t\t\tisa = PBXResourcesBuildPhase;
-\t\t\tbuildActionMask = 2147483647;
-\t\t\tfiles = (
-${macosResourcePhaseFiles}
-\t\t\t);
-\t\t\trunOnlyForDeploymentPostprocessing = 0;
-\t\t};`
-    : ""
-}
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -669,30 +510,8 @@ ${macosResourcePhaseFiles}
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t\tshellPath = /bin/sh;
-\t\t\tshellScript = "${copyIosDistScript}";
+\t\t\tshellScript = "${copyDistScript}";
 \t\t};
-${
-  hasMacos
-    ? `\t\t${UUID.macCopyDistBuildPhase} /* Copy Web Bundle */ = {
-\t\t\tisa = PBXShellScriptBuildPhase;
-\t\t\tbuildActionMask = 2147483647;
-\t\t\tfiles = (
-\t\t\t);
-\t\t\tinputFileListPaths = (
-\t\t\t);
-\t\t\tinputPaths = (
-\t\t\t);
-\t\t\tname = "Copy Web Bundle";
-\t\t\toutputFileListPaths = (
-\t\t\t);
-\t\t\toutputPaths = (
-\t\t\t);
-\t\t\trunOnlyForDeploymentPostprocessing = 0;
-\t\t\tshellPath = /bin/sh;
-\t\t\tshellScript = "${copyMacosDistScript}";
-\t\t};`
-    : ""
-}
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -704,18 +523,6 @@ ${sourcesPhaseFiles}
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t};
-${
-  hasMacos
-    ? `\t\t${UUID.macSourcesBuildPhase} /* Sources */ = {
-\t\t\tisa = PBXSourcesBuildPhase;
-\t\t\tbuildActionMask = 2147483647;
-\t\t\tfiles = (
-${macSourcesPhaseFiles}
-\t\t\t);
-\t\t\trunOnlyForDeploymentPostprocessing = 0;
-\t\t};`
-    : ""
-}
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -766,76 +573,7 @@ ${projectSdkSettings}\t\t\t\tMTL_FAST_MATH = YES;
 \t\t\t};
 \t\t\tname = Release;
 \t\t};
-\t\t${UUID.targetDebugConfig} /* Debug */ = {
-\t\t\tisa = XCBuildConfiguration;
-\t\t\tbuildSettings = {
-\t\t\t\tCURRENT_PROJECT_VERSION = ${iosBuildNumber};${iosDevTeamSetting}
-\t\t\t\tGENERATE_INFOPLIST_FILE = NO;
-\t\t\t\tINFOPLIST_FILE = ${appName}/Info.plist;${iosTargetSdkSettings}
-\t\t\t\tMARKETING_VERSION = ${iosMarketingVersion};
-\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = ${iosAppId};
-\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
-\t\t\t\tSUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
-\t\t\t\tSWIFT_VERSION = 5.0;
-\t\t\t\tTARGETED_DEVICE_FAMILY = "1,2";
-\t\t\t};
-\t\t\tname = Debug;
-\t\t};
-\t\t${UUID.targetReleaseConfig} /* Release */ = {
-\t\t\tisa = XCBuildConfiguration;
-\t\t\tbuildSettings = {
-\t\t\t\tCURRENT_PROJECT_VERSION = ${iosBuildNumber};${iosDevTeamSetting}
-\t\t\t\tGENERATE_INFOPLIST_FILE = NO;
-\t\t\t\tINFOPLIST_FILE = ${appName}/Info.plist;${iosTargetSdkSettings}
-\t\t\t\tMARKETING_VERSION = ${iosMarketingVersion};
-\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = ${iosAppId};
-\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
-\t\t\t\tSUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
-\t\t\t\tSWIFT_VERSION = 5.0;
-\t\t\t\tTARGETED_DEVICE_FAMILY = "1,2";
-\t\t\t};
-\t\t\tname = Release;
-\t\t};
-${
-  hasMacos
-    ? `\t\t${UUID.macTargetDebugConfig} /* Debug */ = {
-\t\t\tisa = XCBuildConfiguration;
-\t\t\tbuildSettings = {
-\t\t\t\tCURRENT_PROJECT_VERSION = ${macosBuildNumber};${macosDevTeamSetting}
-\t\t\t\tGENERATE_INFOPLIST_FILE = NO;
-\t\t\t\tINFOPLIST_FILE = "${appName}/Info-macOS.plist";
-\t\t\t\tMACOSX_DEPLOYMENT_TARGET = ${macosDeploymentTarget};
-\t\t\t\tMARKETING_VERSION = ${macosMarketingVersion};
-\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = ${macosAppId};
-\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
-\t\t\t\tSDKROOT = macosx;
-\t\t\t\tSUPPORTED_PLATFORMS = macosx;
-\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
-\t\t\t\tSWIFT_VERSION = 5.0;
-\t\t\t};
-\t\t\tname = Debug;
-\t\t};
-\t\t${UUID.macTargetReleaseConfig} /* Release */ = {
-\t\t\tisa = XCBuildConfiguration;
-\t\t\tbuildSettings = {
-\t\t\t\tCURRENT_PROJECT_VERSION = ${macosBuildNumber};${macosDevTeamSetting}
-\t\t\t\tGENERATE_INFOPLIST_FILE = NO;
-\t\t\t\tINFOPLIST_FILE = "${appName}/Info-macOS.plist";
-\t\t\t\tMACOSX_DEPLOYMENT_TARGET = ${macosDeploymentTarget};
-\t\t\t\tMARKETING_VERSION = ${macosMarketingVersion};
-\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = ${macosAppId};
-\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";
-\t\t\t\tSDKROOT = macosx;
-\t\t\t\tSUPPORTED_PLATFORMS = macosx;
-\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
-\t\t\t\tSWIFT_VERSION = 5.0;
-\t\t\t};
-\t\t\tname = Release;
-\t\t};`
-    : ""
-}
+${targetBuildSettings}
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -857,19 +595,6 @@ ${
 \t\t\tdefaultConfigurationIsVisible = 0;
 \t\t\tdefaultConfigurationName = Release;
 \t\t};
-${
-  hasMacos
-    ? `\t\t${UUID.macTargetConfigList} /* Build configuration list for PBXNativeTarget "${appName}-macOS" */ = {
-\t\t\tisa = XCConfigurationList;
-\t\t\tbuildConfigurations = (
-\t\t\t\t${UUID.macTargetDebugConfig} /* Debug */,
-\t\t\t\t${UUID.macTargetReleaseConfig} /* Release */,
-\t\t\t);
-\t\t\tdefaultConfigurationIsVisible = 0;
-\t\t\tdefaultConfigurationName = Release;
-\t\t};`
-    : ""
-}
 /* End XCConfigurationList section */
 \t};
 \trootObject = ${UUID.project} /* Project object */;

@@ -924,4 +924,329 @@ describe("nativiteChromeTemplate", () => {
       expect(output).toContain("didFailProvisionalNavigation");
     });
   });
+
+  // ─── macOS Chrome ──────────────────────────────────────────────────────────
+
+  describe("macOS Chrome", () => {
+    function getMacosSection(config = baseConfig): string {
+      const output = nativiteChromeTemplate(config);
+      const macosStart = output.indexOf("#elseif os(macOS)");
+      expect(macosStart).toBeGreaterThan(-1);
+      return output.slice(macosStart);
+    }
+
+    describe("NSToolbar (unified titleBar + toolbar)", () => {
+      it("creates an NSToolbar with delegate conformance", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var toolbar: NSToolbar?");
+        expect(macos).toContain('NSToolbar(identifier: "NativiteToolbar")');
+        expect(macos).toContain("extension NativiteChrome: NSToolbarDelegate");
+      });
+
+      it("builds toolbar items from titleBar leading/trailing and toolbar items", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("pendingLeadingItems");
+        expect(macos).toContain("pendingTrailingItems");
+        expect(macos).toContain("pendingToolbarItems");
+        expect(macos).toContain("func rebuildToolbarIfNeeded()");
+      });
+
+      it("routes toolbar item clicks to correct event areas", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("func toolbarItemClicked");
+        expect(macos).toContain('"titleBar.leadingItemPressed"');
+        expect(macos).toContain('"titleBar.trailingItemPressed"');
+        expect(macos).toContain('"toolbar.itemPressed"');
+      });
+
+      it("supports NSMenuToolbarItem for items with menus", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("NSMenuToolbarItem(itemIdentifier:");
+        expect(macos).toContain("func toolbarMenuItemClicked");
+        expect(macos).toContain('"titleBar.menuItemPressed"');
+      });
+
+      it("includes NSSearchToolbarItem for searchBar", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("NSSearchToolbarItem(itemIdentifier:");
+        expect(macos).toContain("pendingSearchBar");
+      });
+
+      it("implements NSSearchFieldDelegate for search events", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("extension NativiteChrome: NSSearchFieldDelegate");
+        expect(macos).toContain('"titleBar.searchChanged"');
+        expect(macos).toContain('"titleBar.searchSubmitted"');
+        expect(macos).toContain('"titleBar.searchCancelled"');
+      });
+    });
+
+    describe("NSTabView (navigation)", () => {
+      it("creates an NSTabView lazily", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var tabView: NSTabView?");
+        expect(macos).toContain("func applyNavigation");
+      });
+
+      it("creates NSTabViewItem for each navigation item", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("NSTabViewItem(identifier: id)");
+        expect(macos).toContain("tv.addTabViewItem(tabItem)");
+      });
+
+      it("implements NSTabViewDelegate for selection events", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("extension NativiteChrome: NSTabViewDelegate");
+        expect(macos).toContain('"navigation.itemPressed"');
+      });
+
+      it("handles hidden state", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("tv.isHidden = hidden");
+      });
+    });
+
+    describe("NSSplitViewController (sidebarPanel)", () => {
+      it("creates NSSplitViewController with sidebar and detail items", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var splitViewController: NSSplitViewController?");
+        expect(macos).toContain("NSSplitViewItem(sidebarWithViewController:");
+      });
+
+      it("uses NSOutlineView as a source list", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var sidebarOutlineView: NSOutlineView?");
+        expect(macos).toContain("outlineView.style = .sourceList");
+        expect(macos).toContain("outlineView.dataSource = self");
+        expect(macos).toContain("outlineView.delegate = self");
+      });
+
+      it("implements NSOutlineViewDataSource and Delegate", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("extension NativiteChrome: NSOutlineViewDataSource");
+        expect(macos).toContain("extension NativiteChrome: NSOutlineViewDelegate");
+        expect(macos).toContain('"sidebarPanel.itemPressed"');
+      });
+
+      it("has a SidebarNode model with hierarchical children", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private class SidebarNode: NSObject");
+        expect(macos).toContain("var children: [SidebarNode]");
+        expect(macos).toContain("static func from(_ dict: [String: Any]) -> SidebarNode?");
+      });
+
+      it("toggles sidebar collapse via visible property", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("sidebarItem.isCollapsed = !visible");
+      });
+    });
+
+    describe("sheets (NSPanel)", () => {
+      it("presents sheets via window.beginSheet", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var activeSheets: [String: NSPanel]");
+        expect(macos).toContain("window.beginSheet(panel)");
+        expect(macos).toContain('"sheet.presented"');
+        expect(macos).toContain('"sheet.dismissed"');
+      });
+
+      it("dismisses sheets via window.endSheet", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("window.endSheet(panel)");
+      });
+
+      it("supports dismissible configuration", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("panel.styleMask.remove(.closable)");
+      });
+    });
+
+    describe("drawers (NSSplitViewItem)", () => {
+      it("creates drawer items as NSSplitViewItems", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var activeDrawerItems: [String: NSSplitViewItem]");
+        expect(macos).toContain('"drawer.presented"');
+        expect(macos).toContain('"drawer.dismissed"');
+      });
+
+      it("supports leading and trailing side drawers", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("NSSplitViewItem(sidebarWithViewController: childVC)");
+        expect(macos).toContain("NSSplitViewItem(inspectorWithViewController: childVC)");
+      });
+    });
+
+    describe("appWindows (NSWindow)", () => {
+      it("creates new NSWindow instances", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var activeAppWindows: [String: NSWindow]");
+        expect(macos).toContain('"appWindow.presented"');
+        expect(macos).toContain('"appWindow.dismissed"');
+      });
+
+      it("supports modal via beginSheet", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("vc.view.window?.beginSheet(win)");
+      });
+
+      it("implements NSWindowDelegate for close events", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("extension NativiteChrome: NSWindowDelegate");
+        expect(macos).toContain("func windowWillClose");
+      });
+
+      it("supports window properties: title, size, minSize, resizable", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("win.title =");
+        expect(macos).toContain("win.minSize =");
+        expect(macos).toContain("mask.insert(.resizable)");
+      });
+    });
+
+    describe("popovers (NSPopover)", () => {
+      it("creates NSPopover instances", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var activePopovers: [String: NSPopover]");
+        expect(macos).toContain('"popover.presented"');
+        expect(macos).toContain('"popover.dismissed"');
+      });
+
+      it("resolves anchor element rect via JS evaluation", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("anchorElementId");
+        expect(macos).toContain("getBoundingClientRect");
+        expect(macos).toContain("popover.show(relativeTo:");
+      });
+
+      it("implements NSPopoverDelegate", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("extension NativiteChrome: NSPopoverDelegate");
+        expect(macos).toContain("func popoverDidClose");
+      });
+    });
+
+    describe("inter-webview messaging", () => {
+      it("has a child webview registry", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private var childWebViews: [String: WKWebView]");
+      });
+
+      it("implements postMessageToChild with actual delivery", () => {
+        const macos = getMacosSection();
+        // Ensure the no-op stubs are gone
+        expect(macos).not.toContain("{ _ = name; _ = payload }");
+        expect(macos).toContain("func postMessageToChild(name: String, payload: Any?)");
+        expect(macos).toContain("childWebViews[name]");
+      });
+
+      it("implements broadcastMessage to all children", () => {
+        const macos = getMacosSection();
+        expect(macos).not.toContain("{ _ = sender; _ = payload }");
+        expect(macos).toContain("func broadcastMessage(from sender: String, payload: Any?)");
+        expect(macos).toContain("for (name, webView) in childWebViews");
+      });
+
+      it("implements instanceName lookup from webview reference", () => {
+        const macos = getMacosSection();
+        // Old no-op stub was: { _ = webView; return "unknown" }
+        expect(macos).not.toContain("_ = webView; return");
+        expect(macos).toContain("func instanceName(for webView: WKWebView?) -> String");
+        expect(macos).toContain("for (name, wv) in childWebViews");
+      });
+    });
+
+    describe("NativiteChildWebViewController", () => {
+      it("exists as a shared child webview host", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("private class NativiteChildWebViewController:");
+        expect(macos).toContain("WKNavigationDelegate");
+      });
+
+      it("shares the default WKWebsiteDataStore", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("WKWebsiteDataStore.default()");
+      });
+
+      it("injects instance name and platform attribute", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("__nativekit_instance_name__");
+        expect(macos).toContain("data-nk-platform");
+      });
+
+      it("registers the bridge script message handler", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain(
+          'config.userContentController.addScriptMessageHandler(nativeBridge, contentWorld: .page, name: "nativite")',
+        );
+      });
+
+      it("has SPA route support for file:// URLs", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("func applySPARoute");
+        expect(macos).toContain("history.replaceState");
+      });
+    });
+
+    describe("applyState dispatch", () => {
+      it("dispatches all chrome areas in applyState", () => {
+        const macos = getMacosSection();
+        const applyStateBody = macos.slice(
+          macos.indexOf("func applyState"),
+          macos.indexOf("func pushVarUpdates"),
+        );
+        expect(applyStateBody).toContain('"titleBar"');
+        expect(applyStateBody).toContain('"toolbar"');
+        expect(applyStateBody).toContain('"navigation"');
+        expect(applyStateBody).toContain('"menuBar"');
+        expect(applyStateBody).toContain('"sidebarPanel"');
+        expect(applyStateBody).toContain('"sheets"');
+        expect(applyStateBody).toContain('"drawers"');
+        expect(applyStateBody).toContain('"appWindows"');
+        expect(applyStateBody).toContain('"popovers"');
+      });
+    });
+
+    describe("resetArea", () => {
+      it("handles all resettable areas", () => {
+        const macos = getMacosSection();
+        const resetAreaBody = macos.slice(
+          macos.indexOf("func resetArea"),
+          macos.indexOf("private func resetTitleBar"),
+        );
+        expect(resetAreaBody).toContain('"titleBar"');
+        expect(resetAreaBody).toContain('"toolbar"');
+        expect(resetAreaBody).toContain('"navigation"');
+        expect(resetAreaBody).toContain('"menuBar"');
+        expect(resetAreaBody).toContain('"sidebarPanel"');
+        expect(resetAreaBody).toContain('"sheets"');
+        expect(resetAreaBody).toContain('"drawers"');
+        expect(resetAreaBody).toContain('"appWindows"');
+        expect(resetAreaBody).toContain('"popovers"');
+      });
+
+      it("has reset methods for each area", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("func resetTitleBar()");
+        expect(macos).toContain("func resetToolbar()");
+        expect(macos).toContain("func resetNavigation()");
+        expect(macos).toContain("func resetMenuBar()");
+        expect(macos).toContain("func resetSidebarPanel()");
+        expect(macos).toContain("func resetSheets()");
+        expect(macos).toContain("func resetDrawers()");
+        expect(macos).toContain("func resetAppWindows()");
+        expect(macos).toContain("func resetPopovers()");
+      });
+    });
+
+    describe("title bar window properties", () => {
+      it("maps window title, subtitle, separator style, fullSizeContent, hidden", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("window.title = title");
+        expect(macos).toContain("window.subtitle = subtitle");
+        expect(macos).toContain("window.titlebarSeparatorStyle");
+        expect(macos).toContain(".fullSizeContentView");
+        expect(macos).toContain("window.titleVisibility");
+      });
+    });
+  });
 });

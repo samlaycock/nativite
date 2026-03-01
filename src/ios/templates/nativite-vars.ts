@@ -79,6 +79,7 @@ export function nativiteVarsTemplate(): string {
       --nk-keyboard-duration:250ms;--nk-keyboard-curve:ease-in-out;
       --nk-accessory-height:0px;
       --nk-nav-depth:0;--nk-title-collapse:0;--nk-pop-gesture:0;
+      --nk-sidebar-width:0px;--nk-sidebar-visible:0;
       --nk-sheet-visible:0;--nk-sheet-detent:0;
       --nk-display-scale:2;--nk-display-corner:0px;
       --nk-is-phone:0;--nk-is-tablet:0;--nk-is-desktop:0;

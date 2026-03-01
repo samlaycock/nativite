@@ -124,6 +124,6 @@ describe("platform registry", () => {
     const iosConfig = resolveConfigForPlatform(config, "ios");
     expect(iosConfig.app.bundleId).toBe("com.example.testapp.ios");
     expect(iosConfig.app.version).toBe("1.1.0");
-    expect(iosConfig.signing?.ios.teamId).toBe("ABCDE12345");
+    expect(iosConfig.signing?.ios?.teamId).toBe("ABCDE12345");
   });
 });

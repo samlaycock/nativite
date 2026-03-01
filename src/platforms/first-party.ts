@@ -2,6 +2,7 @@ import { execSync, spawn } from "node:child_process";
 import { join } from "node:path";
 
 import type { NativiteConfig, NativitePlatformLogger, NativitePlatformPlugin } from "../index.ts";
+import type { AppleTargetPlatform } from "../ios/index.ts";
 
 import { runXcodebuild } from "../cli/xcodebuild.ts";
 import { generateProject } from "../ios/index.ts";
@@ -63,7 +64,7 @@ async function buildAndLaunchMacOS(
 ): Promise<void> {
   const appName = config.app.name;
   const appId = appIdOverride ?? config.app.bundleId;
-  const projectPath = join(projectRoot, ".nativite", "ios", `${appName}.xcodeproj`);
+  const projectPath = join(projectRoot, ".nativite", "macos", `${appName}.xcodeproj`);
   const buildDir = `/tmp/nativite-build-${appId}-macos`;
   const derivedDataPath = `/tmp/nativite-derived-${appId}-macos`;
 
@@ -72,7 +73,7 @@ async function buildAndLaunchMacOS(
       "-project",
       projectPath,
       "-scheme",
-      `${appName}-macOS`,
+      appName,
       "-configuration",
       "Debug",
       "-destination",
@@ -96,7 +97,7 @@ async function buildAndLaunchMacOS(
 }
 
 async function generateAppleProject(
-  pluginName: string,
+  targetPlatform: AppleTargetPlatform,
   ctx: Parameters<NonNullable<NativitePlatformPlugin["generate"]>>[0],
 ): Promise<void> {
   const result = await generateProject(
@@ -104,6 +105,7 @@ async function generateAppleProject(
     ctx.projectRoot,
     ctx.force,
     ctx.mode ?? "generate",
+    targetPlatform,
   );
   if (result.skipped) {
     ctx.logger.info(`Project is up to date. Use --force to regenerate.`);
@@ -121,7 +123,7 @@ const iosPlatformPlugin: NativitePlatformPlugin = {
     await generateAppleProject("ios", ctx);
   },
   async dev(ctx) {
-    await generateProject(ctx.rootConfig, ctx.projectRoot, false, "dev");
+    await generateProject(ctx.rootConfig, ctx.projectRoot, false, "dev", "ios");
 
     if (process.platform !== "darwin") {
       ctx.logger.warn("Skipping iOS launch; this host is not macOS.");
@@ -137,11 +139,12 @@ const iosPlatformPlugin: NativitePlatformPlugin = {
     }
 
     try {
-      ctx.logger.info(`Booting simulator: ${ctx.simulatorName}`);
+      const simulatorName = ctx.simulatorName ?? "iPhone 16 Pro";
+      ctx.logger.info(`Booting simulator: ${simulatorName}`);
       await buildAndLaunchSimulator(
         ctx.rootConfig,
         ctx.projectRoot,
-        ctx.simulatorName,
+        simulatorName,
         ctx.devUrl,
         ctx.logger,
         ctx.config.app.bundleId,
@@ -152,7 +155,7 @@ const iosPlatformPlugin: NativitePlatformPlugin = {
     }
   },
   async build(ctx) {
-    await generateProject(ctx.rootConfig, ctx.projectRoot, false, "build");
+    await generateProject(ctx.rootConfig, ctx.projectRoot, false, "build", "ios");
   },
 };
 
@@ -165,7 +168,7 @@ const macosPlatformPlugin: NativitePlatformPlugin = {
     await generateAppleProject("macos", ctx);
   },
   async dev(ctx) {
-    await generateProject(ctx.rootConfig, ctx.projectRoot, false, "dev");
+    await generateProject(ctx.rootConfig, ctx.projectRoot, false, "dev", "macos");
 
     if (process.platform !== "darwin") {
       ctx.logger.warn("Skipping macOS launch; this host is not macOS.");
@@ -187,7 +190,7 @@ const macosPlatformPlugin: NativitePlatformPlugin = {
     }
   },
   async build(ctx) {
-    await generateProject(ctx.rootConfig, ctx.projectRoot, false, "build");
+    await generateProject(ctx.rootConfig, ctx.projectRoot, false, "build", "macos");
   },
 };
 

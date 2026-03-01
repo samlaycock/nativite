@@ -78,7 +78,11 @@ export type NativiteRootConfigOverrides = {
     buildNumber: number;
   }>;
   signing?: {
-    ios: {
+    ios?: {
+      mode: "automatic" | "manual";
+      teamId: string;
+    };
+    macos?: {
       mode: "automatic" | "manual";
       teamId: string;
     };
@@ -149,8 +153,8 @@ export type NativitePlatformGenerateContext = NativitePlatformHookContext & {
 
 export type NativitePlatformDevContext = NativitePlatformHookContext & {
   devUrl: string;
-  launchTarget: NativiteDevTarget;
-  simulatorName: string;
+  launchTarget?: NativiteDevTarget;
+  simulatorName?: string;
 };
 
 export type NativitePlatformBuildContext = NativitePlatformHookContext & {
@@ -285,7 +289,11 @@ type NormalizedNativiteConfig = {
   platforms?: NativitePlatformConfig[];
   platformPlugins?: NativitePlatformPlugin[];
   signing?: {
-    ios: {
+    ios?: {
+      mode: "automatic" | "manual";
+      teamId: string;
+    };
+    macos?: {
       mode: "automatic" | "manual";
       teamId: string;
     };
@@ -333,10 +341,18 @@ const RootConfigOverridesSchema = z
       .optional(),
     signing: z
       .object({
-        ios: z.object({
-          mode: z.enum(["automatic", "manual"]),
-          teamId: z.string(),
-        }),
+        ios: z
+          .object({
+            mode: z.enum(["automatic", "manual"]),
+            teamId: z.string(),
+          })
+          .optional(),
+        macos: z
+          .object({
+            mode: z.enum(["automatic", "manual"]),
+            teamId: z.string(),
+          })
+          .optional(),
       })
       .optional(),
     updates: z
@@ -421,14 +437,20 @@ export const NativiteConfigSchema = z
         message: "Platform plugins must target unique platform names.",
       })
       .optional(),
-    // signing.ios covers iOS code signing only. macOS targets use the
-    // certificate and provisioning profile configured in Xcode directly.
     signing: z
       .object({
-        ios: z.object({
-          mode: z.enum(["automatic", "manual"]),
-          teamId: z.string(),
-        }),
+        ios: z
+          .object({
+            mode: z.enum(["automatic", "manual"]),
+            teamId: z.string(),
+          })
+          .optional(),
+        macos: z
+          .object({
+            mode: z.enum(["automatic", "manual"]),
+            teamId: z.string(),
+          })
+          .optional(),
       })
       .optional(),
     updates: z

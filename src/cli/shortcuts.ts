@@ -9,9 +9,9 @@ interface ShortcutsContext {
   readonly config: NativiteConfig;
   readonly platform: string;
   readonly runtimes: ReadonlyArray<ResolvedNativitePlatformRuntime>;
-  readonly simulatorName: string;
+  readonly simulatorName?: string;
   readonly devUrl: string;
-  readonly launchTarget: "simulator" | "device";
+  readonly launchTarget?: "simulator" | "device";
 }
 
 export function createNativiteShortcuts(ctx: ShortcutsContext): CLIShortcut<ViteDevServer>[] {

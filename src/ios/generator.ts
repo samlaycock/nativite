@@ -21,30 +21,31 @@ import { pbxprojTemplate } from "./templates/pbxproj.ts";
 import { splashImageContentsTemplate } from "./templates/splash-image-contents.ts";
 import { viewControllerTemplate } from "./templates/view-controller.ts";
 
+export type AppleTargetPlatform = "ios" | "macos";
+
 export type GenerateResult = {
   skipped: boolean;
   projectPath: string;
   hash: string;
 };
 
-function hasConfiguredPlatform(config: NativiteConfig, platformId: string): boolean {
-  return (config.platforms ?? []).some((platform) => platform.platform === platformId);
-}
-
-function requiresLegacyProjectRefresh(config: NativiteConfig, projectRoot: string): boolean {
-  const projectPath = join(projectRoot, `${config.app.name}.xcodeproj`, "project.pbxproj");
+function requiresLegacyProjectRefresh(
+  targetPlatform: AppleTargetPlatform,
+  projectRoot: string,
+  appName: string,
+): boolean {
+  const projectPath = join(projectRoot, `${appName}.xcodeproj`, "project.pbxproj");
   if (!existsSync(projectPath)) return true;
 
   try {
     const pbxproj = readFileSync(projectPath, "utf-8");
-    if (!pbxproj.includes('SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";')) return true;
-    if (!pbxproj.includes("SDKROOT = iphoneos;")) return true;
-    if (!pbxproj.includes("$SRCROOT/../../../dist-ios")) return true;
-    if (
-      hasConfiguredPlatform(config, "macos") &&
-      !pbxproj.includes("$SRCROOT/../../../dist-macos")
-    ) {
-      return true;
+    if (targetPlatform === "ios") {
+      if (!pbxproj.includes('SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";')) return true;
+      if (!pbxproj.includes("SDKROOT = iphoneos;")) return true;
+      if (!pbxproj.includes("$SRCROOT/../../../dist-ios")) return true;
+    } else {
+      if (!pbxproj.includes("SDKROOT = macosx;")) return true;
+      if (!pbxproj.includes("$SRCROOT/../../../dist-macos")) return true;
     }
   } catch {
     return true;
@@ -58,20 +59,23 @@ export async function generateProject(
   cwd: string,
   force = false,
   mode: NativitePluginMode = "generate",
+  targetPlatform: AppleTargetPlatform = "ios",
 ): Promise<GenerateResult> {
   const nativiteDir = join(cwd, ".nativite");
-  const hashFile = join(nativiteDir, ".hash");
-  const projectRoot = join(nativiteDir, "ios");
+  const hashFile = join(nativiteDir, `.hash-${targetPlatform}`);
+  const projectRoot = join(nativiteDir, targetPlatform);
   const appName = config.app.name;
-  const iosConfig = resolveConfigForPlatform(config, "ios");
-  const macosConfig = resolveConfigForPlatform(config, "macos");
+  const platformConfig = resolveConfigForPlatform(config, targetPlatform);
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
   const hash = hashConfigForGeneration(config, resolvedPlugins);
 
   // Dirty check — skip if nothing has changed
   if (!force && existsSync(hashFile)) {
     const existingHash = readFileSync(hashFile, "utf-8").trim();
-    if (existingHash === hash && !requiresLegacyProjectRefresh(config, projectRoot)) {
+    if (
+      existingHash === hash &&
+      !requiresLegacyProjectRefresh(targetPlatform, projectRoot, appName)
+    ) {
       return {
         skipped: true,
         projectPath: join(projectRoot, `${appName}.xcodeproj`),
@@ -89,6 +93,7 @@ export async function generateProject(
     mkdirSync(dir, { recursive: true });
   }
 
+  // Swift source files — shared across both platforms (use #if os() guards)
   writeFileSync(join(appDir, "AppDelegate.swift"), appDelegateTemplate(config));
   writeFileSync(join(appDir, "ViewController.swift"), viewControllerTemplate(config));
   writeFileSync(join(appDir, "NativiteBridge.swift"), nativiteBridgeTemplate(config));
@@ -104,11 +109,10 @@ export async function generateProject(
     writeFileSync(join(appDir, "OTAUpdater.swift"), otaUpdaterTemplate(config));
   }
 
-  if (config.splash) {
-    // Write the LaunchScreen storyboard.
+  // iOS-only: LaunchScreen storyboard and splash image
+  if (targetPlatform === "ios" && config.splash) {
     writeFileSync(join(appDir, "LaunchScreen.storyboard"), launchScreenTemplate(config));
 
-    // When an image is specified, copy it into Splash.imageset and write Contents.json.
     if (config.splash.image) {
       const splashImagesetDir = join(assetsDir, "Splash.imageset");
       mkdirSync(splashImagesetDir, { recursive: true });
@@ -123,11 +127,11 @@ export async function generateProject(
     }
   }
 
-  writeFileSync(join(appDir, "Info.plist"), infoPlistTemplate(iosConfig));
-
-  // Write macOS Info.plist when the macOS platform is configured.
-  if ((config.platforms ?? []).some((platform) => platform.platform === "macos")) {
-    writeFileSync(join(appDir, "Info-macOS.plist"), infoPlistMacOSTemplate(macosConfig));
+  // Info.plist — platform-specific
+  if (targetPlatform === "ios") {
+    writeFileSync(join(appDir, "Info.plist"), infoPlistTemplate(platformConfig));
+  } else {
+    writeFileSync(join(appDir, "Info.plist"), infoPlistMacOSTemplate(platformConfig));
   }
 
   // App icon — copy the user's 1024×1024 image into AppIcon.appiconset when configured.
@@ -142,7 +146,7 @@ export async function generateProject(
 
   writeFileSync(
     join(xcodeproj, "project.pbxproj"),
-    pbxprojTemplate(config, resolvedPlugins, projectRoot),
+    pbxprojTemplate(config, resolvedPlugins, projectRoot, targetPlatform),
   );
   writeFileSync(hashFile, hash);
 
