@@ -1,7 +1,8 @@
-import { ios, macos, type NativiteConfig, type NativiteUserConfig } from "../index.ts";
+import { android, ios, macos, type NativiteConfig, type NativiteUserConfig } from "../index.ts";
 
 const iosPlatformEntry = ios({ minimumVersion: "17.0" });
 const macosPlatformEntry = macos({ minimumVersion: "14.0" });
+const androidPlatformEntry = android({ minSdk: 26 });
 
 /** Minimal valid user config input shape. */
 export const baseUserConfig: NativiteUserConfig = {
@@ -120,4 +121,31 @@ export const dualPlatformConfig: NativiteConfig = {
     buildNumber: 1,
   },
   platforms: [iosPlatformEntry, macosPlatformEntry],
+};
+
+/** Config with Android platform. */
+export const androidConfig: NativiteConfig = {
+  app: {
+    name: "TestApp",
+    bundleId: "com.example.testapp",
+    version: "1.0.0",
+    buildNumber: 1,
+  },
+  platforms: [androidPlatformEntry],
+};
+
+/** Android config with splash screen. */
+export const androidSplashConfig: NativiteConfig = {
+  ...androidConfig,
+  splash: {
+    backgroundColor: "#1A2B3C",
+  },
+};
+
+/** Android config with default chrome state. */
+export const androidChromeConfig: NativiteConfig = {
+  ...androidConfig,
+  defaultChrome: {
+    titleBar: { title: "Home" },
+  },
 };

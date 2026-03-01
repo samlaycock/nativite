@@ -32,6 +32,12 @@ describe("pbxprojTemplate (plugins)", () => {
               registrars: [],
               dependencies: [],
             },
+            android: {
+              sources: [],
+              resources: [],
+              registrars: [],
+              dependencies: [],
+            },
           },
         },
       ],
@@ -48,6 +54,12 @@ describe("pbxprojTemplate (plugins)", () => {
           dependencies: [{ name: "AVFoundation", weak: false }],
         },
         macos: {
+          sources: [],
+          resources: [],
+          registrars: [],
+          dependencies: [],
+        },
+        android: {
           sources: [],
           resources: [],
           registrars: [],
@@ -87,6 +99,7 @@ describe("pbxprojTemplate (plugins)", () => {
       platforms: {
         ios: { sources: [], resources: [], registrars: [], dependencies: [] },
         macos: { sources: [], resources: [], registrars: [], dependencies: [] },
+        android: { sources: [], resources: [], registrars: [], dependencies: [] },
       },
     };
 
@@ -108,6 +121,7 @@ describe("pbxprojTemplate (plugins)", () => {
       platforms: {
         ios: { sources: [], resources: [], registrars: [], dependencies: [] },
         macos: { sources: [], resources: [], registrars: [], dependencies: [] },
+        android: { sources: [], resources: [], registrars: [], dependencies: [] },
       },
     };
 

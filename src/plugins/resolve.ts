@@ -37,6 +37,7 @@ export type ResolvedNativitePlugin = {
   platforms: {
     ios: ResolvedNativitePlatformContribution;
     macos: ResolvedNativitePlatformContribution;
+    android: ResolvedNativitePlatformContribution;
   };
 };
 
@@ -45,11 +46,12 @@ export type ResolvedNativitePlugins = {
   platforms: {
     ios: ResolvedNativitePlatformContribution;
     macos: ResolvedNativitePlatformContribution;
+    android: ResolvedNativitePlatformContribution;
   };
 };
 
-const PLATFORM_KEYS = ["ios", "macos"] as const;
-type ApplePlatformKey = (typeof PLATFORM_KEYS)[number];
+const PLATFORM_KEYS = ["ios", "macos", "android"] as const;
+type PlatformKey = (typeof PLATFORM_KEYS)[number];
 
 function hashString(input: string): string {
   return createHash("sha256").update(input).digest("hex");
@@ -268,7 +270,7 @@ function normalizePlatformContribution(
 
 function aggregatePlatform(
   plugins: ResolvedNativitePlugin[],
-  platform: ApplePlatformKey,
+  platform: PlatformKey,
 ): ResolvedNativitePlatformContribution {
   const filesByPath = new Map<string, ResolvedNativitePluginFile>();
   const resourcesByPath = new Map<string, ResolvedNativitePluginFile>();
@@ -339,25 +341,22 @@ function computePluginFingerprint(
     ),
   );
 
+  const normalizedPlatforms: Record<string, unknown> = {};
+  for (const key of PLATFORM_KEYS) {
+    normalizedPlatforms[key] = {
+      sources: normalized[key].sources.map((s) => s.absolutePath),
+      resources: normalized[key].resources.map((r) => r.absolutePath),
+      registrars: normalized[key].registrars,
+      dependencies: normalized[key].dependencies,
+    };
+  }
+
   return hashString(
     JSON.stringify({
       name: plugin.name,
       meta: pluginMeta,
       contribution: toSerializable(mergedContribution),
-      normalized: {
-        ios: {
-          sources: normalized.ios.sources.map((s) => s.absolutePath),
-          resources: normalized.ios.resources.map((r) => r.absolutePath),
-          registrars: normalized.ios.registrars,
-          dependencies: normalized.ios.dependencies,
-        },
-        macos: {
-          sources: normalized.macos.sources.map((s) => s.absolutePath),
-          resources: normalized.macos.resources.map((r) => r.absolutePath),
-          registrars: normalized.macos.registrars,
-          dependencies: normalized.macos.dependencies,
-        },
-      },
+      normalized: normalizedPlatforms,
     }),
   );
 }
@@ -380,6 +379,7 @@ export async function resolveNativitePlugins(
   const configuredPlatforms = new Set((config.platforms ?? []).map((entry) => entry.platform));
   const iosEnabled = configuredPlatforms.has("ios");
   const macosEnabled = configuredPlatforms.has("macos");
+  const androidEnabled = configuredPlatforms.has("android");
 
   for (const plugin of plugins) {
     const rootDir = resolve(
@@ -406,6 +406,9 @@ export async function resolveNativitePlugins(
       macos: macosEnabled
         ? normalizePlatformContribution(plugin.name, rootDir, mergedContribution.platforms?.macos)
         : emptyPlatformContribution(),
+      android: androidEnabled
+        ? normalizePlatformContribution(plugin.name, rootDir, mergedContribution.platforms?.android)
+        : emptyPlatformContribution(),
     };
 
     const fingerprint = computePluginFingerprint(plugin, mergedContribution, normalizedPlatforms);
@@ -423,6 +426,7 @@ export async function resolveNativitePlugins(
     platforms: {
       ios: aggregatePlatform(resolvedPlugins, "ios"),
       macos: aggregatePlatform(resolvedPlugins, "macos"),
+      android: aggregatePlatform(resolvedPlugins, "android"),
     },
   };
 }

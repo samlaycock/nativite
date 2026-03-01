@@ -120,6 +120,13 @@ export type NativiteMacOSPlatformConfig = {
   overrides?: NativiteRootConfigOverrides;
 };
 
+export type NativiteAndroidPlatformConfig = {
+  platform: "android";
+  minSdk: number;
+  targetSdk?: number;
+  overrides?: NativiteRootConfigOverrides;
+};
+
 export type NativiteCustomPlatformConfig<
   T extends Record<string, unknown> = Record<string, unknown>,
 > = {
@@ -130,6 +137,7 @@ export type NativiteCustomPlatformConfig<
 export type NativitePlatformConfig =
   | NativiteIOSPlatformConfig
   | NativiteMacOSPlatformConfig
+  | NativiteAndroidPlatformConfig
   | NativiteCustomPlatformConfig;
 
 export type NativitePlatformLogger = {
@@ -208,10 +216,22 @@ export function macos(
 }
 
 /**
+ * Define Android platform configuration in `nativite.config.ts`.
+ *
+ * @example
+ * platforms: [android({ minSdk: 26 })]
+ */
+export function android(
+  config: Omit<NativiteAndroidPlatformConfig, "platform">,
+): NativiteAndroidPlatformConfig {
+  return { platform: "android", ...config };
+}
+
+/**
  * Define a custom platform configuration entry.
  *
  * @example
- * platforms: [platform("android", { minSdk: 26, targetDevice: "pixel-9" })]
+ * platforms: [platform("custom", { foo: "bar" })]
  */
 export function platform<T extends Record<string, unknown>>(
   name: string,
@@ -485,7 +505,7 @@ export const NativiteConfigSchema = z
   })
   .strict()
   .superRefine((config, ctx) => {
-    const firstPartyPlatformIds = new Set(["ios", "macos"]);
+    const firstPartyPlatformIds = new Set(["ios", "macos", "android"]);
     const hasTopLevelPlatforms = (config.platforms?.length ?? 0) > 0;
 
     if (!hasTopLevelPlatforms) {
@@ -503,6 +523,16 @@ export const NativiteConfigSchema = z
             code: "custom",
             path: ["platforms"],
             message: `Built-in platform "${entry.platform}" requires a string minimumVersion.`,
+          });
+        }
+      }
+
+      if (entry.platform === "android") {
+        if (typeof entry["minSdk"] !== "number" || !Number.isInteger(entry["minSdk"])) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["platforms"],
+            message: 'Built-in platform "android" requires an integer minSdk.',
           });
         }
       }

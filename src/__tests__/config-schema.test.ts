@@ -68,12 +68,12 @@ describe("NativiteConfigSchema", () => {
     expect(() =>
       NativiteConfigSchema.parse({
         ...baseUserConfig,
-        platforms: [platform("android", { minSdk: 26 })],
+        platforms: [platform("flutter", { minSdk: 26 })],
         platformPlugins: [
           definePlatformPlugin({
-            name: "android-platform",
-            platform: "android",
-            extensions: [".android", ".mobile", ".native"],
+            name: "flutter-platform",
+            platform: "flutter",
+            extensions: [".flutter", ".mobile", ".native"],
           }),
         ],
       }),
@@ -84,7 +84,7 @@ describe("NativiteConfigSchema", () => {
     expect(() =>
       NativiteConfigSchema.parse({
         ...baseUserConfig,
-        platforms: [platform("android", { minSdk: 26 })],
+        platforms: [platform("flutter", { minSdk: 26 })],
       }),
     ).toThrow();
   });

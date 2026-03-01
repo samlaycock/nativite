@@ -35,22 +35,22 @@ describe("platform registry", () => {
         version: "1.0.0",
         buildNumber: 1,
       },
-      platforms: [platform("android", { minSdk: 26 })],
+      platforms: [platform("flutter", { minSdk: 26 })],
       platformPlugins: [
         definePlatformPlugin({
-          name: "android-platform",
-          platform: "android",
-          environments: ["android", "android-tablet"],
-          extensions: ["android", ".mobile", ".native"],
+          name: "flutter-platform",
+          platform: "flutter",
+          environments: ["flutter", "flutter-tablet"],
+          extensions: ["flutter", ".mobile", ".native"],
         }),
       ],
     });
 
     const runtimes = resolveConfiguredPlatformRuntimes(config);
     expect(runtimes).toHaveLength(1);
-    expect(runtimes[0]?.id).toBe("android");
-    expect(runtimes[0]?.environments).toEqual(["android", "android-tablet"]);
-    expect(runtimes[0]?.extensions).toEqual([".android", ".mobile", ".native"]);
+    expect(runtimes[0]?.id).toBe("flutter");
+    expect(runtimes[0]?.environments).toEqual(["flutter", "flutter-tablet"]);
+    expect(runtimes[0]?.extensions).toEqual([".flutter", ".mobile", ".native"]);
   });
 
   it("resolves built-in macOS metadata from the first-party plugin", () => {
@@ -80,13 +80,13 @@ describe("platform registry", () => {
         version: "1.0.0",
         buildNumber: 1,
       },
-      platforms: [platform("android", { minSdk: 26 })],
+      platforms: [platform("roku", { deviceFamily: "tv" })],
       platformPlugins: [
         definePlatformPlugin({
-          name: "android-platform",
-          platform: "android",
-          environments: ["android"],
-          extensions: [".android", ".native"],
+          name: "roku-platform",
+          platform: "roku",
+          environments: ["roku"],
+          extensions: [".roku", ".native"],
         }),
       ],
     });
@@ -95,10 +95,10 @@ describe("platform registry", () => {
       string,
       { extensions: string[]; environments: string[]; bundlePlatform: string }
     >;
-    expect(metadata["android"]).toEqual({
-      extensions: [".android", ".native"],
-      environments: ["android"],
-      bundlePlatform: "android",
+    expect(metadata["roku"]).toEqual({
+      extensions: [".roku", ".native"],
+      environments: ["roku"],
+      bundlePlatform: "roku",
     });
   });
 

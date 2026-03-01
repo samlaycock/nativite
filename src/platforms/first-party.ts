@@ -1,9 +1,12 @@
 import { execSync, spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { NativiteConfig, NativitePlatformLogger, NativitePlatformPlugin } from "../index.ts";
 import type { AppleTargetPlatform } from "../ios/index.ts";
 
+import { generateProject as generateAndroidProject } from "../android/index.ts";
+import { runGradle } from "../cli/gradle.ts";
 import { runXcodebuild } from "../cli/xcodebuild.ts";
 import { generateProject } from "../ios/index.ts";
 
@@ -194,7 +197,57 @@ const macosPlatformPlugin: NativitePlatformPlugin = {
   },
 };
 
+const androidPlatformPlugin: NativitePlatformPlugin = {
+  name: "nativite-android",
+  platform: "android",
+  environments: ["android"],
+  extensions: [".android", ".mobile", ".native"],
+  async generate(ctx) {
+    const result = await generateAndroidProject(
+      ctx.rootConfig,
+      ctx.projectRoot,
+      ctx.force,
+      ctx.mode ?? "generate",
+    );
+    if (result.skipped) {
+      ctx.logger.info("Project is up to date. Use --force to regenerate.");
+    } else {
+      ctx.logger.info(`Generated: ${result.projectPath}`);
+    }
+  },
+  async dev(ctx) {
+    await generateAndroidProject(ctx.rootConfig, ctx.projectRoot, false, "dev");
+
+    const projectPath = join(ctx.projectRoot, ".nativite", "android");
+    const assetsDir = join(projectPath, "app", "src", "main", "assets");
+    writeFileSync(join(assetsDir, "dev.json"), JSON.stringify({ devURL: ctx.devUrl }));
+
+    try {
+      ctx.logger.info("Building Android debug APK...");
+      await runGradle({
+        args: ["assembleDebug"],
+        cwd: projectPath,
+        logger: ctx.logger,
+      });
+
+      const appId = ctx.config.app.bundleId;
+      const apkPath = join(projectPath, "app", "build", "outputs", "apk", "debug", "app-debug.apk");
+
+      execSync(`adb install -r "${apkPath}"`, { stdio: "pipe" });
+      execSync(`adb shell am start -n "${appId}/.MainActivity"`, { stdio: "pipe" });
+
+      ctx.logger.info(`App launched. WebView loading ${ctx.devUrl}`);
+    } catch (err) {
+      ctx.logger.error(`Build/launch failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  },
+  async build(ctx) {
+    await generateAndroidProject(ctx.rootConfig, ctx.projectRoot, false, "build");
+  },
+};
+
 export const FIRST_PARTY_PLATFORM_PLUGINS: ReadonlyArray<NativitePlatformPlugin> = [
   iosPlatformPlugin,
   macosPlatformPlugin,
+  androidPlatformPlugin,
 ];
