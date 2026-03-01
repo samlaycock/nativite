@@ -51,8 +51,9 @@ function setupAndroidPortListener(): void {
             const id = msg["id"];
             const pending = pendingAndroidCalls.get(id)!;
             pendingAndroidCalls.delete(id);
-            if (msg["error"] !== undefined) {
-              pending.reject(new Error(String(msg["error"])));
+            const error = msg["error"];
+            if (error !== undefined) {
+              pending.reject(new Error(typeof error === "string" ? error : JSON.stringify(error)));
             } else {
               pending.resolve(msg["result"]);
             }
