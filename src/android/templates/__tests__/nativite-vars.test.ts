@@ -22,6 +22,25 @@ describe("nativiteVarsTemplate", () => {
     expect(output).toContain('"--nv-keyboard-inset"');
   });
 
+  it("updates device/orientation/theme flags from runtime configuration", () => {
+    const output = nativiteVarsTemplate(androidConfig);
+    expect(output).toContain("updateEnvironmentVars()");
+    expect(output).toContain("Configuration.UI_MODE_NIGHT_MASK");
+    expect(output).toContain('"--nv-is-phone"');
+    expect(output).toContain('"--nv-is-tablet"');
+    expect(output).toContain('"--nv-is-portrait"');
+    expect(output).toContain('"--nv-is-landscape"');
+    expect(output).toContain('"--nv-is-dark"');
+    expect(output).toContain('"--nv-is-light"');
+    expect(output).toContain('"--nv-font-scale"');
+  });
+
+  it("requests insets and listens to layout changes for live env updates", () => {
+    const output = nativiteVarsTemplate(androidConfig);
+    expect(output).toContain("webView.addOnLayoutChangeListener");
+    expect(output).toContain("ViewCompat.requestApplyInsets(webView)");
+  });
+
   it("does not set safe area variables from system bars", () => {
     const output = nativiteVarsTemplate(androidConfig);
     expect(output).not.toContain("--nv-safe-area-top");

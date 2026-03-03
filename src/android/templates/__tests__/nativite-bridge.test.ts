@@ -85,14 +85,22 @@ describe("nativiteBridgeTemplate", () => {
     expect(output).toContain("it.startObserving()");
   });
 
-  it("pushes chrome geometry CSS vars on state update", () => {
+  it("pushes chrome geometry CSS vars from rendered measurements", () => {
     const output = nativiteBridgeTemplate(androidConfig);
-    expect(output).toContain("pushChromeGeometryVars(state)");
+    expect(output).toContain("fun updateRenderedChromeGeometry(");
+    expect(output).toContain("navHeightPx: Int");
+    expect(output).toContain("tabHeightPx: Int");
+    expect(output).toContain("toolbarHeightPx: Int");
     expect(output).toContain("--nv-nav-height");
     expect(output).toContain("--nv-tab-height");
     expect(output).toContain("--nv-toolbar-height");
     expect(output).toContain("--nv-nav-visible");
     expect(output).toContain("--nv-tab-visible");
     expect(output).toContain("--nv-toolbar-visible");
+    expect(output).not.toContain("val navHeight = if (titleBarVisible) 64 else 0");
+    expect(output).not.toContain("val tabHeight = if (navVisible) 80 else 0");
+    expect(output).not.toContain(
+      "val toolbarHeight = if (toolbarVisible && !navVisible) 80 else 0",
+    );
   });
 });

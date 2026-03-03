@@ -3,7 +3,7 @@
 > Maps to: `src/android/templates/nativite-vars.ts`
 > Generated file: `NativiteVars.kt`
 
-The CSS variables module injects `--nv-*` CSS custom properties into the webview as a `<style>` block and observes Android window insets for keyboard tracking.
+The CSS variables module injects `--nv-*` CSS custom properties into the webview as a `<style>` block, observes Android window insets for keyboard tracking, and updates device/orientation/appearance flags from the current Android configuration.
 
 ## Architecture
 
@@ -38,20 +38,20 @@ On Android, native chrome (title bar, navigation bar, toolbar) sits **around** t
 | `--nv-inset-left`       | `0px`   | Same as safe-left                          |
 | `--nv-inset-right`      | `0px`   | Same as safe-right                         |
 | `--nv-nav-height`       | `0px`   | Chrome sits outside webview                |
-| `--nv-nav-visible`      | `0`     | Updated via `pushCustomVars`               |
+| `--nv-nav-visible`      | `0`     | Updated from rendered Compose chrome       |
 | `--nv-tab-height`       | `0px`   | Chrome sits outside webview                |
-| `--nv-tab-visible`      | `0`     | Updated via `pushCustomVars`               |
+| `--nv-tab-visible`      | `0`     | Updated from rendered Compose chrome       |
 | `--nv-toolbar-height`   | `0px`   | Chrome sits outside webview                |
-| `--nv-toolbar-visible`  | `0`     | Updated via `pushCustomVars`               |
+| `--nv-toolbar-visible`  | `0`     | Updated from rendered Compose chrome       |
 | `--nv-status-height`    | `0px`   | Scaffold handles status bar                |
 | `--nv-keyboard-height`  | `0px`   | Updated dynamically via IME inset observer |
 | `--nv-keyboard-visible` | `0`     | Updated dynamically via IME inset observer |
 | `--nv-keyboard-inset`   | `0px`   | Updated dynamically via IME inset observer |
-| `--nv-is-phone`         | `1`     | Default device type                        |
-| `--nv-is-tablet`        | `0`     |                                            |
+| `--nv-is-phone`         | `1`     | Updated from `Configuration`               |
+| `--nv-is-tablet`        | `0`     | Updated from `Configuration`               |
 | `--nv-is-desktop`       | `0`     |                                            |
-| `--nv-is-dark`          | `0`     |                                            |
-| `--nv-is-light`         | `1`     |                                            |
+| `--nv-is-dark`          | `0`     | Updated from Android night mode            |
+| `--nv-is-light`         | `1`     | Updated from Android night mode            |
 
 ## Keyboard Observation
 
@@ -69,11 +69,26 @@ System bar insets are **not** tracked as CSS variables because the Compose `Scaf
 | `--nv-keyboard-visible` | IME bottom | `1` when open        |
 | `--nv-keyboard-inset`   | IME bottom | Same as height       |
 
+## Chrome Geometry Updates
+
+Chrome geometry variables are pushed from **rendered Compose measurements**, not fixed constants:
+
+- `NativiteApp` measures title/navigation/toolbar heights using `onGloballyPositioned`.
+- The measurements are forwarded to `NativiteBridge.updateRenderedChromeGeometry(...)`.
+- The bridge then patches:
+  - `--nv-nav-height` / `--nv-nav-visible`
+  - `--nv-tab-height` / `--nv-tab-visible`
+  - `--nv-toolbar-height` / `--nv-toolbar-visible`
+
+This keeps CSS values aligned with the actual chrome currently on screen (including large-title and search variants).
+
 ## Custom Variable Injection
 
 ### `pushCustomVars(vars: Map<String, String>)`
 
-Accepts arbitrary CSS variables from other modules. Used by the bridge to inject chrome geometry variables:
+Accepts arbitrary CSS variables from other modules.
+
+Used by the bridge to inject measured chrome geometry variables:
 
 - `--nv-nav-height` / `--nv-nav-visible`
 - `--nv-tab-height` / `--nv-tab-visible`

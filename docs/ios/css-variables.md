@@ -37,12 +37,12 @@ The `NativiteVars` class manages a `WKUserScript` injected at `documentStart` (b
 
 Includes safe area plus any native chrome that overlaps the webview:
 
-| Variable            | Type | Description                          |
-| ------------------- | ---- | ------------------------------------ |
-| `--nv-inset-top`    | `px` | Safe area + nav bar height           |
-| `--nv-inset-bottom` | `px` | Safe area + tab bar / toolbar height |
-| `--nv-inset-left`   | `px` | Safe area + sidebar width            |
-| `--nv-inset-right`  | `px` | Safe area                            |
+| Variable            | Type | Description                                                    |
+| ------------------- | ---- | -------------------------------------------------------------- |
+| `--nv-inset-top`    | `px` | Safe area + nav bar height (status bar is reported separately) |
+| `--nv-inset-bottom` | `px` | Safe area + tab bar / toolbar height                           |
+| `--nv-inset-left`   | `px` | Safe area + sidebar width                                      |
+| `--nv-inset-right`  | `px` | Safe area                                                      |
 
 ### Chrome Geometry
 
@@ -124,6 +124,8 @@ All values are in `px` and reflect the user's Dynamic Type preference:
 - Always `--nv-is-desktop=1`, `--nv-is-landscape=1`
 - Fixed font sizes per macOS HIG (not Dynamic Type)
 - Appearance changes tracked via `NSApplication` notifications instead of trait collection changes
+- Initial macOS appearance variables are seeded immediately on startup (not only after a theme-change notification)
+- `--nv-nav-height`/`--nv-tab-height` are derived from live window/navigation geometry; `--nv-toolbar-*` stays `0` on macOS because the unified NSToolbar is top chrome, not a bottom bar
 
 ## Usage in CSS
 

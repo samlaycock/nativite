@@ -934,6 +934,21 @@ describe("nativiteChromeTemplate", () => {
       });
     });
 
+    describe("CSS var geometry", () => {
+      it("uses measured heights and explicit visibility when pushing chrome vars", () => {
+        const macos = getMacosSection();
+        const body = macos.slice(
+          macos.indexOf("func pushVarUpdates"),
+          macos.indexOf("func postMessageToChild"),
+        );
+        expect(body).toContain("navigationContainerView?.frame.height ?? 0");
+        expect(body).toContain("titleBarVisible");
+        expect(body).toContain("navHeight: titleBarVisible ? titlebarHeight : 0");
+        expect(body).toContain("toolbarHeight: 0");
+        expect(body).toContain("toolbarVisible: false");
+      });
+    });
+
     describe("resetArea", () => {
       it("handles all resettable areas", () => {
         const macos = getMacosSection();

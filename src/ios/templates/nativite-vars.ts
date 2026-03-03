@@ -253,7 +253,7 @@ ${sharedInstallation}
     let isTablet = idiom == .pad
 
     // Derive combined insets
-    let insetTop    = safeTop + statusHeight + (navVisible ? navHeight : 0)
+    let insetTop    = safeTop + (navVisible ? navHeight : 0)
     let insetBottom = safeBottom + (tabVisible ? tabHeight : 0) + (toolbarVisible ? toolbarHeight : 0)
 
     var vars: [String: String] = [
@@ -481,6 +481,7 @@ ${sharedInstallation}
       name: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
       object: nil
     )
+    updateAppearance()
   }
 
   deinit {

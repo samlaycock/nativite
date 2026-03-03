@@ -23,4 +23,13 @@ describe("nativiteVarsTemplate", () => {
     // Should use collapsed variables instead of the raw multi-line strings.
     expect(swift).toContain(".components(separatedBy: .newlines)");
   });
+
+  it("keeps inset-top math consistent between safe-area and chrome updates", () => {
+    const swift = nativiteVarsTemplate();
+
+    expect(swift).toContain("let insetTop    = safeTop + (navVisible ? navHeight : 0)");
+    expect(swift).not.toContain(
+      "let insetTop    = safeTop + statusHeight + (navVisible ? navHeight : 0)",
+    );
+  });
 });

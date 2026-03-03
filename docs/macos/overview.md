@@ -93,6 +93,12 @@ class NativiteAppDelegate: NSObject, NSApplicationDelegate {
 | `--nv-font-*`        | Dynamic Type values      | Fixed HIG values                     |
 | Appearance tracking  | Trait collection changes | `NSApplication` notifications        |
 
+macOS chrome geometry notes:
+
+- `--nv-nav-height` is derived from live `NSWindow` titlebar/content layout geometry.
+- `--nv-tab-height` is derived from the rendered navigation segmented-control container height.
+- `--nv-toolbar-*` remains `0` because macOS toolbar content is part of top window chrome, not a bottom toolbar inset.
+
 ## View Controller
 
 Uses `NSViewController` instead of `UIViewController`:

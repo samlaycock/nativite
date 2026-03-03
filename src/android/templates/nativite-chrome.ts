@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -101,6 +102,40 @@ fun NativiteApp(bridge: NativiteBridge) {
     } else {
         null
     }
+    val titleBarVisible = titleBar != null && titleBar["hidden"] != true
+    val navigationVisible = navigation != null && navigation["hidden"] != true
+    val toolbarVisible = !navigationVisible && toolbar != null && toolbar["hidden"] != true
+
+    var topBarHeightPx by remember { mutableStateOf(0) }
+    var navigationHeightPx by remember { mutableStateOf(0) }
+    var bottomToolbarHeightPx by remember { mutableStateOf(0) }
+
+    LaunchedEffect(titleBarVisible) {
+        if (!titleBarVisible) topBarHeightPx = 0
+    }
+    LaunchedEffect(navigationVisible) {
+        if (!navigationVisible) navigationHeightPx = 0
+    }
+    LaunchedEffect(toolbarVisible) {
+        if (!toolbarVisible) bottomToolbarHeightPx = 0
+    }
+    LaunchedEffect(
+        titleBarVisible,
+        navigationVisible,
+        toolbarVisible,
+        topBarHeightPx,
+        navigationHeightPx,
+        bottomToolbarHeightPx,
+    ) {
+        bridge.updateRenderedChromeGeometry(
+            navHeightPx = if (titleBarVisible) topBarHeightPx else 0,
+            navVisible = titleBarVisible,
+            tabHeightPx = if (navigationVisible) navigationHeightPx else 0,
+            tabVisible = navigationVisible,
+            toolbarHeightPx = if (toolbarVisible) bottomToolbarHeightPx else 0,
+            toolbarVisible = toolbarVisible,
+        )
+    }
 
     // Back button handler
     BackHandler {
@@ -122,8 +157,14 @@ fun NativiteApp(bridge: NativiteBridge) {
                 Modifier
             },
             topBar = {
-                if (titleBar != null && titleBar["hidden"] != true) {
-                    NativiteTitleBar(titleBar, bridge, useLargeTitle, scrollBehavior)
+                if (titleBarVisible) {
+                    Box(
+                        modifier = Modifier.onGloballyPositioned { coordinates ->
+                            topBarHeightPx = coordinates.size.height
+                        },
+                    ) {
+                        NativiteTitleBar(titleBar!!, bridge, useLargeTitle, scrollBehavior)
+                    }
                 }
             },
             bottomBar = {
@@ -132,10 +173,22 @@ fun NativiteApp(bridge: NativiteBridge) {
                     if (tabBottomAccessory != null && tabBottomAccessory["presented"] == true) {
                         NativiteTabBottomAccessory(tabBottomAccessory, bridge)
                     }
-                    if (navigation != null && navigation["hidden"] != true) {
-                        NativiteNavigationBar(navigation, bridge)
-                    } else if (toolbar != null && toolbar["hidden"] != true) {
-                        NativiteToolbar(toolbar, bridge)
+                    if (navigationVisible) {
+                        Box(
+                            modifier = Modifier.onGloballyPositioned { coordinates ->
+                                navigationHeightPx = coordinates.size.height
+                            },
+                        ) {
+                            NativiteNavigationBar(navigation!!, bridge)
+                        }
+                    } else if (toolbarVisible) {
+                        Box(
+                            modifier = Modifier.onGloballyPositioned { coordinates ->
+                                bottomToolbarHeightPx = coordinates.size.height
+                            },
+                        ) {
+                            NativiteToolbar(toolbar!!, bridge)
+                        }
                     }
                 }
             },

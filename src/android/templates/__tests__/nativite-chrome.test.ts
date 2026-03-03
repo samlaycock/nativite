@@ -15,6 +15,14 @@ describe("nativiteChromeTemplate", () => {
     expect(output).toContain("Scaffold(");
   });
 
+  it("measures rendered chrome geometry and reports it to the bridge", () => {
+    expect(output).toContain("onGloballyPositioned");
+    expect(output).toContain("bridge.updateRenderedChromeGeometry(");
+    expect(output).toContain("navHeightPx = if (titleBarVisible) topBarHeightPx else 0");
+    expect(output).toContain("tabHeightPx = if (navigationVisible) navigationHeightPx else 0");
+    expect(output).toContain("toolbarHeightPx = if (toolbarVisible) bottomToolbarHeightPx else 0");
+  });
+
   // ─── TitleBar ──────────────────────────────────────────────────────────
 
   it("renders TitleBar as TopAppBar", () => {

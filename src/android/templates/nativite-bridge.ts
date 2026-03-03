@@ -33,6 +33,15 @@ class NativiteBridge {
     private var primaryVars: NativiteVars? = null
     private val childWebViews = mutableMapOf<String, WebView>()
     private val childPorts = mutableMapOf<String, WebMessagePortCompat>()
+    private data class ChromeGeometry(
+        val navHeightPx: Int = 0,
+        val navVisible: Boolean = false,
+        val tabHeightPx: Int = 0,
+        val tabVisible: Boolean = false,
+        val toolbarHeightPx: Int = 0,
+        val toolbarVisible: Boolean = false,
+    )
+    private var chromeGeometry = ChromeGeometry()
 
     init {
         registerBuiltinHandlers()
@@ -56,6 +65,14 @@ class NativiteBridge {
         if (instanceName == "main") {
             primaryWebView = webView
             primaryVars = NativiteVars(webView, this).also { it.startObserving() }
+            updateRenderedChromeGeometry(
+                navHeightPx = chromeGeometry.navHeightPx,
+                navVisible = chromeGeometry.navVisible,
+                tabHeightPx = chromeGeometry.tabHeightPx,
+                tabVisible = chromeGeometry.tabVisible,
+                toolbarHeightPx = chromeGeometry.toolbarHeightPx,
+                toolbarVisible = chromeGeometry.toolbarVisible,
+            )
         } else {
             childWebViews[instanceName] = webView
         }
@@ -124,7 +141,6 @@ class NativiteBridge {
                     val state = jsonToMap(msg.optJSONObject("args"))
                     mainHandler.post {
                         chromeState.value = state
-                        pushChromeGeometryVars(state)
                     }
                     if (id != null) replyPort.postMessage(WebMessageCompat(replyJson(id, null)))
                     return
@@ -230,27 +246,33 @@ class NativiteBridge {
 
     // ─── Chrome geometry CSS vars ──────────────────────────────────────────
 
-    private fun pushChromeGeometryVars(state: Map<String, Any?>) {
+    fun updateRenderedChromeGeometry(
+        navHeightPx: Int,
+        navVisible: Boolean,
+        tabHeightPx: Int,
+        tabVisible: Boolean,
+        toolbarHeightPx: Int,
+        toolbarVisible: Boolean,
+    ) {
+        val next = ChromeGeometry(
+            navHeightPx = navHeightPx,
+            navVisible = navVisible,
+            tabHeightPx = tabHeightPx,
+            tabVisible = tabVisible,
+            toolbarHeightPx = toolbarHeightPx,
+            toolbarVisible = toolbarVisible,
+        )
+        if (next == chromeGeometry) return
+        chromeGeometry = next
+
         val vars = primaryVars ?: return
-        val titleBar = state["titleBar"] as? Map<*, *>
-        val navigation = state["navigation"] as? Map<*, *>
-        val toolbar = state["toolbar"] as? Map<*, *>
-
-        val titleBarVisible = titleBar != null && titleBar["hidden"] != true
-        val navVisible = navigation != null && navigation["hidden"] != true
-        val toolbarVisible = toolbar != null && toolbar["hidden"] != true
-
-        // Standard Material3 component heights (dp = CSS px in WebView)
-        val navHeight = if (titleBarVisible) 64 else 0
-        val tabHeight = if (navVisible) 80 else 0
-        val toolbarHeight = if (toolbarVisible && !navVisible) 80 else 0
 
         vars.pushCustomVars(mapOf(
-            "--nv-nav-height" to "\${navHeight}px",
-            "--nv-nav-visible" to if (titleBarVisible) "1" else "0",
-            "--nv-tab-height" to "\${tabHeight}px",
-            "--nv-tab-visible" to if (navVisible) "1" else "0",
-            "--nv-toolbar-height" to "\${toolbarHeight}px",
+            "--nv-nav-height" to "\${navHeightPx}px",
+            "--nv-nav-visible" to if (navVisible) "1" else "0",
+            "--nv-tab-height" to "\${tabHeightPx}px",
+            "--nv-tab-visible" to if (tabVisible) "1" else "0",
+            "--nv-toolbar-height" to "\${toolbarHeightPx}px",
             "--nv-toolbar-visible" to if (toolbarVisible) "1" else "0",
         ))
     }

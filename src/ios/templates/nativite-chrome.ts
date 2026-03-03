@@ -1540,13 +1540,13 @@ class NativiteChrome: NSObject {
   private func pushVarUpdates() {
     guard let window = viewController?.view.window else { return }
     let titlebarHeight = window.frame.height - window.contentLayoutRect.height
-    let hasToolbar = toolbar != nil
     let hasNavigation = navigationContainerView != nil && !(navigationContainerView?.isHidden ?? true)
-    let tabHeight: CGFloat = hasNavigation ? 36 : 0
+    let tabHeight: CGFloat = hasNavigation ? (navigationContainerView?.frame.height ?? 0) : 0
+    let titleBarVisible = !(chromeState?.titleBarHidden ?? false)
     vars?.updateChrome(
-      navHeight: titlebarHeight, navVisible: true,
+      navHeight: titleBarVisible ? titlebarHeight : 0, navVisible: titleBarVisible,
       tabHeight: tabHeight, tabVisible: hasNavigation,
-      toolbarHeight: nil, toolbarVisible: hasToolbar
+      toolbarHeight: 0, toolbarVisible: false
     )
   }
 
