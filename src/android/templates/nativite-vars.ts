@@ -47,7 +47,7 @@ class NativiteVars(private val webView: WebView, private val bridge: NativiteBri
     private fun flush() {
         if (lastVars.isEmpty()) return
         val js = buildString {
-            append("if(window.__nk_patch){window.__nk_patch({")
+            append("if(window.__nv_patch){window.__nv_patch({")
             var first = true
             for ((name, value) in lastVars) {
                 if (!first) append(",")
@@ -65,7 +65,7 @@ class NativiteVars(private val webView: WebView, private val bridge: NativiteBri
     companion object {
         /**
          * Returns a JS snippet that injects a <style> block with all --nv-*
-         * CSS variable defaults and defines the window.__nk_patch() helper.
+         * CSS variable defaults and defines the window.__nv_patch() helper.
          *
          * On Android the native chrome (title bar, navigation bar, toolbar)
          * sits around the WebView in the Compose layout rather than
@@ -77,10 +77,10 @@ class NativiteVars(private val webView: WebView, private val bridge: NativiteBri
          */
         fun buildInitScript(): String = """(function(){
 var s=document.createElement('style');
-s.id='__nk_vars__';
+s.id='__nv_vars__';
 s.textContent=':root{--nv-safe-top:0px;--nv-safe-bottom:0px;--nv-safe-left:0px;--nv-safe-right:0px;--nv-nav-height:0px;--nv-nav-visible:0;--nv-tab-height:0px;--nv-tab-visible:0;--nv-toolbar-height:0px;--nv-toolbar-visible:0;--nv-status-height:0px;--nv-inset-top:0px;--nv-inset-bottom:0px;--nv-inset-left:0px;--nv-inset-right:0px;--nv-keyboard-height:0px;--nv-keyboard-visible:0;--nv-keyboard-inset:0px;--nv-accessory-height:0px;--nv-sidebar-width:0px;--nv-sidebar-visible:0;--nv-sheet-visible:0;--nv-sheet-detent:0;--nv-is-phone:1;--nv-is-tablet:0;--nv-is-desktop:0;--nv-is-portrait:1;--nv-is-landscape:0;--nv-is-dark:0;--nv-is-light:1;--nv-contrast:0;--nv-reduced-motion:0;--nv-reduced-transparency:0;--nv-font-scale:1;}';
 document.documentElement.appendChild(s);
-window.__nk_patch=function(vars){var r=document.documentElement;for(var k in vars){r.style.setProperty(k,vars[k]);}};
+window.__nv_patch=function(vars){var r=document.documentElement;for(var k in vars){r.style.setProperty(k,vars[k]);}};
 })()"""
     }
 }

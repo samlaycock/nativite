@@ -666,10 +666,10 @@ struct NativiteChildWebView: UIViewRepresentable {
   func makeUIView(context: Context) -> NativiteWebView {
     let config = WKWebViewConfiguration()
     config.websiteDataStore = WKWebsiteDataStore.default()
-    let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
-    config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"
+    let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+    config.applicationNameForUserAgent = "Nativite/\\(nvPlatform)/1.0"
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nk-platform','\\(nkPlatform)');",
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','\\(nvPlatform)');",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))
@@ -748,7 +748,7 @@ struct NativiteChildWebView: NSViewRepresentable {
     config.websiteDataStore = WKWebsiteDataStore.default()
     config.applicationNameForUserAgent = "Nativite/macos/1.0"
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nk-platform','macos');",
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','macos');",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))

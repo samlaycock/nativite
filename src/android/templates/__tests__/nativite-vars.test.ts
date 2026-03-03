@@ -30,9 +30,9 @@ describe("nativiteVarsTemplate", () => {
     expect(output).not.toContain("--nv-safe-area-right");
   });
 
-  it("flushes via __nk_patch helper", () => {
+  it("flushes via __nv_patch helper", () => {
     const output = nativiteVarsTemplate(androidConfig);
-    expect(output).toContain("window.__nk_patch");
+    expect(output).toContain("window.__nv_patch");
   });
 
   it("clears lastVars after flush", () => {
@@ -41,14 +41,14 @@ describe("nativiteVarsTemplate", () => {
   });
 
   describe("buildInitScript", () => {
-    it("creates a style element with __nk_vars__ id", () => {
+    it("creates a style element with __nv_vars__ id", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("s.id='__nk_vars__'");
+      expect(output).toContain("s.id='__nv_vars__'");
     });
 
-    it("defines the __nk_patch helper function", () => {
+    it("defines the __nv_patch helper function", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("window.__nk_patch=function(vars)");
+      expect(output).toContain("window.__nv_patch=function(vars)");
     });
 
     it("defaults safe area variables to 0px", () => {

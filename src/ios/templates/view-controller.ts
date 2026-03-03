@@ -168,8 +168,8 @@ class ViewController: UIViewController {
     // Appended to every request's User-Agent so the Vite dev server can route
     // this WKWebView to the correct named platform environment. iPad is
     // detected at runtime so a single binary serves both form factors.
-    let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
-    config.applicationNameForUserAgent = "Nativite/\\(nkPlatform)/1.0"
+    let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+    config.applicationNameForUserAgent = "Nativite/\\(nvPlatform)/1.0"
     // Identify this webview as "main" so the native message broker can
     // route postToParent/postToChild/broadcast calls to the correct instance.
     config.userContentController.addUserScript(WKUserScript(

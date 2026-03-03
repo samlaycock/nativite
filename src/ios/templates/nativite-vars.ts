@@ -108,9 +108,9 @@ export function nativiteVarsTemplate(): string {
     """
     // Resolve the platform string at runtime so iPad is distinguished from iPhone.
     #if os(iOS)
-    let nkPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+    let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
     #elseif os(macOS)
-    let nkPlatform = "macos"
+    let nvPlatform = "macos"
     #endif
 
     // Collapse multi-line strings to single lines before embedding in JS.
@@ -127,23 +127,23 @@ export function nativiteVarsTemplate(): string {
     // Inject as a <style> block so it is in the cascade (not inline style).
     // Also attach a tiny patcher function used by subsequent updates.
     // Data attributes are set here so CSS attribute selectors and Tailwind
-    // variant modifiers (e.g. [data-nk-platform="ios"]:) work from first paint.
+    // variant modifiers (e.g. [data-nv-platform="ios"]:) work from first paint.
     return """
     (function(){
       var s=document.createElement('style');
-      s.id='__nk_vars__';
+      s.id='__nv_vars__';
       s.textContent=':root{\\(css)}\\(devCSS)';
       document.documentElement.appendChild(s);
-      window.__nk_patch=function(vars){
+      window.__nv_patch=function(vars){
         var r=document.documentElement;
         for(var k in vars){r.style.setProperty(k,vars[k]);}
       };
-      document.documentElement.setAttribute('data-nk-platform','\\(nkPlatform)');
+      document.documentElement.setAttribute('data-nv-platform','\\(nvPlatform)');
     })();
     """
   }
 
-  // Serialise a dictionary of var→value and call __nk_patch on the live page.
+  // Serialise a dictionary of var→value and call __nv_patch on the live page.
   private func patch(_ vars: [String: String]) {
     guard let wv = webView else { return }
     guard !vars.isEmpty else { return }
@@ -158,7 +158,7 @@ export function nativiteVarsTemplate(): string {
       entries.append("\\"\\(escapedKey)\\":\\"\\(escapedValue)\\"")
     }
 
-    let js = "if(window.__nk_patch){window.__nk_patch({\\(entries.joined(separator: ","))});}"
+    let js = "if(window.__nv_patch){window.__nv_patch({\\(entries.joined(separator: ","))});}"
 
     DispatchQueue.main.async {
       wv.evaluateJavaScript(js, completionHandler: nil)

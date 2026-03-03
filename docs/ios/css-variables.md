@@ -10,8 +10,8 @@ The CSS variables layer injects 70+ `--nv-*` CSS custom properties into the webv
 The `NativiteVars` class manages a `WKUserScript` injected at `documentStart` (before any other script runs) that:
 
 1. Creates a `<style>` element on `document.documentElement` with all `--nv-*` variables set to defaults.
-2. Defines a `window.__nk_patch()` helper function for efficient subsequent updates.
-3. Sets the `data-nk-platform` attribute on `documentElement` (`"ios"`, `"ipad"`, or `"macos"`).
+2. Defines a `window.__nv_patch()` helper function for efficient subsequent updates.
+3. Sets the `data-nv-platform` attribute on `documentElement` (`"ios"`, `"ipad"`, or `"macos"`).
 
 ## Update Sources
 

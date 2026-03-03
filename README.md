@@ -192,12 +192,12 @@ Also available on `chrome`:
 Typed helpers for `--nv-*` device variables:
 
 ```ts
-import { NKVars } from "nativite/css";
+import { NVVars } from "nativite/css";
 
-const topInset = NKVars.getNumber("safe-top");
-const isDark = NKVars.getBoolean("is-dark");
+const topInset = NVVars.getNumber("safe-top");
+const isDark = NVVars.getBoolean("is-dark");
 
-const stop = NKVars.observeNumber("keyboard-height", (height) => {
+const stop = NVVars.observeNumber("keyboard-height", (height) => {
   console.log("Keyboard height:", height);
 });
 
@@ -273,7 +273,7 @@ Then use:
 - `nativite/vite`: `nativite()`
 - `nativite/client`: `bridge`, `ota`
 - `nativite/chrome`: `chrome` + chrome factory functions + chrome types
-- `nativite/css`: `NKVars`, `NKVarName`
+- `nativite/css`: `NVVars`, `NVVarName`
 - `nativite/utils`: platform utility helpers
 - `nativite/globals`: ambient globals types
 - `nativite/cli`: CLI entry point

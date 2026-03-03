@@ -22,9 +22,9 @@ describe("nativiteWebViewTemplate", () => {
     expect(output).toContain("onPageStarted");
   });
 
-  it("sets data-nk-platform attribute on page start", () => {
+  it("sets data-nv-platform attribute on page start", () => {
     const output = nativiteWebViewTemplate(androidConfig);
-    expect(output).toContain("document.documentElement.setAttribute('data-nk-platform','android')");
+    expect(output).toContain("document.documentElement.setAttribute('data-nv-platform','android')");
   });
 
   it("injects CSS variable defaults via NativiteVars.buildInitScript on page start", () => {

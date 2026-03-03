@@ -21,7 +21,7 @@ class NativiteVars(
 Returns a JS snippet injected in `onPageStarted` (before the `NativiteVars` instance is created) that:
 
 1. Creates a `<style>` element on `document.documentElement` with all `--nv-*` variables set to defaults.
-2. Defines a `window.__nk_patch()` helper function for efficient subsequent updates.
+2. Defines a `window.__nv_patch()` helper function for efficient subsequent updates.
 
 On Android, native chrome (title bar, navigation bar, toolbar) sits **around** the WebView in the Compose `Scaffold` layout rather than overlapping it. This means safe-area and chrome-geometry variables default to `0px` — the Scaffold already provides the necessary padding.
 
@@ -87,11 +87,11 @@ Tracks changes to avoid duplicate updates. Only variables whose value has actual
 
 ### `flush()`
 
-Batches all pending variable changes into a single `window.__nk_patch()` call via `evaluateJavascript()`:
+Batches all pending variable changes into a single `window.__nv_patch()` call via `evaluateJavascript()`:
 
 ```javascript
-if (window.__nk_patch) {
-  window.__nk_patch({ "--nv-keyboard-height": "300px", "--nv-keyboard-visible": "1" });
+if (window.__nv_patch) {
+  window.__nv_patch({ "--nv-keyboard-height": "300px", "--nv-keyboard-visible": "1" });
 }
 ```
 
@@ -100,6 +100,6 @@ if (window.__nk_patch) {
 | Aspect            | iOS                                  | Android                                 |
 | ----------------- | ------------------------------------ | --------------------------------------- |
 | Initial injection | `WKUserScript` at documentStart      | `evaluateJavascript` in `onPageStarted` |
-| Update mechanism  | `window.__nk_patch()` helper         | `window.__nk_patch()` helper (same)     |
+| Update mechanism  | `window.__nv_patch()` helper         | `window.__nv_patch()` helper (same)     |
 | Safe area vars    | Derived from actual insets           | `0px` (Scaffold handles spacing)        |
 | Keyboard tracking | `UIResponder` keyboard notifications | `WindowInsetsCompat.Type.ime()`         |

@@ -9,33 +9,33 @@ The CSS variables module provides typed, observable access to `--nv-*` CSS custo
 ### Reading Values
 
 ```typescript
-import { NKVars } from "nativite/css";
+import { NVVars } from "nativite/css";
 
 // Raw string value
-NKVars.get("keyboard-height"); // → "0px" or "336px"
+NVVars.get("keyboard-height"); // → "0px" or "336px"
 
 // Parsed numeric value
-NKVars.getNumber("keyboard-height"); // → 0 or 336
+NVVars.getNumber("keyboard-height"); // → 0 or 336
 
 // Boolean flag
-NKVars.getBoolean("is-dark"); // → true or false
+NVVars.getBoolean("is-dark"); // → true or false
 ```
 
 ### Observing Changes
 
 ```typescript
 // Observe raw string changes
-const unsub = NKVars.observe("keyboard-height", (value) => {
+const unsub = NVVars.observe("keyboard-height", (value) => {
   console.log("Keyboard:", value); // "336px"
 });
 
 // Observe as boolean
-NKVars.observeBoolean("is-dark", (isDark) => {
+NVVars.observeBoolean("is-dark", (isDark) => {
   document.body.classList.toggle("dark", isDark);
 });
 
 // Observe as number
-NKVars.observeNumber("safe-top", (top) => {
+NVVars.observeNumber("safe-top", (top) => {
   console.log("Safe area top:", top);
 });
 ```
@@ -59,7 +59,7 @@ Defaults include: safe area `0px`, dark mode `0`, accent colour blue components,
 
 ## Variable Names
 
-The `NKVarName` type defines all valid variable names:
+The `NVVarName` type defines all valid variable names:
 
 ### Safe Area
 

@@ -898,7 +898,7 @@ describe("nativiteChromeTemplate", () => {
       it("injects instance name and platform attribute", () => {
         const macos = getMacosSection();
         expect(macos).toContain("__nativekit_instance_name__");
-        expect(macos).toContain("data-nk-platform");
+        expect(macos).toContain("data-nv-platform");
       });
 
       it("registers the bridge script message handler", () => {

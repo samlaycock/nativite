@@ -1,24 +1,24 @@
 /// <reference lib="dom" />
 
-// ─── NKVars — typed helpers for the --nv-* CSS variable system ───────────────
+// ─── NVVars — typed helpers for the --nv-* CSS variable system ───────────────
 //
 // Variables are set on document.documentElement by NativiteVars.swift via
-// window.__nk_patch(). When running in a browser (non-native) they are read
+// window.__nv_patch(). When running in a browser (non-native) they are read
 // from the :root <style> block injected by the WKUserScript at document start,
 // or fall back to their specified defaults.
 //
 // Usage:
-//   import { NKVars } from 'nativite/css'
+//   import { NVVars } from 'nativite/css'
 //
-//   const kbHeight = NKVars.get('keyboard-height')   // → "0px" | "336px" etc.
-//   const unsub = NKVars.observe('is-dark', (v) => {
+//   const kbHeight = NVVars.get('keyboard-height')   // → "0px" | "336px" etc.
+//   const unsub = NVVars.observe('is-dark', (v) => {
 //     document.body.classList.toggle('dark', v === '1')
 //   })
 //   unsub() // stop observing
 
 // ─── Variable name map ────────────────────────────────────────────────────────
 
-export type NKVarName =
+export type NVVarName =
   // Safe areas
   | "safe-top"
   | "safe-bottom"
@@ -88,7 +88,7 @@ export type NKVarName =
 // ─── Default values ───────────────────────────────────────────────────────────
 // Returned when running outside of a Nativite WebView (browser dev mode).
 
-const DEFAULTS: Record<NKVarName, string> = {
+const DEFAULTS: Record<NVVarName, string> = {
   "safe-top": "0px",
   "safe-bottom": "0px",
   "safe-left": "0px",
@@ -148,9 +148,9 @@ const DEFAULTS: Record<NKVarName, string> = {
   "font-largeTitle": "34px",
 };
 
-// ─── NKVars ───────────────────────────────────────────────────────────────────
+// ─── NVVars ───────────────────────────────────────────────────────────────────
 
-function cssVarName(name: NKVarName): string {
+function cssVarName(name: NVVarName): string {
   return `--nv-${name}`;
 }
 
@@ -158,7 +158,7 @@ function cssVarName(name: NKVarName): string {
  * Read the current value of a single --nv-* variable.
  * Returns the typed default when running outside a native WebView.
  */
-function get(name: NKVarName): string {
+function get(name: NVVarName): string {
   if (typeof document === "undefined") return DEFAULTS[name];
   const value = getComputedStyle(document.documentElement)
     .getPropertyValue(cssVarName(name))
@@ -170,21 +170,21 @@ function get(name: NKVarName): string {
  * Read the current numeric value of a pixel variable (e.g. "336.0px" → 336).
  * Returns 0 for non-pixel variables.
  */
-function getNumber(name: NKVarName): number {
+function getNumber(name: NVVarName): number {
   return parseFloat(get(name)) || 0;
 }
 
 /**
  * Read the current boolean flag (0 or 1) as a JS boolean.
  */
-function getBoolean(name: NKVarName): boolean {
+function getBoolean(name: NVVarName): boolean {
   return get(name) === "1";
 }
 
 // ─── Shared MutationObserver ─────────────────────────────────────────────────
 // A single observer watches documentElement's style attribute and fans out to
 // all active per-variable subscriptions. This avoids spawning one observer per
-// NKVars.observe() call while keeping each subscription independent.
+// NVVars.observe() call while keeping each subscription independent.
 
 type Subscription = {
   lastValue: string;
@@ -192,7 +192,7 @@ type Subscription = {
 };
 
 /** name → set of active subscriptions for that variable */
-const subscriptions = new Map<NKVarName, Set<Subscription>>();
+const subscriptions = new Map<NVVarName, Set<Subscription>>();
 
 let sharedObserver: MutationObserver | null = null;
 
@@ -229,11 +229,11 @@ function getOrCreateObserver(): MutationObserver {
  * Returns an unsubscribe function.
  *
  * @example
- * const unsub = NKVars.observe('keyboard-height', (v) => {
+ * const unsub = NVVars.observe('keyboard-height', (v) => {
  *   console.log('Keyboard height changed to', v)
  * })
  */
-function observe(name: NKVarName, callback: (value: string) => void): () => void {
+function observe(name: NVVarName, callback: (value: string) => void): () => void {
   if (typeof MutationObserver === "undefined") return () => {};
 
   getOrCreateObserver();
@@ -253,18 +253,18 @@ function observe(name: NKVarName, callback: (value: string) => void): () => void
 /**
  * Subscribe to a boolean flag (0 or 1 var) and receive a JS boolean.
  */
-function observeBoolean(name: NKVarName, callback: (value: boolean) => void): () => void {
+function observeBoolean(name: NVVarName, callback: (value: boolean) => void): () => void {
   return observe(name, (v) => callback(v === "1"));
 }
 
 /**
  * Subscribe to a pixel variable and receive a numeric pixel value.
  */
-function observeNumber(name: NKVarName, callback: (value: number) => void): () => void {
+function observeNumber(name: NVVarName, callback: (value: number) => void): () => void {
   return observe(name, (v) => callback(parseFloat(v) || 0));
 }
 
-export const NKVars = {
+export const NVVars = {
   get,
   getNumber,
   getBoolean,
