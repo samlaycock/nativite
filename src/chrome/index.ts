@@ -88,6 +88,13 @@ function postToNative(msg: object): void {
   _pendingNativeMessage = msg;
 }
 
+// ─── Splash State ────────────────────────────────────────────────────────────
+// Tracks whether the developer has opted out of automatic splash screen hiding.
+// Set synchronously via chrome.splash.preventAutoHide() so the flag is visible
+// to native when it checks the JS global in didFinish / onPageFinished.
+
+let _splashAutoHidePrevented = false;
+
 // ─── Internal State ──────────────────────────────────────────────────────────
 
 type Layer = Map<string, ChromeElement>;
@@ -257,10 +264,25 @@ interface ChromeMessaging {
   onMessage(handler: (from: "main" | (string & {}), payload: unknown) => void): Unsubscribe;
 }
 
+interface ChromeSplash {
+  /**
+   * Prevent the splash screen from automatically hiding when the page finishes
+   * loading. Call this at the top level of your module — before any async work —
+   * so the flag is set before the native page-finished handler runs.
+   *
+   * After calling this, you **must** call `chrome.splash.hide()` to dismiss
+   * the splash screen manually.
+   */
+  preventAutoHide(): void;
+  /** Manually hide the splash screen. */
+  hide(): void;
+}
+
 interface ChromeFunction {
   (...elements: ChromeElement[]): Unsubscribe;
   readonly on: ChromeOnOverloads;
   readonly messaging: ChromeMessaging;
+  readonly splash: ChromeSplash;
 }
 
 function chromeImpl(...elements: ChromeElement[]): Unsubscribe {
@@ -327,9 +349,31 @@ const messaging: ChromeMessaging = {
   },
 };
 
+const splash: ChromeSplash = {
+  preventAutoHide(): void {
+    _splashAutoHidePrevented = true;
+    // Set a synchronous window global so native can check it in didFinish /
+    // onPageFinished before the bridge port is ready (Android) or before the
+    // async reply channel fires (iOS).
+    if (typeof window !== "undefined") {
+      (window as unknown as Record<string, unknown>).__nativite_splash_prevent_auto_hide__ = true;
+    }
+  },
+  hide(): void {
+    postToNative({
+      id: null,
+      type: "call",
+      namespace: "__chrome__",
+      method: "__chrome_splash_hide__",
+      args: null,
+    });
+  },
+};
+
 export const chrome = Object.assign(chromeImpl, {
   on: chromeOn,
   messaging,
+  splash,
 }) as ChromeFunction;
 
 // ─── Chrome Area Factory Functions ───────────────────────────────────────────
@@ -417,6 +461,10 @@ export function _resetChromeState(): void {
   _pendingFlush = false;
   _flushGeneration++;
   _pendingNativeMessage = null;
+  _splashAutoHidePrevented = false;
+  if (typeof window !== "undefined") {
+    delete (window as unknown as Record<string, unknown>).__nativite_splash_prevent_auto_hide__;
+  }
   if (boundEventHandler && typeof window !== "undefined") {
     window.removeEventListener("__nativite_event__", boundEventHandler);
     boundEventHandler = undefined;

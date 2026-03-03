@@ -23,6 +23,8 @@ typealias NativiteHandler = (args: Any?, completion: (Result<Any?>) -> Unit) -> 
 
 class NativiteBridge {
     val chromeState: MutableState<Map<String, Any?>> = mutableStateOf(emptyMap())
+    /** Controls the Android splash screen keep-on-screen condition. */
+    val splashKeepOnScreen: MutableState<Boolean> = mutableStateOf(false)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val handlers = mutableMapOf<String, NativiteHandler>()
 
@@ -110,6 +112,11 @@ class NativiteBridge {
                         chromeState.value = state
                         pushChromeGeometryVars(state)
                     }
+                    if (id != null) replyPort.postMessage(WebMessageCompat(replyJson(id, null)))
+                    return
+                }
+                namespace == "__chrome__" && method == "__chrome_splash_hide__" -> {
+                    mainHandler.post { splashKeepOnScreen.value = false }
                     if (id != null) replyPort.postMessage(WebMessageCompat(replyJson(id, null)))
                     return
                 }

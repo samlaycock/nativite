@@ -323,7 +323,16 @@ extension ViewController: WKNavigationDelegate {
     // all --nk-* variables reflect actual safe area, traits, etc.
     vars.updateSafeArea(view.safeAreaInsets, in: self)
     vars.updateTraits(traitCollection)
-    chromeState?.splashVisible = false
+
+    // Check if JS called chrome.splash.preventAutoHide() during page load.
+    // The flag is set as a synchronous window global so it is available by
+    // the time didFinish fires. If the developer opted out of auto-hide,
+    // the splash stays visible until chrome.splash.hide() is called.
+    webView.evaluateJavaScript("window.__nativite_splash_prevent_auto_hide__ === true") { [weak self] result, _ in
+      if result as? Bool != true {
+        self?.chromeState?.splashVisible = false
+      }
+    }
   }
 }
 

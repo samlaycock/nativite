@@ -22,7 +22,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {${
       hasSplash
         ? `
-        installSplashScreen()`
+        // Keep the OS splash screen visible until the webview finishes loading
+        // (or until chrome.splash.hide() is called from JS).
+        bridge.splashKeepOnScreen.value = true
+        installSplashScreen().setKeepOnScreenCondition { bridge.splashKeepOnScreen.value }`
         : ""
     }
         enableEdgeToEdge()

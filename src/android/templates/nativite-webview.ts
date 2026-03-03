@@ -66,9 +66,14 @@ fun createNativiteWebView(
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
-            // Inject instance name so the JS bridge knows which webview this is
+            // Inject instance name, platform attribute, and CSS variable
+            // defaults as early as possible so CSS selectors like
+            // [data-nk-platform="android"] and var(--nk-*) work before
+            // content renders.
             view.evaluateJavascript(
-                "window.__nativekit_instance_name__ = '\${instanceName}';",
+                "window.__nativekit_instance_name__ = '\${instanceName}';" +
+                "document.documentElement.setAttribute('data-nk-platform','android');" +
+                NativiteVars.buildInitScript(),
                 null,
             )
         }
@@ -85,6 +90,15 @@ fun createNativiteWebView(
                     "(() => { var p = \${payload}; try { history.replaceState(null, '', p.route); dispatchEvent(new PopStateEvent('popstate')); } catch(e){} })();",
                     null,
                 )
+            }
+            // Check if JS called chrome.splash.preventAutoHide() during page
+            // load. If not, dismiss the splash screen automatically.
+            if (instanceName == "main") {
+                view.evaluateJavascript("window.__nativite_splash_prevent_auto_hide__ === true") { result ->
+                    if (result != "true") {
+                        bridge.splashKeepOnScreen.value = false
+                    }
+                }
             }
         }
     }

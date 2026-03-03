@@ -940,6 +940,49 @@ describe("nativiteReceive", () => {
   });
 });
 
+// ─── chrome.splash ──────────────────────────────────────────────────────────
+
+describe("chrome.splash", () => {
+  it("preventAutoHide() sets the window global", () => {
+    chrome.splash.preventAutoHide();
+    expect(
+      (globalThis as unknown as Record<string, unknown>).__nativite_splash_prevent_auto_hide__,
+    ).toBe(true);
+  });
+
+  it("preventAutoHide() is idempotent", () => {
+    chrome.splash.preventAutoHide();
+    chrome.splash.preventAutoHide();
+    expect(
+      (globalThis as unknown as Record<string, unknown>).__nativite_splash_prevent_auto_hide__,
+    ).toBe(true);
+  });
+
+  it("hide() sends the correct bridge message", () => {
+    chrome.splash.hide();
+    expect(postMessage).toHaveBeenCalledWith({
+      id: null,
+      type: "call",
+      namespace: "__chrome__",
+      method: "__chrome_splash_hide__",
+      args: null,
+    });
+  });
+
+  it("hide() works without a prior preventAutoHide() call", () => {
+    chrome.splash.hide();
+    expect(postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("_resetChromeState() clears the window global", () => {
+    chrome.splash.preventAutoHide();
+    _resetChromeState();
+    expect(
+      (globalThis as unknown as Record<string, unknown>).__nativite_splash_prevent_auto_hide__,
+    ).toBeUndefined();
+  });
+});
+
 // ─── Unified ButtonItem across areas ────────────────────────────────────────
 
 describe("unified ButtonItem across chrome areas", () => {

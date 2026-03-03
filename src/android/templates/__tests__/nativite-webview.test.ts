@@ -22,6 +22,17 @@ describe("nativiteWebViewTemplate", () => {
     expect(output).toContain("onPageStarted");
   });
 
+  it("sets data-nk-platform attribute on page start", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("document.documentElement.setAttribute('data-nk-platform','android')");
+  });
+
+  it("injects CSS variable defaults via NativiteVars.buildInitScript on page start", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("NativiteVars.buildInitScript()");
+    expect(output).toContain("onPageStarted");
+  });
+
   it("attaches bridge on page finish", () => {
     const output = nativiteWebViewTemplate(androidConfig);
     expect(output).toContain("onPageFinished");

@@ -69,6 +69,19 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
       return
     }
 
+    // Chrome splash hide — manually dismiss the splash overlay
+    if namespace == "__chrome__" && method == "__chrome_splash_hide__" {
+      guard isMessageFromPrimaryWebView(message) else {
+        replyHandler(nil, nil)
+        return
+      }
+      DispatchQueue.main.async {
+        self.viewController?.chromeState?.splashVisible = false
+      }
+      replyHandler(nil, nil)
+      return
+    }
+
     // Chrome inter-webview messaging — native message broker
     if namespace == "__chrome__" && method == "__chrome_messaging_post_to_parent__" {
       if !isMessageFromPrimaryWebView(message) {
