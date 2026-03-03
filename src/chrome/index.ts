@@ -29,15 +29,63 @@ import type {
 } from "./types.ts";
 
 // ─── Native transport ───────────────────────────────────────────────────────
-// Every webview (main and children) has its own webkit message handler, so all
-// chrome state and messaging routes directly through native.
+// Every webview (main and children) has its own native message handler registered
+// by the native shell. All state and messaging routes directly through native.
+//
+// iOS:     webkit.messageHandlers.nativite.postMessage()
+// Android: WebMessagePort transferred via postMessage("__nativite_port__")
 
 type WebKitHandler = { postMessage(msg: unknown): void };
 
-function getNativeHandler(): WebKitHandler | undefined {
+function getIOSHandler(): WebKitHandler | undefined {
   if (typeof window === "undefined") return undefined;
   return (window as Window & { webkit?: { messageHandlers?: { nativite?: WebKitHandler } } }).webkit
     ?.messageHandlers?.nativite;
+}
+
+// ─── Android WebMessagePort transport ────────────────────────────────────────
+// Native transfers a MessagePort to JS via postMessage("__nativite_port__").
+// We capture the port and use it for sending chrome state to the native side.
+
+let _androidPort: MessagePort | null = null;
+let _pendingNativeMessage: object | null = null;
+
+function setupChromeAndroidPortListener(): void {
+  if (typeof window === "undefined") return;
+  window.addEventListener("message", (event: MessageEvent) => {
+    if (event.data === "__nativite_port__" && event.ports.length > 0) {
+      _androidPort = event.ports[0]!;
+      // Flush any pending state that was queued before the port was ready
+      if (_pendingNativeMessage) {
+        _androidPort.postMessage(JSON.stringify(_pendingNativeMessage));
+        _pendingNativeMessage = null;
+      }
+    }
+  });
+}
+
+setupChromeAndroidPortListener();
+
+/**
+ * Send a fire-and-forget message to native, supporting both iOS and Android.
+ * On Android, if the port isn't ready yet, queues the message for delivery
+ * once the port connects. Only the latest queued message is kept (chrome state
+ * is replaced entirely, so we only need the final value).
+ */
+function postToNative(msg: object): void {
+  // iOS: webkit handler is available immediately
+  const handler = getIOSHandler();
+  if (handler) {
+    handler.postMessage(msg);
+    return;
+  }
+  // Android: use the transferred WebMessagePort
+  if (_androidPort) {
+    _androidPort.postMessage(JSON.stringify(msg));
+    return;
+  }
+  // Android port not ready yet — queue message for delivery when port connects
+  _pendingNativeMessage = msg;
 }
 
 // ─── Internal State ──────────────────────────────────────────────────────────
@@ -83,16 +131,13 @@ function flushState(): void {
     }
   }
   const state = buildState(effectiveMap);
-  const handler = getNativeHandler();
-  if (handler) {
-    handler.postMessage({
-      id: null,
-      type: "call",
-      namespace: "__chrome__",
-      method: "__chrome_set_state__",
-      args: state,
-    });
-  }
+  postToNative({
+    id: null,
+    type: "call",
+    namespace: "__chrome__",
+    method: "__chrome_set_state__",
+    args: state,
+  });
 }
 
 // ─── Flush scheduling ────────────────────────────────────────────────────────
@@ -248,7 +293,7 @@ const chromeOn: ChromeOnOverloads = (<T extends ChromeEventType>(
 
 const messaging: ChromeMessaging = {
   postToParent(payload: unknown): void {
-    getNativeHandler()?.postMessage({
+    postToNative({
       id: null,
       type: "call",
       namespace: "__chrome__",
@@ -257,7 +302,7 @@ const messaging: ChromeMessaging = {
     });
   },
   postToChild(name: string, payload: unknown): void {
-    getNativeHandler()?.postMessage({
+    postToNative({
       id: null,
       type: "call",
       namespace: "__chrome__",
@@ -266,7 +311,7 @@ const messaging: ChromeMessaging = {
     });
   },
   broadcast(payload: unknown): void {
-    getNativeHandler()?.postMessage({
+    postToNative({
       id: null,
       type: "call",
       namespace: "__chrome__",
@@ -371,6 +416,7 @@ export function _resetChromeState(): void {
   wildcardListeners.clear();
   _pendingFlush = false;
   _flushGeneration++;
+  _pendingNativeMessage = null;
   if (boundEventHandler && typeof window !== "undefined") {
     window.removeEventListener("__nativite_event__", boundEventHandler);
     boundEventHandler = undefined;

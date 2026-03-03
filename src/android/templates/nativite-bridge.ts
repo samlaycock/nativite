@@ -28,6 +28,7 @@ class NativiteBridge {
 
     private var primaryWebView: WebView? = null
     private var primaryPort: WebMessagePortCompat? = null
+    private var primaryVars: NativiteVars? = null
     private val childWebViews = mutableMapOf<String, WebView>()
     private val childPorts = mutableMapOf<String, WebMessagePortCompat>()
 
@@ -38,6 +39,7 @@ class NativiteBridge {
     fun attachWebView(webView: WebView, instanceName: String = "main") {
         if (instanceName == "main") {
             primaryWebView = webView
+            primaryVars = NativiteVars(webView, this).also { it.startObserving() }
         } else {
             childWebViews[instanceName] = webView
         }
@@ -49,6 +51,7 @@ class NativiteBridge {
         if (instanceName == "main") {
             primaryPort?.close()
             primaryPort = null
+            primaryVars = null
             primaryWebView = null
         } else {
             childPorts[instanceName]?.close()
@@ -103,7 +106,10 @@ class NativiteBridge {
                 namespace == "__chrome__" && method == "__chrome_set_state__" -> {
                     @Suppress("UNCHECKED_CAST")
                     val state = jsonToMap(msg.optJSONObject("args"))
-                    mainHandler.post { chromeState.value = state }
+                    mainHandler.post {
+                        chromeState.value = state
+                        pushChromeGeometryVars(state)
+                    }
                     if (id != null) replyPort.postMessage(WebMessageCompat(replyJson(id, null)))
                     return
                 }
@@ -155,13 +161,13 @@ class NativiteBridge {
             put("id", JSONObject.NULL)
             put("type", "event")
             put("event", name)
-            put("data", data ?: JSONObject.NULL)
+            put("data", toJsonValue(data))
         }
         val js = "window.nativiteReceive(\${event})"
         mainHandler.post { webView.evaluateJavascript(js, null) }
     }
 
-    fun sendEventToPrimary(name: String, data: Any?) {
+    fun sendEventToPrimary(name: String, data: Map<String, Any?>?) {
         primaryWebView?.let { sendEvent(it, name, data) }
     }
 
@@ -201,10 +207,37 @@ class NativiteBridge {
         }
     }
 
+    // ─── Chrome geometry CSS vars ──────────────────────────────────────────
+
+    private fun pushChromeGeometryVars(state: Map<String, Any?>) {
+        val vars = primaryVars ?: return
+        val titleBar = state["titleBar"] as? Map<*, *>
+        val navigation = state["navigation"] as? Map<*, *>
+        val toolbar = state["toolbar"] as? Map<*, *>
+
+        val titleBarVisible = titleBar != null && titleBar["hidden"] != true
+        val navVisible = navigation != null && navigation["hidden"] != true
+        val toolbarVisible = toolbar != null && toolbar["hidden"] != true
+
+        // Standard Material3 component heights (dp = CSS px in WebView)
+        val navHeight = if (titleBarVisible) 64 else 0
+        val tabHeight = if (navVisible) 80 else 0
+        val toolbarHeight = if (toolbarVisible && !navVisible) 80 else 0
+
+        vars.pushCustomVars(mapOf(
+            "--nk-nav-height" to "\${navHeight}px",
+            "--nk-nav-visible" to if (titleBarVisible) "1" else "0",
+            "--nk-tab-height" to "\${tabHeight}px",
+            "--nk-tab-visible" to if (navVisible) "1" else "0",
+            "--nk-toolbar-height" to "\${toolbarHeight}px",
+            "--nk-toolbar-visible" to if (toolbarVisible) "1" else "0",
+        ))
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────────
 
     fun getDefaultChromeState(): Map<String, Any?>? {
-        val json = ${defaultChromeJson} ?: return null
+        val json: String = ${defaultChromeJson} ?: return null
         return try {
             jsonToMap(JSONObject(json))
         } catch (_: Exception) {
@@ -227,6 +260,34 @@ class NativiteBridge {
                 put("error", message)
             }
             return obj.toString()
+        }
+
+        /** Convert a Kotlin value to a JSON-safe type for JSONObject.put(). */
+        fun toJsonValue(value: Any?): Any {
+            return when (value) {
+                null -> JSONObject.NULL
+                is JSONObject, is org.json.JSONArray -> value
+                is Map<*, *> -> mapToJsonObject(value)
+                is List<*> -> listToJsonArray(value)
+                is Boolean, is Number, is String -> value
+                else -> value.toString()
+            }
+        }
+
+        private fun mapToJsonObject(map: Map<*, *>): JSONObject {
+            val obj = JSONObject()
+            for ((key, value) in map) {
+                obj.put(key.toString(), toJsonValue(value))
+            }
+            return obj
+        }
+
+        private fun listToJsonArray(list: List<*>): org.json.JSONArray {
+            val array = org.json.JSONArray()
+            for (value in list) {
+                array.put(toJsonValue(value))
+            }
+            return array
         }
 
         fun jsonToMap(json: JSONObject?): Map<String, Any?> {

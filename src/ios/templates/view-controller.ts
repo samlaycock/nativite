@@ -419,7 +419,6 @@ class ViewController: NSViewController {
   private(set) var webView: WKWebView!
   private let bridge = NativiteBridge()
   private let vars   = NativiteVars()${hasOta ? "\n  private let otaUpdater = OTAUpdater()" : ""}
-  private var hasLoadedContent = false
 
   // SwiftUI @Observable model — injected by NativiteViewControllerRepresentable.
   var chromeState: NativiteChromeState?
@@ -432,9 +431,20 @@ class ViewController: NSViewController {
     super.viewDidLoad()
 
     let config = WKWebViewConfiguration()
+    // Using WKWebsiteDataStore.default() ensures this webview shares the same
+    // web process as any child webviews using the default store (macOS 14+),
+    // enabling shared storage (localStorage, IndexedDB, cookies) across instances.
+    config.websiteDataStore = WKWebsiteDataStore.default()
     // Appended to every request's User-Agent so the Vite dev server can route
     // this WKWebView to the "macos" named platform environment.
     config.applicationNameForUserAgent = "Nativite/macos/1.0"
+    // Identify this webview as "main" so the native message broker can
+    // route postToParent/postToChild/broadcast calls to the correct instance.
+    config.userContentController.addUserScript(WKUserScript(
+      source: "window.__nativekit_instance_name__ = \\"main\\";",
+      injectionTime: .atDocumentStart,
+      forMainFrameOnly: false
+    ))
     config.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "nativite")
     bridge.viewController = self
 
@@ -466,19 +476,20 @@ class ViewController: NSViewController {
       bridge.chrome.chromeState = chromeState
     }
 
-    ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
-  }
-
-  override func viewDidAppear() {
-    super.viewDidAppear()
-    guard !hasLoadedContent else { return }
-    hasLoadedContent = true
-    loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}
+    ${hasOta ? "otaUpdater.applyPendingUpdateIfAvailable()\n    " : ""}loadContent()${hasOta ? "\n    Task { await otaUpdater.checkForUpdate() }" : ""}${hasDefaultChrome ? "\n    bridge.chrome.applyInitialState()" : ""}
   }
 
   override func viewDidLayout() {
     super.viewDidLayout()
     vars.updateSafeArea(view.safeAreaInsets)
+
+    // Replay any chrome state that arrived before SwiftUI attached the
+    // ViewController's view to the NSWindow hierarchy.  The first
+    // viewDidLayout() call after window attachment is our earliest
+    // reliable signal that the window is available.
+    if view.window != nil {
+      bridge.chrome.replayPendingState()
+    }
 
     let insets = view.safeAreaInsets
     bridge.chrome.sendEvent(name: "safeArea.changed", data: [
@@ -543,6 +554,13 @@ extension ViewController: WKNavigationDelegate {
     }
 
     decisionHandler(.allow)
+  }
+
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    // The user script seeds :root with zero defaults at documentStart.
+    // Re-push the real device values now that the JS context exists so
+    // all --nk-* variables reflect actual safe area, traits, etc.
+    vars.updateSafeArea(view.safeAreaInsets)
   }
 }
 

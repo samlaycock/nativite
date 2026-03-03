@@ -1385,6 +1385,13 @@ class NativiteChrome: NSObject {
   // All child webviews indexed by instance name for messaging.
   private var childWebViews: [String: WKWebView] = [:]
 
+  // ── Deferred window state ─────────────────────────────────────────────────
+  // When the ViewController is embedded via NSViewControllerRepresentable the
+  // NSWindow may not yet be attached to the view hierarchy at the time the
+  // first chrome state arrives from JS.  We stash the pending state and let
+  // the ViewController replay it once the window becomes available.
+  private var pendingWindowState: [String: Any]?
+
   // ── Entry point ────────────────────────────────────────────────────────────
 
   func applyState(_ args: Any?) {
@@ -1393,67 +1400,141 @@ class NativiteChrome: NSObject {
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
 
-      // Wire the event callback so SwiftUI views can route user
-      // interactions back to the JS bridge (future use on macOS).
-      if self.chromeState?.onChromeEvent == nil {
-        self.chromeState?.onChromeEvent = { [weak self] name, data in
-          self?.sendEvent(name: name, data: data)
-        }
+      // If the window isn't available yet (e.g. SwiftUI hasn't finished
+      // embedding the view in the window hierarchy), stash the state so the
+      // ViewController can replay it via replayPendingState() once the
+      // window is attached.
+      if self.viewController?.view.window == nil {
+        self.pendingWindowState = state
+        // Still forward SwiftUI-driven areas (sheets, alerts) that do NOT
+        // require the window — they are pure @Observable model updates.
+        self.applySwiftUIOnlyState(state)
+        return
       }
 
-      // Reset areas that were previously applied but are now absent.
-      let currentAreas = Set(state.keys)
-      for area in self.lastAppliedAreas.subtracting(currentAreas) {
-        self.resetArea(area)
-      }
-      self.lastAppliedAreas = currentAreas
-
-      if let titleBarState = state["titleBar"] as? [String: Any] {
-        self.applyTitleBar(titleBarState)
-      }
-      if let toolbarState = state["toolbar"] as? [String: Any] {
-        self.applyToolbar(toolbarState)
-      }
-      if let navigationState = state["navigation"] as? [String: Any] {
-        self.applyNavigation(navigationState)
-      }
-      if let menuBarState = state["menuBar"] as? [String: Any] {
-        self.applyMenuBar(menuBarState)
-      }
-      if let sidebarPanelState = state["sidebarPanel"] as? [String: Any] {
-        self.applySidebarPanel(sidebarPanelState)
-      }
-      if let sheets = state["sheets"] as? [String: [String: Any]] {
-        for (name, sheetState) in sheets {
-          self.applySheet(name: name, state: sheetState)
-        }
-      }
-      if let drawers = state["drawers"] as? [String: [String: Any]] {
-        for (name, drawerState) in drawers {
-          self.applyDrawer(name: name, state: drawerState)
-        }
-      }
-      if let appWindows = state["appWindows"] as? [String: [String: Any]] {
-        for (name, windowState) in appWindows {
-          self.applyAppWindow(name: name, state: windowState)
-        }
-      }
-      if let popovers = state["popovers"] as? [String: [String: Any]] {
-        for (name, popoverState) in popovers {
-          self.applyPopover(name: name, state: popoverState)
-        }
-      }
-
-      // Rebuild the unified NSToolbar after both titleBar and toolbar areas
-      // have been processed so all items are merged into a single toolbar.
-      self.rebuildToolbarIfNeeded()
-
-      // Push updated chrome geometry to CSS variables.
-      self.pushVarUpdates()
-
-      // iOS-only areas are no-ops: statusBar, homeIndicator, keyboard,
-      // tabBottomAccessory
+      self.pendingWindowState = nil
+      self.applyStateInternal(state)
     }
+  }
+
+  /// Called by the ViewController (from viewDidLayout) once the NSWindow is
+  /// attached.  Replays any chrome state that was deferred because the window
+  /// was not yet available.
+  func replayPendingState() {
+    guard let state = pendingWindowState else { return }
+    pendingWindowState = nil
+    applyStateInternal(state)
+  }
+
+  /// Forward state for areas that are driven purely by the @Observable
+  /// NativiteChromeState model (no window dependency).  Also applies the
+  /// navigation segmented control because it is added to vc.view directly
+  /// and does not require the NSWindow.
+  private func applySwiftUIOnlyState(_ state: [String: Any]) {
+    if let titleBarState = state["titleBar"] as? [String: Any] {
+      chromeState?.updateTitleBar(titleBarState)
+    }
+    if let toolbarState = state["toolbar"] as? [String: Any] {
+      chromeState?.updateToolbar(toolbarState)
+    }
+    if let navigationState = state["navigation"] as? [String: Any] {
+      chromeState?.updateNavigation(navigationState)
+      applyNavigation(navigationState)
+    }
+    rebuildNavigationIfNeeded()
+    if let menuBarState = state["menuBar"] as? [String: Any] {
+      chromeState?.updateMenuBar(menuBarState)
+    }
+    if let sidebarPanelState = state["sidebarPanel"] as? [String: Any] {
+      chromeState?.updateSidebarPanel(sidebarPanelState)
+    }
+    if let sheets = state["sheets"] as? [String: [String: Any]] {
+      for (name, sheetState) in sheets {
+        chromeState?.updateSheet(name: name, state: sheetState)
+      }
+    }
+    if let drawers = state["drawers"] as? [String: [String: Any]] {
+      for (name, drawerState) in drawers {
+        chromeState?.updateDrawer(name: name, state: drawerState)
+      }
+    }
+    if let appWindows = state["appWindows"] as? [String: [String: Any]] {
+      for (name, windowState) in appWindows {
+        chromeState?.updateAppWindow(name: name, state: windowState)
+      }
+    }
+    if let popovers = state["popovers"] as? [String: [String: Any]] {
+      for (name, popoverState) in popovers {
+        chromeState?.updatePopover(name: name, state: popoverState)
+      }
+    }
+  }
+
+  private func applyStateInternal(_ state: [String: Any]) {
+    // Wire the event callback so SwiftUI views can route user
+    // interactions back to the JS bridge (future use on macOS).
+    if self.chromeState?.onChromeEvent == nil {
+      self.chromeState?.onChromeEvent = { [weak self] name, data in
+        self?.sendEvent(name: name, data: data)
+      }
+    }
+
+    // Reset areas that were previously applied but are now absent.
+    let currentAreas = Set(state.keys)
+    for area in self.lastAppliedAreas.subtracting(currentAreas) {
+      self.resetArea(area)
+    }
+    self.lastAppliedAreas = currentAreas
+
+    if let titleBarState = state["titleBar"] as? [String: Any] {
+      self.applyTitleBar(titleBarState)
+    }
+    if let toolbarState = state["toolbar"] as? [String: Any] {
+      self.applyToolbar(toolbarState)
+    }
+    if let navigationState = state["navigation"] as? [String: Any] {
+      self.applyNavigation(navigationState)
+    }
+    if let menuBarState = state["menuBar"] as? [String: Any] {
+      self.applyMenuBar(menuBarState)
+    }
+    if let sidebarPanelState = state["sidebarPanel"] as? [String: Any] {
+      self.applySidebarPanel(sidebarPanelState)
+    }
+    if let sheets = state["sheets"] as? [String: [String: Any]] {
+      for (name, sheetState) in sheets {
+        self.applySheet(name: name, state: sheetState)
+      }
+    }
+    if let drawers = state["drawers"] as? [String: [String: Any]] {
+      for (name, drawerState) in drawers {
+        self.applyDrawer(name: name, state: drawerState)
+      }
+    }
+    if let appWindows = state["appWindows"] as? [String: [String: Any]] {
+      for (name, windowState) in appWindows {
+        self.applyAppWindow(name: name, state: windowState)
+      }
+    }
+    if let popovers = state["popovers"] as? [String: [String: Any]] {
+      for (name, popoverState) in popovers {
+        self.applyPopover(name: name, state: popoverState)
+      }
+    }
+
+    // Rebuild the unified NSToolbar after both titleBar and toolbar areas
+    // have been processed so all items are merged into a single toolbar.
+    self.rebuildToolbarIfNeeded()
+
+    // Rebuild the navigation segmented control separately — it is added to
+    // vc.view and does not require the window to be available.
+    self.rebuildNavigationIfNeeded()
+
+    // Push updated chrome geometry to CSS variables.
+    self.pushVarUpdates()
+
+    // iOS-only areas are no-ops: statusBar, homeIndicator, keyboard,
+    // tabBottomAccessory
   }
 
   private func pushVarUpdates() {
@@ -1561,9 +1642,8 @@ ${applyInitialStateMethod}
     let hasTrailing = pendingTrailingItems != nil
     let hasToolbar = pendingToolbarItems != nil
     let hasSearch = pendingSearchBar != nil
-    let hasNavigation = pendingNavigationItems != nil
 
-    guard hasLeading || hasTrailing || hasToolbar || hasSearch || hasNavigation else {
+    guard hasLeading || hasTrailing || hasToolbar || hasSearch else {
       // No toolbar-related state — remove toolbar if it exists.
       if toolbar != nil {
         viewController?.view.window?.toolbar = nil
@@ -1572,18 +1652,6 @@ ${applyInitialStateMethod}
         toolbarItems = [:]
         toolbarItemActions = [:]
         toolbarMenuActions = [:]
-        navigationSegmentedControl = nil
-        navigationItems = []
-        if let container = navigationContainerView {
-          container.removeFromSuperview()
-          navigationContainerView = nil
-          navigationWebViewTopConstraint?.isActive = false
-          navigationWebViewTopConstraint = nil
-          if let vc = viewController {
-            vc.webView.autoresizingMask = [.width, .height]
-            vc.webView.frame = vc.view.bounds
-          }
-        }
       }
       return
     }
@@ -1687,75 +1755,94 @@ ${applyInitialStateMethod}
     pendingTrailingItems = nil
     pendingToolbarItems = nil
     pendingSearchBar = nil
+  }
 
-    // ── Navigation segmented control (below the toolbar) ──────────────────
-    if let navItems = pendingNavigationItems {
-      let hidden = pendingNavigationHidden
-      let activeItem = pendingNavigationActiveItem
-      navigationItems = navItems
+  // ── Navigation segmented control ─────────────────────────────────────
+  // Extracted from rebuildToolbarIfNeeded() because the NSSegmentedControl
+  // is added to vc.view (not the window), so it must NOT be blocked by the
+  // guard-let-window check that toolbar creation requires.
 
-      if !navItems.isEmpty {
-        let seg: NSSegmentedControl
-        if let existing = navigationSegmentedControl {
-          seg = existing
-        } else {
-          seg = NSSegmentedControl()
-          seg.segmentStyle = .capsule
-          seg.trackingMode = .selectOne
-          seg.target = self
-          seg.action = #selector(navigationSegmentTapped(_:))
-          seg.translatesAutoresizingMaskIntoConstraints = false
-          navigationSegmentedControl = seg
-        }
+  private func rebuildNavigationIfNeeded() {
+    guard let navItems = pendingNavigationItems else { return }
 
-        seg.segmentCount = navItems.count
-        for (index, item) in navItems.enumerated() {
-          seg.setLabel(item["label"] as? String ?? "", forSegment: index)
-          if let icon = item["icon"] as? String,
-             let image = NSImage(systemSymbolName: icon, accessibilityDescription: item["label"] as? String) {
+    let hidden = pendingNavigationHidden
+    let activeItem = pendingNavigationActiveItem
+    navigationItems = navItems
+
+    if !navItems.isEmpty {
+      let seg: NSSegmentedControl
+      if let existing = navigationSegmentedControl {
+        seg = existing
+      } else {
+        seg = NSSegmentedControl()
+        seg.segmentStyle = .capsule
+        seg.trackingMode = .selectOne
+        seg.target = self
+        seg.action = #selector(navigationSegmentTapped(_:))
+        seg.translatesAutoresizingMaskIntoConstraints = false
+        navigationSegmentedControl = seg
+      }
+
+      seg.segmentCount = navItems.count
+      for (index, item) in navItems.enumerated() {
+        seg.setLabel(item["label"] as? String ?? "", forSegment: index)
+        let role = item["role"] as? String
+        if let icon = item["icon"] as? String,
+           let image = NSImage(systemSymbolName: icon, accessibilityDescription: item["label"] as? String) {
+          seg.setImage(image, forSegment: index)
+        } else if role == "search" {
+          // Default to magnifying glass for search-role items when no icon
+          // is provided, matching the iOS behaviour.
+          if let image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: item["label"] as? String) {
             seg.setImage(image, forSegment: index)
           }
-          let itemId = item["id"] as? String ?? ""
-          if itemId == activeItem {
-            seg.selectedSegment = index
-          }
         }
-
-        // Create the container if it doesn't exist.
-        if navigationContainerView == nil {
-          let container = NSView()
-          container.translatesAutoresizingMaskIntoConstraints = false
-          container.addSubview(seg)
-          NSLayoutConstraint.activate([
-            seg.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            seg.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            container.heightAnchor.constraint(equalToConstant: 36),
-          ])
-          navigationContainerView = container
-          if let vc = viewController {
-            installNavigationContainer(container, in: vc)
-          }
-        }
-      } else {
-        // Empty items — remove the container.
-        navigationSegmentedControl = nil
-        if let container = navigationContainerView {
-          container.removeFromSuperview()
-          navigationContainerView = nil
-          navigationWebViewTopConstraint?.isActive = false
-          navigationWebViewTopConstraint = nil
-          if let vc = viewController {
-            vc.webView.autoresizingMask = [.width, .height]
-            vc.webView.frame = vc.view.bounds
-          }
+        let disabled = (item["disabled"] as? Bool) ?? false
+        seg.setEnabled(!disabled, forSegment: index)
+        let itemId = item["id"] as? String ?? ""
+        if itemId == activeItem {
+          seg.selectedSegment = index
         }
       }
 
-      navigationContainerView?.isHidden = hidden
+      // style, minimizeBehavior, subtitle, badge, and searchBar are
+      // no-ops on macOS — NSSegmentedControl does not support these
+      // concepts natively.
 
-      pendingNavigationItems = nil
-      pendingNavigationActiveItem = nil
+      // Create the container if it doesn't exist.
+      if navigationContainerView == nil {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(seg)
+        NSLayoutConstraint.activate([
+          seg.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+          seg.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+          container.heightAnchor.constraint(equalToConstant: 36),
+        ])
+        navigationContainerView = container
+        if let vc = viewController {
+          installNavigationContainer(container, in: vc)
+        }
+      }
+    } else {
+      // Empty items — remove the container.
+      navigationSegmentedControl = nil
+      if let container = navigationContainerView {
+        container.removeFromSuperview()
+        navigationContainerView = nil
+        navigationWebViewTopConstraint?.isActive = false
+        navigationWebViewTopConstraint = nil
+        if let vc = viewController {
+          vc.webView.autoresizingMask = [.width, .height]
+          vc.webView.frame = vc.view.bounds
+        }
+      }
     }
+
+    navigationContainerView?.isHidden = hidden
+
+    pendingNavigationItems = nil
+    pendingNavigationActiveItem = nil
   }
 
   private func makeToolbarItem(_ state: [String: Any], position: String) -> NSToolbarItem? {
@@ -1886,8 +1973,10 @@ ${applyInitialStateMethod}
     let topConstraint = vc.webView.topAnchor.constraint(equalTo: container.bottomAnchor)
     navigationWebViewTopConstraint = topConstraint
 
+    // Pin the container to the safe-area top so it sits below the title bar /
+    // toolbar rather than being hidden behind them.
     NSLayoutConstraint.activate([
-      container.topAnchor.constraint(equalTo: parent.topAnchor),
+      container.topAnchor.constraint(equalTo: parent.safeAreaLayoutGuide.topAnchor),
       container.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
       container.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
       topConstraint,
@@ -1989,9 +2078,12 @@ ${applyInitialStateMethod}
     sidebarItems = items.compactMap { SidebarNode.from($0) }
     sidebarActiveItemId = state["activeItem"] as? String
 
-    // Lazily create the split view controller.
+    // Lazily create the split view embedded inside the ViewController's own
+    // view hierarchy.  IMPORTANT: We must NOT replace window.contentViewController
+    // because SwiftUI's WindowGroup owns the window — replacing it would destroy
+    // the hosting view hierarchy (sheets, alerts, etc.).
     if splitViewController == nil {
-      guard let vc = viewController, let window = vc.view.window else { return }
+      guard let vc = viewController else { return }
 
       let split = NSSplitViewController()
 
@@ -2003,12 +2095,26 @@ ${applyInitialStateMethod}
       sidebarItem.maximumThickness = 320
       split.addSplitViewItem(sidebarItem)
 
-      // Detail item — wraps the existing ViewController
-      let detailItem = NSSplitViewItem(viewController: vc)
+      // Detail item — hosts the webview (not the ViewController itself, which
+      // is owned by SwiftUI's NSViewControllerRepresentable).
+      let detailVC = NSViewController()
+      detailVC.view = NSView(frame: vc.view.bounds)
+      let detailItem = NSSplitViewItem(viewController: detailVC)
       split.addSplitViewItem(detailItem)
 
-      // Swap window content
-      window.contentViewController = split
+      // Embed the split view inside the ViewController's view instead of
+      // replacing the window's contentViewController.
+      vc.addChild(split)
+      split.view.frame = vc.view.bounds
+      split.view.autoresizingMask = [.width, .height]
+      vc.view.addSubview(split.view)
+
+      // Reparent the webview into the detail pane.
+      vc.webView.removeFromSuperview()
+      vc.webView.frame = detailVC.view.bounds
+      vc.webView.autoresizingMask = [.width, .height]
+      detailVC.view.addSubview(vc.webView)
+
       splitViewController = split
 
       // Build outline view
@@ -2102,14 +2208,27 @@ ${applyInitialStateMethod}
         return
       }
 
-      // Ensure split view controller exists
+      // Ensure split view controller exists — embed inside the ViewController's
+      // view hierarchy rather than replacing window.contentViewController (which
+      // is owned by SwiftUI's WindowGroup).
       if splitViewController == nil {
-        // Create a minimal split VC to host drawers
-        guard let window = vc.view.window else { return }
         let split = NSSplitViewController()
-        let detailItem = NSSplitViewItem(viewController: vc)
+        let detailVC = NSViewController()
+        detailVC.view = NSView(frame: vc.view.bounds)
+        let detailItem = NSSplitViewItem(viewController: detailVC)
         split.addSplitViewItem(detailItem)
-        window.contentViewController = split
+
+        vc.addChild(split)
+        split.view.frame = vc.view.bounds
+        split.view.autoresizingMask = [.width, .height]
+        vc.view.addSubview(split.view)
+
+        // Reparent the webview into the detail pane.
+        vc.webView.removeFromSuperview()
+        vc.webView.frame = detailVC.view.bounds
+        vc.webView.autoresizingMask = [.width, .height]
+        detailVC.view.addSubview(vc.webView)
+
         splitViewController = split
       }
 
@@ -2392,9 +2511,18 @@ ${applyInitialStateMethod}
 
   private func resetSidebarPanel() {
     chromeState?.resetSidebarPanel()
-    if splitViewController != nil, let vc = viewController, let window = vc.view.window {
-      // Remove the split view and restore the VC directly.
-      window.contentViewController = vc
+    if let split = splitViewController, let vc = viewController {
+      // Reparent the webview back into the ViewController's view and remove
+      // the embedded split view.  We must NOT touch window.contentViewController
+      // because SwiftUI's WindowGroup owns the window.
+      vc.webView.removeFromSuperview()
+      split.view.removeFromSuperview()
+      split.removeFromParent()
+
+      vc.webView.frame = vc.view.bounds
+      vc.webView.autoresizingMask = [.width, .height]
+      vc.view.addSubview(vc.webView)
+
       splitViewController = nil
       sidebarOutlineView = nil
       sidebarScrollView = nil

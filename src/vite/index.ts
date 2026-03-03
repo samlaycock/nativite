@@ -9,7 +9,6 @@ import type {
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, statSync, watchFile, writeFileSync } from "node:fs";
-import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -32,19 +31,6 @@ export { defineConfig } from "../index.ts";
 export { platformExtensionsPlugin };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getLanIp(): string | undefined {
-  const nets = networkInterfaces();
-  for (const iface of Object.values(nets)) {
-    if (!iface) continue;
-    for (const net of iface) {
-      if (net.family === "IPv4" && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return undefined;
-}
 
 function collectAssets(dir: string, root: string): string[] {
   const results: string[] = [];
@@ -219,10 +205,11 @@ function nativiteCorePlugin(): Plugin {
   let config: NativiteConfig;
   let platformMetadata = runtimeMetadataFromEnv();
   let configuredPlatformRuntimes = [] as ReturnType<typeof resolveConfiguredPlatformRuntimes>;
-  let configuredNativeEnvironmentNames = new Set<string>(["ios", "ipad", "macos"]);
+  let configuredNativeEnvironmentNames = new Set<string>(["ios", "ipad", "macos", "android"]);
   let nativeVariantSuffixes = new Set<string>([
     ".ios",
     ".ipad",
+    ".android",
     ".mobile",
     ".native",
     ".macos",
@@ -255,7 +242,7 @@ function nativiteCorePlugin(): Plugin {
         const environments =
           metadataEnvironments.length > 0
             ? metadataEnvironments
-            : (["ios", "ipad", "macos"] as string[]);
+            : (["ios", "ipad", "macos", "android"] as string[]);
         for (const environment of environments) {
           nativePlatforms.push(environment as Platform);
         }
@@ -278,6 +265,7 @@ function nativiteCorePlugin(): Plugin {
       const serverConfig =
         command === "serve"
           ? {
+              host: true as const,
               hmr:
                 hmrConfig === false
                   ? false
@@ -400,51 +388,13 @@ function nativiteCorePlugin(): Plugin {
         }
       });
 
-      server.httpServer?.once("listening", async () => {
-        const launchPlatform = process.env["NATIVITE_PLATFORM"] as Platform | undefined;
-        const launchConfig = launchPlatform
-          ? resolveConfigForPlatform(config, launchPlatform)
-          : config;
-
-        // CLI flags (NATIVITE_TARGET / NATIVITE_SIMULATOR env vars) override
-        // the config file values, allowing `nativite dev --simulator "iPhone 15"`
-        // to work without editing nativite.config.ts. Per-platform iOS dev
-        // options from platforms: [ios({ ... })] are normalized into config.dev.
-        const target =
-          (process.env["NATIVITE_TARGET"] as "simulator" | "device" | undefined) ??
-          launchConfig.dev?.target ??
-          "simulator";
-        const simulatorName =
-          process.env["NATIVITE_SIMULATOR"] ?? launchConfig.dev?.simulator ?? "iPhone 16 Pro";
-
-        let devUrl: string;
-        if (target === "device") {
-          const ip = getLanIp() ?? "localhost";
-          const networkUrl = server.resolvedUrls?.network[0];
-          devUrl = networkUrl ?? `http://${ip}:5173`;
-        } else {
-          const localUrl = server.resolvedUrls?.local[0];
-          devUrl = localUrl ?? "http://localhost:5173";
-        }
+      server.httpServer?.once("listening", () => {
+        const localUrl = server.resolvedUrls?.local[0];
+        const networkUrl = server.resolvedUrls?.network[0];
+        const devUrl = networkUrl ?? localUrl ?? "http://localhost:5173";
 
         mkdirSync(nativiteDir, { recursive: true });
         writeFileSync(join(nativiteDir, "dev.json"), JSON.stringify({ devURL: devUrl }, null, 2));
-
-        for (const runtime of configuredPlatformRuntimes) {
-          if (typeof runtime.plugin.dev !== "function") continue;
-          if (launchPlatform && runtime.id !== launchPlatform) continue;
-          const runtimeConfig = resolveConfigForPlatform(config, runtime.id);
-          await runtime.plugin.dev({
-            rootConfig: config,
-            config: runtimeConfig,
-            projectRoot: viteConfig.root,
-            platform: runtime.config,
-            logger: viteConfig.logger,
-            devUrl,
-            launchTarget: target,
-            simulatorName,
-          });
-        }
       });
 
       if (viteConfig.configFile) {
@@ -605,8 +555,8 @@ export function nativite(): Plugin[] {
   return [
     // Sub-plugin 1: platform file extension resolution, scoped per environment.
     //
-    // Named native environments ("ios", "ipad", "macos") are statically bound
-    // to their platform — the env name IS the platform.
+    // Named native environments ("ios", "ipad", "android", "macos") are statically
+    // bound to their platform — the env name IS the platform.
     //
     // "client" is handled separately because it serves two distinct roles:
     //   • In dev: serves web browsers → always uses "web" extensions.
@@ -614,10 +564,11 @@ export function nativite(): Plugin[] {
     //     the native app embeds in the .app bundle and loads in production.
     //     It must therefore resolve the target platform's extensions, not web.
     //
-    //   "ios"    → .ios, .mobile, .native variants
-    //   "ipad"   → .ipad, .ios, .mobile, .native variants
-    //   "macos"  → .macos, .desktop, .native variants
-    //   "client" → NATIVITE_PLATFORM extensions in native builds, else .web
+    //   "ios"     → .ios, .mobile, .native variants
+    //   "ipad"    → .ipad, .ios, .mobile, .native variants
+    //   "android" → .android, .mobile, .native variants
+    //   "macos"   → .macos, .desktop, .native variants
+    //   "client"  → NATIVITE_PLATFORM extensions in native builds, else .web
     //   anything else → skipped (Vite resolves normally)
     (() => {
       // One cached platformExtensionsPlugin per platform, constructed lazily.
@@ -636,6 +587,7 @@ export function nativite(): Plugin[] {
         const map = new Map<string, string>([
           ["ios", "ios"],
           ["ipad", "ios"],
+          ["android", "android"],
           ["macos", "macos"],
         ]);
         const metadata = runtimeMetadataFromEnv();

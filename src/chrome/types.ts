@@ -10,7 +10,8 @@ export interface ButtonItem {
   readonly label?: string;
   /**
    * Platform icon identifier.
-   * On iOS/macOS this is an SF Symbol name ("plus", "square.and.arrow.up").
+   * iOS/macOS: SF Symbol name (e.g. "plus", "square.and.arrow.up").
+   * Android: Material Icon name (e.g. "Add", "Share").
    */
   readonly icon?: string;
   /**
@@ -276,6 +277,7 @@ export type ChromeEvent =
   | { readonly type: "titleBar.searchChanged"; readonly value: string }
   | { readonly type: "titleBar.searchSubmitted"; readonly value: string }
   | { readonly type: "titleBar.searchCancelled" }
+  | { readonly type: "navigation.backPressed" }
   | { readonly type: "navigation.itemPressed"; readonly id: string }
   | { readonly type: "navigation.searchChanged"; readonly value: string }
   | { readonly type: "navigation.searchSubmitted"; readonly value: string }

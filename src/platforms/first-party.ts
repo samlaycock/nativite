@@ -227,7 +227,8 @@ const androidPlatformPlugin: NativitePlatformPlugin = {
 
     const projectPath = join(ctx.projectRoot, ".nativite", "android");
     const assetsDir = join(projectPath, "app", "src", "main", "assets");
-    writeFileSync(join(assetsDir, "dev.json"), JSON.stringify({ devURL: ctx.devUrl }));
+    const devUrl = ctx.devUrl.replace("localhost", "10.0.2.2").replace("127.0.0.1", "10.0.2.2");
+    writeFileSync(join(assetsDir, "dev.json"), JSON.stringify({ devURL: devUrl }));
 
     try {
       ctx.logger.info("Building Android debug APK...");
@@ -239,6 +240,26 @@ const androidPlatformPlugin: NativitePlatformPlugin = {
 
       const appId = ctx.config.app.bundleId;
       const apkPath = join(projectPath, "app", "build", "outputs", "apk", "debug", "app-debug.apk");
+
+      // Boot an emulator if no device/emulator is connected.
+      const devices = execSync("adb devices", { stdio: "pipe" }).toString();
+      const hasDevice = devices
+        .split("\n")
+        .some((line) => /\t(device|emulator)$/.test(line.trim()));
+      if (!hasDevice) {
+        const avds = execSync("emulator -list-avds", { stdio: "pipe" }).toString().trim();
+        const avd = avds.split("\n")[0];
+        if (!avd) {
+          throw new Error("No Android emulators found. Create one in Android Studio first.");
+        }
+        ctx.logger.info(`Booting emulator: ${avd}`);
+        spawn("emulator", ["-avd", avd], {
+          detached: true,
+          stdio: "ignore",
+        }).unref();
+        // Wait for the device to come online.
+        execSync("adb wait-for-device", { stdio: "pipe", timeout: 120_000 });
+      }
 
       execSync(`adb install -r "${apkPath}"`, { stdio: "pipe" });
       execSync(`adb shell am start -n "${appId}/.MainActivity"`, { stdio: "pipe" });

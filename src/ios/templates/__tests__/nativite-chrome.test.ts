@@ -976,5 +976,62 @@ describe("nativiteChromeTemplate", () => {
         expect(macos).toContain("window.titleVisibility");
       });
     });
+
+    describe("deferred window state (SwiftUI NSViewControllerRepresentable)", () => {
+      it("defers chrome state when view.window is nil and replays via replayPendingState", () => {
+        const macos = getMacosSection();
+        // applyState should check for nil window and store pendingWindowState
+        expect(macos).toContain("pendingWindowState");
+        expect(macos).toContain("viewController?.view.window == nil");
+        // replayPendingState is called from the ViewController's viewDidLayout
+        expect(macos).toContain("func replayPendingState()");
+        expect(macos).toContain("applyStateInternal(state)");
+      });
+
+      it("still forwards SwiftUI-only state (sheets, alerts) even when window is nil", () => {
+        const macos = getMacosSection();
+        expect(macos).toContain("applySwiftUIOnlyState(state)");
+        // The fallback should forward to chromeState model updates
+        const swiftUIOnlyStart = macos.indexOf("func applySwiftUIOnlyState");
+        expect(swiftUIOnlyStart).toBeGreaterThan(-1);
+        const swiftUIOnlyBody = macos.slice(swiftUIOnlyStart, swiftUIOnlyStart + 1500);
+        expect(swiftUIOnlyBody).toContain("chromeState?.updateSheet(");
+        expect(swiftUIOnlyBody).toContain("chromeState?.updateTitleBar(");
+      });
+    });
+
+    describe("sidebar/drawer must not replace window.contentViewController", () => {
+      it("applySidebarPanel embeds split view inside ViewController's view, not the window", () => {
+        const macos = getMacosSection();
+        const sidebarStart = macos.indexOf("func applySidebarPanel");
+        expect(sidebarStart).toBeGreaterThan(-1);
+        const sidebarBody = macos.slice(sidebarStart, sidebarStart + 2500);
+        // Must embed as child VC, not replace contentViewController
+        expect(sidebarBody).toContain("vc.addChild(split)");
+        expect(sidebarBody).toContain("vc.view.addSubview(split.view)");
+        expect(sidebarBody).not.toContain("window.contentViewController = split");
+      });
+
+      it("applyDrawer embeds split view inside ViewController's view, not the window", () => {
+        const macos = getMacosSection();
+        const drawerStart = macos.indexOf("func applyDrawer");
+        expect(drawerStart).toBeGreaterThan(-1);
+        const drawerBody = macos.slice(drawerStart, drawerStart + 2000);
+        // Must embed as child VC, not replace contentViewController
+        expect(drawerBody).toContain("vc.addChild(split)");
+        expect(drawerBody).toContain("vc.view.addSubview(split.view)");
+        expect(drawerBody).not.toContain("window.contentViewController = split");
+      });
+
+      it("resetSidebarPanel removes split view from ViewController, not from window", () => {
+        const macos = getMacosSection();
+        const resetStart = macos.indexOf("func resetSidebarPanel");
+        expect(resetStart).toBeGreaterThan(-1);
+        const resetBody = macos.slice(resetStart, resetStart + 800);
+        expect(resetBody).toContain("split.view.removeFromSuperview()");
+        expect(resetBody).toContain("split.removeFromParent()");
+        expect(resetBody).not.toContain("window.contentViewController = vc");
+      });
+    });
   });
 });

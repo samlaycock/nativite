@@ -133,4 +133,66 @@ describe("viewControllerTemplate", () => {
     expect(output).not.toContain("hideSplashOverlay()");
     expect(output).not.toContain("splashOverlayView");
   });
+
+  // ── macOS-specific tests ──────────────────────────────────────────────────
+
+  describe("macOS", () => {
+    function macosSection(output: string): string {
+      // Find the macOS ViewController class, not the #elseif inside shared helpers.
+      const marker = "class ViewController: NSViewController";
+      const classStart = output.indexOf(marker);
+      // Walk back to the preceding #elseif os(macOS)
+      const start = output.lastIndexOf("#elseif os(macOS)", classStart);
+      // The final #endif closes the top-level #if os(iOS)/#elseif os(macOS) block.
+      const end = output.lastIndexOf("#endif");
+      return output.slice(start, end);
+    }
+
+    it("loads content in viewDidLoad rather than deferring to viewDidAppear", () => {
+      const macos = macosSection(viewControllerTemplate(baseConfig));
+      const viewDidLoadIndex = macos.indexOf("override func viewDidLoad()");
+      const loadContentIndex = macos.indexOf("loadContent()", viewDidLoadIndex);
+
+      expect(viewDidLoadIndex).toBeGreaterThan(-1);
+      expect(loadContentIndex).toBeGreaterThan(viewDidLoadIndex);
+
+      // Should not defer to viewDidAppear — SwiftUI's NSViewControllerRepresentable
+      // does not reliably call viewDidAppear, causing a blank screen on launch.
+      expect(macos).not.toContain("viewDidAppear");
+      expect(macos).not.toContain("hasLoadedContent");
+    });
+
+    it("injects instance name 'main' so the native message broker can identify this webview", () => {
+      const macos = macosSection(viewControllerTemplate(baseConfig));
+      expect(macos).toContain('window.__nativekit_instance_name__ = \\"main\\"');
+      expect(macos).toContain("injectionTime: .atDocumentStart");
+    });
+
+    it("re-pushes CSS variables after navigation in didFinish", () => {
+      const macos = macosSection(viewControllerTemplate(baseConfig));
+      const didFinishIndex = macos.indexOf(
+        "func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!)",
+      );
+      expect(didFinishIndex).toBeGreaterThan(-1);
+
+      const updateSafeAreaIndex = macos.indexOf("vars.updateSafeArea(", didFinishIndex);
+      expect(updateSafeAreaIndex).toBeGreaterThan(didFinishIndex);
+    });
+
+    it("replays deferred chrome state from viewDidLayout once the window is available", () => {
+      const macos = macosSection(viewControllerTemplate(baseConfig));
+      const viewDidLayoutIndex = macos.indexOf("override func viewDidLayout()");
+      expect(viewDidLayoutIndex).toBeGreaterThan(-1);
+
+      const replayIndex = macos.indexOf("bridge.chrome.replayPendingState()", viewDidLayoutIndex);
+      expect(replayIndex).toBeGreaterThan(viewDidLayoutIndex);
+      // Guard ensures replay only fires when the window is attached
+      expect(macos).toContain("if view.window != nil");
+    });
+
+    it("uses WKWebsiteDataStore.default() for child webview process sharing", () => {
+      const macos = macosSection(viewControllerTemplate(baseConfig));
+      expect(macos).toContain("config.websiteDataStore = WKWebsiteDataStore.default()");
+    });
+  });
 });

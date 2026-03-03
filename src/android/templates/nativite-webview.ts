@@ -23,7 +23,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import android.net.Uri
 import androidx.webkit.WebViewAssetLoader
+
+private const val PRODUCTION_BASE_URL = "https://appassets.androidplatform.net/assets/dist/index.html"
 
 @SuppressLint("SetJavaScriptEnabled")
 fun createNativiteWebView(
@@ -38,6 +41,7 @@ fun createNativiteWebView(
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         settings.allowFileAccess = false
         settings.allowContentAccess = false
+        settings.userAgentString = settings.userAgentString + " Nativite/android/1.0"
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             settings.isAlgorithmicDarkeningAllowed = true
@@ -73,6 +77,15 @@ fun createNativiteWebView(
             super.onPageFinished(view, url)
             // Attach the bridge port after page load
             bridge.attachWebView(view, instanceName)
+            // Apply pending SPA route for child webviews in production
+            (view.tag as? String)?.let { route ->
+                view.tag = null
+                val payload = org.json.JSONObject().apply { put("route", route) }
+                view.evaluateJavascript(
+                    "(() => { var p = \${payload}; try { history.replaceState(null, '', p.route); dispatchEvent(new PopStateEvent('popstate')); } catch(e){} })();",
+                    null,
+                )
+            }
         }
     }
 
@@ -112,10 +125,16 @@ fun NativiteWebView(
         }
     }
 
-    // Load content once
+    // Load content
     DisposableEffect(url) {
-        val targetUrl = url ?: resolveContentUrl(context)
-        webView.loadUrl(targetUrl)
+        if (url != null) {
+            val (loadUrl, spaRoute) = resolveChildUrl(context, url)
+            webView.tag = spaRoute
+            webView.loadUrl(loadUrl)
+        } else {
+            webView.tag = null
+            webView.loadUrl(resolveContentUrl(context))
+        }
         onDispose {}
     }
 
@@ -125,18 +144,34 @@ fun NativiteWebView(
     )
 }
 
-private fun resolveContentUrl(context: Context): String {
-    // Check for dev URL in assets/dev.json
+private fun getDevUrl(context: Context): String? {
     try {
         val devJson = context.assets.open("dev.json").bufferedReader().readText()
         val parsed = org.json.JSONObject(devJson)
         val devUrl = parsed.optString("devURL", "")
         if (devUrl.isNotEmpty()) return devUrl
-    } catch (_: Exception) {
-        // No dev.json — use bundled assets
+    } catch (_: Exception) {}
+    return null
+}
+
+private fun resolveContentUrl(context: Context): String {
+    return getDevUrl(context) ?: PRODUCTION_BASE_URL
+}
+
+private fun resolveChildUrl(context: Context, rawUrl: String): Pair<String, String?> {
+    // Already absolute — use as-is
+    if (rawUrl.contains("://")) return Pair(rawUrl, null)
+
+    val devUrl = getDevUrl(context)
+    if (devUrl != null) {
+        // Dev: resolve path against dev server URL
+        val base = devUrl.trimEnd('/')
+        val path = if (rawUrl.startsWith("/")) rawUrl else "/$rawUrl"
+        return Pair(base + path, null)
     }
 
-    return "https://appassets.androidplatform.net/assets/dist/index.html"
+    // Production: load SPA entry point, navigate client-side after load
+    return Pair(PRODUCTION_BASE_URL, rawUrl)
 }
 `;
 }

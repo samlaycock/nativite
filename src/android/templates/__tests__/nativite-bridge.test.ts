@@ -49,6 +49,40 @@ describe("nativiteBridgeTemplate", () => {
 
   it("sets default chrome state to null when not configured", () => {
     const output = nativiteBridgeTemplate(androidConfig);
-    expect(output).toContain("val json = null ?: return null");
+    expect(output).toContain("val json: String = null ?: return null");
+  });
+
+  it("converts event data to JSON-safe types via toJsonValue", () => {
+    const output = nativiteBridgeTemplate(androidConfig);
+    expect(output).toContain("fun toJsonValue(value: Any?): Any");
+    expect(output).toContain("is Map<*, *> -> mapToJsonObject(value)");
+    expect(output).toContain("is List<*> -> listToJsonArray(value)");
+  });
+
+  it("uses toJsonValue in sendEvent", () => {
+    const output = nativiteBridgeTemplate(androidConfig);
+    expect(output).toContain('put("data", toJsonValue(data))');
+  });
+
+  it("types sendEventToPrimary data parameter as Map", () => {
+    const output = nativiteBridgeTemplate(androidConfig);
+    expect(output).toContain("fun sendEventToPrimary(name: String, data: Map<String, Any?>?)");
+  });
+
+  it("creates NativiteVars when primary webview is attached", () => {
+    const output = nativiteBridgeTemplate(androidConfig);
+    expect(output).toContain("primaryVars = NativiteVars(webView, this)");
+    expect(output).toContain("it.startObserving()");
+  });
+
+  it("pushes chrome geometry CSS vars on state update", () => {
+    const output = nativiteBridgeTemplate(androidConfig);
+    expect(output).toContain("pushChromeGeometryVars(state)");
+    expect(output).toContain("--nk-nav-height");
+    expect(output).toContain("--nk-tab-height");
+    expect(output).toContain("--nk-toolbar-height");
+    expect(output).toContain("--nk-nav-visible");
+    expect(output).toContain("--nk-tab-visible");
+    expect(output).toContain("--nk-toolbar-visible");
   });
 });

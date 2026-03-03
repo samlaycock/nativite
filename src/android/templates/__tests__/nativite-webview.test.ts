@@ -48,10 +48,50 @@ describe("nativiteWebViewTemplate", () => {
     expect(output).toContain("webView.destroy()");
   });
 
-  it("resolves dev URL from dev.json", () => {
+  it("resolves dev URL from dev.json via getDevUrl", () => {
     const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("fun getDevUrl(context: Context): String?");
     expect(output).toContain("dev.json");
     expect(output).toContain("devURL");
+  });
+
+  it("defines PRODUCTION_BASE_URL constant", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("private const val PRODUCTION_BASE_URL");
+    expect(output).toContain("appassets.androidplatform.net/assets/dist/index.html");
+  });
+
+  it("resolves child URLs against dev server in dev mode", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain(
+      "fun resolveChildUrl(context: Context, rawUrl: String): Pair<String, String?>",
+    );
+    expect(output).toContain("devUrl.trimEnd('/')");
+    expect(output).toContain("Pair(base + path, null)");
+  });
+
+  it("returns SPA route for relative URLs in production", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("Pair(PRODUCTION_BASE_URL, rawUrl)");
+  });
+
+  it("passes absolute URLs through unchanged", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain('rawUrl.contains("://")');
+    expect(output).toContain("Pair(rawUrl, null)");
+  });
+
+  it("applies SPA route via history.replaceState in onPageFinished", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("view.tag as? String");
+    expect(output).toContain("history.replaceState(null, '', p.route)");
+    expect(output).toContain("PopStateEvent('popstate')");
+  });
+
+  it("uses resolveChildUrl for non-null url in DisposableEffect", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("val (loadUrl, spaRoute) = resolveChildUrl(context, url)");
+    expect(output).toContain("webView.tag = spaRoute");
   });
 
   it("enables WebView debugging in debug builds", () => {

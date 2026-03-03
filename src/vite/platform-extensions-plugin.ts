@@ -10,6 +10,7 @@ import { dirname, extname, join, resolve } from "node:path";
 const BUILT_IN_PLATFORM_SUFFIXES: Record<string, string[]> = {
   ipad: [".ipad", ".ios", ".mobile", ".native"],
   ios: [".ios", ".mobile", ".native"],
+  android: [".android", ".mobile", ".native"],
   macos: [".macos", ".desktop", ".native"],
   web: [".web"],
 };
@@ -28,6 +29,7 @@ const SOURCE_EXTENSIONS = [".tsx", ".ts", ".jsx", ".js", ".css", ".svg", ".json"
  * The resolution order per platform:
  * - ipad:    .ipad  → .ios → .mobile → .native → (fallback)
  * - ios:     .ios   → .mobile → .native → (fallback)
+ * - android: .android → .mobile → .native → (fallback)
  * - macos:   .macos → .desktop → .native → (fallback)
  * - web:     .web → (fallback)
  *

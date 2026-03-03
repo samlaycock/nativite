@@ -12,9 +12,10 @@ import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
-class NativiteVars(private val webView: WebView) {
+class NativiteVars(private val webView: WebView, private val bridge: NativiteBridge? = null) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastVars = mutableMapOf<String, String>()
+    private var lastSafeArea: Map<String, Int>? = null
 
     fun startObserving() {
         ViewCompat.setOnApplyWindowInsetsListener(webView) { _, insets ->
@@ -26,6 +27,18 @@ class NativiteVars(private val webView: WebView) {
             updateVar("--nk-safe-area-left", "\${systemBars.left}px")
             updateVar("--nk-safe-area-right", "\${systemBars.right}px")
             updateVar("--nk-keyboard-height", "\${ime.bottom}px")
+
+            // Fire safeArea.changed event when insets change
+            val currentSafeArea = mapOf(
+                "top" to systemBars.top,
+                "right" to systemBars.right,
+                "bottom" to systemBars.bottom,
+                "left" to systemBars.left,
+            )
+            if (currentSafeArea != lastSafeArea) {
+                lastSafeArea = currentSafeArea
+                bridge?.sendEventToPrimary("safeArea.changed", currentSafeArea)
+            }
 
             flush()
             insets
