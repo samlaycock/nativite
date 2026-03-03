@@ -86,11 +86,11 @@ class NativiteAppDelegate: NSObject, NSApplicationDelegate {
 
 | Variable             | iOS                      | macOS                                |
 | -------------------- | ------------------------ | ------------------------------------ |
-| `--nk-keyboard-*`    | Available                | Not available (no software keyboard) |
-| `--nk-status-height` | Available                | Not available (no status bar)        |
-| `--nk-is-desktop`    | `0`                      | `1`                                  |
-| `--nk-is-landscape`  | Dynamic                  | Always `1`                           |
-| `--nk-font-*`        | Dynamic Type values      | Fixed HIG values                     |
+| `--nv-keyboard-*`    | Available                | Not available (no software keyboard) |
+| `--nv-status-height` | Available                | Not available (no status bar)        |
+| `--nv-is-desktop`    | `0`                      | `1`                                  |
+| `--nv-is-landscape`  | Dynamic                  | Always `1`                           |
+| `--nv-font-*`        | Dynamic Type values      | Fixed HIG values                     |
 | Appearance tracking  | Trait collection changes | `NSApplication` notifications        |
 
 ## View Controller

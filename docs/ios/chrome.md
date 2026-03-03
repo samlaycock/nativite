@@ -110,9 +110,9 @@ After applying state, calls `pushVarUpdates()` which reads UIKit geometry:
 
 These are passed to `NativiteVars.updateChrome()` to set:
 
-- `--nk-nav-height`, `--nk-nav-visible`
-- `--nk-tab-height`, `--nk-tab-visible`
-- `--nk-toolbar-height`, `--nk-toolbar-visible`
+- `--nv-nav-height`, `--nv-nav-visible`
+- `--nv-tab-height`, `--nv-tab-visible`
+- `--nv-toolbar-height`, `--nv-toolbar-visible`
 
 ## SwiftUI Integration
 

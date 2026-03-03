@@ -8,7 +8,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Native Bridge](./ios/bridge.md) — JS↔Swift communication via WKScriptMessageHandlerWithReply
 - [Chrome Reconciliation](./ios/chrome.md) — UIKit chrome state reconciliation
 - [Chrome State Model](./ios/chrome-state.md) — SwiftUI @Observable model for chrome areas
-- [CSS Variables](./ios/css-variables.md) — 70+ `--nk-*` CSS custom properties
+- [CSS Variables](./ios/css-variables.md) — 70+ `--nv-*` CSS custom properties
 - [Keyboard & Input Accessory](./ios/keyboard.md) — Keyboard dismiss modes and accessory bar
 - [App Entry Point](./ios/app-entry.md) — SwiftUI @main, root view, splash overlay
 - [Project Generation](./ios/project-generation.md) — Xcode project generation and structure
@@ -36,7 +36,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Splash Screen Control](./shared/splash-screen.md) — Manual splash screen hide with `chrome.splash`
 - [Chrome Types](./shared/chrome-types.md) — Full type definitions for all chrome areas and events
 - [Client Bridge](./shared/client-bridge.md) — Low-level RPC and event subscription API
-- [CSS Variables Module](./shared/css-vars-module.md) — Observable access to `--nk-*` variables
+- [CSS Variables Module](./shared/css-vars-module.md) — Observable access to `--nv-*` variables
 - [Vite Plugin](./shared/vite-plugin.md) — Build pipeline, dev server routing, HMR
 - [Platform Registry](./shared/platform-registry.md) — Platform plugin resolution and config merging
 - [Inter-Webview Messaging](./shared/inter-webview-messaging.md) — Communication between main and child webviews

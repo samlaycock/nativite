@@ -95,12 +95,12 @@ When chrome state updates, `pushChromeGeometryVars()` calculates and pushes:
 
 | Variable               | Value         | Description                             |
 | ---------------------- | ------------- | --------------------------------------- |
-| `--nk-nav-height`      | `64dp` or `0` | Title bar height (Material 3 TopAppBar) |
-| `--nk-nav-visible`     | `0` / `1`     | Whether title bar is visible            |
-| `--nk-tab-height`      | `80dp` or `0` | Navigation bar height (Material 3)      |
-| `--nk-tab-visible`     | `0` / `1`     | Whether navigation bar is visible       |
-| `--nk-toolbar-height`  | `80dp` or `0` | Bottom app bar height (Material 3)      |
-| `--nk-toolbar-visible` | `0` / `1`     | Whether toolbar is visible              |
+| `--nv-nav-height`      | `64dp` or `0` | Title bar height (Material 3 TopAppBar) |
+| `--nv-nav-visible`     | `0` / `1`     | Whether title bar is visible            |
+| `--nv-tab-height`      | `80dp` or `0` | Navigation bar height (Material 3)      |
+| `--nv-tab-visible`     | `0` / `1`     | Whether navigation bar is visible       |
+| `--nv-toolbar-height`  | `80dp` or `0` | Bottom app bar height (Material 3)      |
+| `--nv-toolbar-visible` | `0` / `1`     | Whether toolbar is visible              |
 
 Heights use Material 3 standard dimensions (64dp for top bar, 80dp for bottom bars).
 

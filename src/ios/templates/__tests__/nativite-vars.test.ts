@@ -7,8 +7,8 @@ describe("nativiteVarsTemplate", () => {
     const swift = nativiteVarsTemplate();
 
     expect(swift).toContain("vite-error-overlay");
-    expect(swift).toContain("--nk-inset-top");
-    expect(swift).toContain("--nk-inset-bottom");
+    expect(swift).toContain("--nv-inset-top");
+    expect(swift).toContain("--nv-inset-bottom");
   });
 
   it("collapses multi-line CSS strings before embedding in the JS string literal", () => {

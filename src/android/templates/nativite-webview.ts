@@ -68,7 +68,7 @@ fun createNativiteWebView(
             super.onPageStarted(view, url, favicon)
             // Inject instance name, platform attribute, and CSS variable
             // defaults as early as possible so CSS selectors like
-            // [data-nk-platform="android"] and var(--nk-*) work before
+            // [data-nk-platform="android"] and var(--nv-*) work before
             // content renders.
             view.evaluateJavascript(
                 "window.__nativekit_instance_name__ = '\${instanceName}';" +

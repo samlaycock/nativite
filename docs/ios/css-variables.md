@@ -3,13 +3,13 @@
 > Maps to: `src/ios/templates/nativite-vars.ts`
 > Generated file: `NativiteVars.swift`
 
-The CSS variables layer injects 70+ `--nk-*` CSS custom properties into the webview, keeping web content aware of native layout, device state, and accessibility settings in real time.
+The CSS variables layer injects 70+ `--nv-*` CSS custom properties into the webview, keeping web content aware of native layout, device state, and accessibility settings in real time.
 
 ## Architecture
 
 The `NativiteVars` class manages a `WKUserScript` injected at `documentStart` (before any other script runs) that:
 
-1. Creates a `<style>` element on `document.documentElement` with all `--nk-*` variables set to defaults.
+1. Creates a `<style>` element on `document.documentElement` with all `--nv-*` variables set to defaults.
 2. Defines a `window.__nk_patch()` helper function for efficient subsequent updates.
 3. Sets the `data-nk-platform` attribute on `documentElement` (`"ios"`, `"ipad"`, or `"macos"`).
 
@@ -28,10 +28,10 @@ The `NativiteVars` class manages a `WKUserScript` injected at `documentStart` (b
 
 | Variable           | Type | Description            |
 | ------------------ | ---- | ---------------------- |
-| `--nk-safe-top`    | `px` | Top safe area inset    |
-| `--nk-safe-bottom` | `px` | Bottom safe area inset |
-| `--nk-safe-left`   | `px` | Left safe area inset   |
-| `--nk-safe-right`  | `px` | Right safe area inset  |
+| `--nv-safe-top`    | `px` | Top safe area inset    |
+| `--nv-safe-bottom` | `px` | Bottom safe area inset |
+| `--nv-safe-left`   | `px` | Left safe area inset   |
+| `--nv-safe-right`  | `px` | Right safe area inset  |
 
 ### Combined Insets
 
@@ -39,65 +39,65 @@ Includes safe area plus any native chrome that overlaps the webview:
 
 | Variable            | Type | Description                          |
 | ------------------- | ---- | ------------------------------------ |
-| `--nk-inset-top`    | `px` | Safe area + nav bar height           |
-| `--nk-inset-bottom` | `px` | Safe area + tab bar / toolbar height |
-| `--nk-inset-left`   | `px` | Safe area + sidebar width            |
-| `--nk-inset-right`  | `px` | Safe area                            |
+| `--nv-inset-top`    | `px` | Safe area + nav bar height           |
+| `--nv-inset-bottom` | `px` | Safe area + tab bar / toolbar height |
+| `--nv-inset-left`   | `px` | Safe area + sidebar width            |
+| `--nv-inset-right`  | `px` | Safe area                            |
 
 ### Chrome Geometry
 
 | Variable               | Type      | Description                       |
 | ---------------------- | --------- | --------------------------------- |
-| `--nk-nav-height`      | `px`      | Navigation bar height             |
-| `--nk-nav-visible`     | `0` / `1` | Whether navigation bar is visible |
-| `--nk-tab-height`      | `px`      | Tab bar height                    |
-| `--nk-tab-visible`     | `0` / `1` | Whether tab bar is visible        |
-| `--nk-toolbar-height`  | `px`      | Toolbar height                    |
-| `--nk-toolbar-visible` | `0` / `1` | Whether toolbar is visible        |
-| `--nk-status-height`   | `px`      | Status bar height                 |
+| `--nv-nav-height`      | `px`      | Navigation bar height             |
+| `--nv-nav-visible`     | `0` / `1` | Whether navigation bar is visible |
+| `--nv-tab-height`      | `px`      | Tab bar height                    |
+| `--nv-tab-visible`     | `0` / `1` | Whether tab bar is visible        |
+| `--nv-toolbar-height`  | `px`      | Toolbar height                    |
+| `--nv-toolbar-visible` | `0` / `1` | Whether toolbar is visible        |
+| `--nv-status-height`   | `px`      | Status bar height                 |
 
 ### Keyboard
 
 | Variable                 | Type      | Description                          |
 | ------------------------ | --------- | ------------------------------------ |
-| `--nk-keyboard-height`   | `px`      | Software keyboard height             |
-| `--nk-keyboard-visible`  | `0` / `1` | Whether keyboard is shown            |
-| `--nk-keyboard-floating` | `0` / `1` | Whether keyboard is floating (iPad)  |
-| `--nk-keyboard-inset`    | `px`      | Combined keyboard + safe area bottom |
-| `--nk-keyboard-duration` | `s`       | Keyboard animation duration          |
-| `--nk-keyboard-curve`    | string    | Keyboard animation curve identifier  |
+| `--nv-keyboard-height`   | `px`      | Software keyboard height             |
+| `--nv-keyboard-visible`  | `0` / `1` | Whether keyboard is shown            |
+| `--nv-keyboard-floating` | `0` / `1` | Whether keyboard is floating (iPad)  |
+| `--nv-keyboard-inset`    | `px`      | Combined keyboard + safe area bottom |
+| `--nv-keyboard-duration` | `s`       | Keyboard animation duration          |
+| `--nv-keyboard-curve`    | string    | Keyboard animation curve identifier  |
 
 ### Device
 
 | Variable              | Type      | Description                       |
 | --------------------- | --------- | --------------------------------- |
-| `--nk-is-phone`       | `0` / `1` | Running on iPhone                 |
-| `--nk-is-tablet`      | `0` / `1` | Running on iPad                   |
-| `--nk-is-desktop`     | `0` / `1` | Running on macOS                  |
-| `--nk-is-portrait`    | `0` / `1` | Portrait orientation              |
-| `--nk-is-landscape`   | `0` / `1` | Landscape orientation             |
-| `--nk-display-scale`  | number    | Device display scale (1x, 2x, 3x) |
-| `--nk-display-corner` | `px`      | Display corner radius             |
+| `--nv-is-phone`       | `0` / `1` | Running on iPhone                 |
+| `--nv-is-tablet`      | `0` / `1` | Running on iPad                   |
+| `--nv-is-desktop`     | `0` / `1` | Running on macOS                  |
+| `--nv-is-portrait`    | `0` / `1` | Portrait orientation              |
+| `--nv-is-landscape`   | `0` / `1` | Landscape orientation             |
+| `--nv-display-scale`  | number    | Device display scale (1x, 2x, 3x) |
+| `--nv-display-corner` | `px`      | Display corner radius             |
 
 ### Appearance
 
 | Variable                    | Type      | Description                    |
 | --------------------------- | --------- | ------------------------------ |
-| `--nk-is-dark`              | `0` / `1` | Dark mode active               |
-| `--nk-is-light`             | `0` / `1` | Light mode active              |
-| `--nk-contrast`             | `0` / `1` | High contrast enabled          |
-| `--nk-reduced-motion`       | `0` / `1` | Reduce motion preference       |
-| `--nk-reduced-transparency` | `0` / `1` | Reduce transparency preference |
-| `--nk-font-scale`           | number    | Dynamic Type scaling factor    |
+| `--nv-is-dark`              | `0` / `1` | Dark mode active               |
+| `--nv-is-light`             | `0` / `1` | Light mode active              |
+| `--nv-contrast`             | `0` / `1` | High contrast enabled          |
+| `--nv-reduced-motion`       | `0` / `1` | Reduce motion preference       |
+| `--nv-reduced-transparency` | `0` / `1` | Reduce transparency preference |
+| `--nv-font-scale`           | number    | Dynamic Type scaling factor    |
 
 ### Accent Colour
 
 | Variable        | Type    | Description                   |
 | --------------- | ------- | ----------------------------- |
-| `--nk-accent-r` | `0-255` | Accent colour red component   |
-| `--nk-accent-g` | `0-255` | Accent colour green component |
-| `--nk-accent-b` | `0-255` | Accent colour blue component  |
-| `--nk-accent`   | `rgb()` | Composed accent colour value  |
+| `--nv-accent-r` | `0-255` | Accent colour red component   |
+| `--nv-accent-g` | `0-255` | Accent colour green component |
+| `--nv-accent-b` | `0-255` | Accent colour blue component  |
+| `--nv-accent`   | `rgb()` | Composed accent colour value  |
 
 ### Dynamic Type (Font Sizes)
 
@@ -105,23 +105,23 @@ All values are in `px` and reflect the user's Dynamic Type preference:
 
 | Variable                | iOS Default |
 | ----------------------- | ----------- |
-| `--nk-font-body`        | 17px        |
-| `--nk-font-callout`     | 16px        |
-| `--nk-font-caption1`    | 12px        |
-| `--nk-font-caption2`    | 11px        |
-| `--nk-font-footnote`    | 13px        |
-| `--nk-font-headline`    | 17px        |
-| `--nk-font-subheadline` | 15px        |
-| `--nk-font-title1`      | 28px        |
-| `--nk-font-title2`      | 22px        |
-| `--nk-font-title3`      | 20px        |
-| `--nk-font-largeTitle`  | 34px        |
+| `--nv-font-body`        | 17px        |
+| `--nv-font-callout`     | 16px        |
+| `--nv-font-caption1`    | 12px        |
+| `--nv-font-caption2`    | 11px        |
+| `--nv-font-footnote`    | 13px        |
+| `--nv-font-headline`    | 17px        |
+| `--nv-font-subheadline` | 15px        |
+| `--nv-font-title1`      | 28px        |
+| `--nv-font-title2`      | 22px        |
+| `--nv-font-title3`      | 20px        |
+| `--nv-font-largeTitle`  | 34px        |
 
 ## macOS Differences
 
 - No keyboard variables (no software keyboard)
 - No status bar height
-- Always `--nk-is-desktop=1`, `--nk-is-landscape=1`
+- Always `--nv-is-desktop=1`, `--nv-is-landscape=1`
 - Fixed font sizes per macOS HIG (not Dynamic Type)
 - Appearance changes tracked via `NSApplication` notifications instead of trait collection changes
 
@@ -130,28 +130,28 @@ All values are in `px` and reflect the user's Dynamic Type preference:
 ```css
 /* Adapt to native chrome insets */
 .content {
-  padding-top: var(--nk-inset-top);
-  padding-bottom: var(--nk-inset-bottom);
+  padding-top: var(--nv-inset-top);
+  padding-bottom: var(--nv-inset-bottom);
 }
 
 /* React to keyboard */
 .chat-input {
-  transform: translateY(calc(-1 * var(--nk-keyboard-height)));
-  transition-duration: var(--nk-keyboard-duration);
+  transform: translateY(calc(-1 * var(--nv-keyboard-height)));
+  transition-duration: var(--nv-keyboard-duration);
 }
 
 /* Dark mode */
-:root[style*="--nk-is-dark: 1"] {
+:root[style*="--nv-is-dark: 1"] {
   --bg: #1a1a1a;
 }
 
 /* Respect Dynamic Type */
 body {
-  font-size: var(--nk-font-body);
+  font-size: var(--nv-font-body);
 }
 
 /* Accessibility */
 @media (prefers-reduced-motion: reduce) {
-  /* also available as --nk-reduced-motion */
+  /* also available as --nv-reduced-motion */
 }
 ```

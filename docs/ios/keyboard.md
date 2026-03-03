@@ -75,11 +75,11 @@ The keyboard module updates the following CSS variables via `NativiteVars`:
 
 | Variable                 | Description                               |
 | ------------------------ | ----------------------------------------- |
-| `--nk-keyboard-height`   | Current keyboard height in px             |
-| `--nk-keyboard-visible`  | `0` or `1`                                |
-| `--nk-keyboard-floating` | `0` or `1` (iPad floating keyboard)       |
-| `--nk-keyboard-inset`    | Keyboard height + safe area bottom        |
-| `--nk-keyboard-duration` | Animation duration for keyboard show/hide |
-| `--nk-keyboard-curve`    | Animation curve identifier                |
+| `--nv-keyboard-height`   | Current keyboard height in px             |
+| `--nv-keyboard-visible`  | `0` or `1`                                |
+| `--nv-keyboard-floating` | `0` or `1` (iPad floating keyboard)       |
+| `--nv-keyboard-inset`    | Keyboard height + safe area bottom        |
+| `--nv-keyboard-duration` | Animation duration for keyboard show/hide |
+| `--nv-keyboard-curve`    | Animation curve identifier                |
 
 These variables are updated in response to `UIResponder.keyboardWillChangeFrameNotification` and `keyboardWillHideNotification`.

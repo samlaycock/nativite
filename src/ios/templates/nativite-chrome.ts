@@ -74,7 +74,7 @@ class NativiteChrome: NSObject {
 
   weak var viewController: ViewController?
   // NativiteVars receives geometry updates after each setState call so it can
-  // keep --nk-nav-height, --nk-tab-height etc. in sync with the live UIKit state.
+  // keep --nv-nav-height, --nv-tab-height etc. in sync with the live UIKit state.
   weak var vars: NativiteVars?
   // NativiteKeyboard handles the input accessory bar and keyboard dismiss mode.
   weak var keyboard: NativiteKeyboard?
@@ -172,7 +172,7 @@ class NativiteChrome: NSObject {
 
   /// Reads live UIKit geometry (nav bar, tab bar, toolbar heights and
   /// visibility) and forwards them to NativiteVars so the CSS custom
-  /// properties (--nk-nav-height, --nk-tab-height, etc.) stay in
+  /// properties (--nv-nav-height, --nv-tab-height, etc.) stay in
   /// sync with the current UIKit state.
   private func pushVarUpdates() {
     guard let vc = viewController else { return }

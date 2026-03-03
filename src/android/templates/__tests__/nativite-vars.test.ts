@@ -17,17 +17,17 @@ describe("nativiteVarsTemplate", () => {
 
   it("updates keyboard variables on inset change", () => {
     const output = nativiteVarsTemplate(androidConfig);
-    expect(output).toContain('"--nk-keyboard-height"');
-    expect(output).toContain('"--nk-keyboard-visible"');
-    expect(output).toContain('"--nk-keyboard-inset"');
+    expect(output).toContain('"--nv-keyboard-height"');
+    expect(output).toContain('"--nv-keyboard-visible"');
+    expect(output).toContain('"--nv-keyboard-inset"');
   });
 
   it("does not set safe area variables from system bars", () => {
     const output = nativiteVarsTemplate(androidConfig);
-    expect(output).not.toContain("--nk-safe-area-top");
-    expect(output).not.toContain("--nk-safe-area-bottom");
-    expect(output).not.toContain("--nk-safe-area-left");
-    expect(output).not.toContain("--nk-safe-area-right");
+    expect(output).not.toContain("--nv-safe-area-top");
+    expect(output).not.toContain("--nv-safe-area-bottom");
+    expect(output).not.toContain("--nv-safe-area-left");
+    expect(output).not.toContain("--nv-safe-area-right");
   });
 
   it("flushes via __nk_patch helper", () => {
@@ -53,56 +53,56 @@ describe("nativiteVarsTemplate", () => {
 
     it("defaults safe area variables to 0px", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("--nk-safe-top:0px");
-      expect(output).toContain("--nk-safe-bottom:0px");
-      expect(output).toContain("--nk-safe-left:0px");
-      expect(output).toContain("--nk-safe-right:0px");
+      expect(output).toContain("--nv-safe-top:0px");
+      expect(output).toContain("--nv-safe-bottom:0px");
+      expect(output).toContain("--nv-safe-left:0px");
+      expect(output).toContain("--nv-safe-right:0px");
     });
 
     it("defaults chrome geometry variables to 0", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("--nk-nav-height:0px");
-      expect(output).toContain("--nk-nav-visible:0");
-      expect(output).toContain("--nk-tab-height:0px");
-      expect(output).toContain("--nk-tab-visible:0");
-      expect(output).toContain("--nk-toolbar-height:0px");
-      expect(output).toContain("--nk-toolbar-visible:0");
-      expect(output).toContain("--nk-status-height:0px");
+      expect(output).toContain("--nv-nav-height:0px");
+      expect(output).toContain("--nv-nav-visible:0");
+      expect(output).toContain("--nv-tab-height:0px");
+      expect(output).toContain("--nv-tab-visible:0");
+      expect(output).toContain("--nv-toolbar-height:0px");
+      expect(output).toContain("--nv-toolbar-visible:0");
+      expect(output).toContain("--nv-status-height:0px");
     });
 
     it("defaults inset variables to 0px", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("--nk-inset-top:0px");
-      expect(output).toContain("--nk-inset-bottom:0px");
-      expect(output).toContain("--nk-inset-left:0px");
-      expect(output).toContain("--nk-inset-right:0px");
+      expect(output).toContain("--nv-inset-top:0px");
+      expect(output).toContain("--nv-inset-bottom:0px");
+      expect(output).toContain("--nv-inset-left:0px");
+      expect(output).toContain("--nv-inset-right:0px");
     });
 
     it("defaults keyboard variables to 0", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("--nk-keyboard-height:0px");
-      expect(output).toContain("--nk-keyboard-visible:0");
-      expect(output).toContain("--nk-keyboard-inset:0px");
+      expect(output).toContain("--nv-keyboard-height:0px");
+      expect(output).toContain("--nv-keyboard-visible:0");
+      expect(output).toContain("--nv-keyboard-inset:0px");
     });
 
     it("defaults device type to phone", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("--nk-is-phone:1");
-      expect(output).toContain("--nk-is-tablet:0");
-      expect(output).toContain("--nk-is-desktop:0");
+      expect(output).toContain("--nv-is-phone:1");
+      expect(output).toContain("--nv-is-tablet:0");
+      expect(output).toContain("--nv-is-desktop:0");
     });
 
     it("defaults theme to light", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("--nk-is-dark:0");
-      expect(output).toContain("--nk-is-light:1");
+      expect(output).toContain("--nv-is-dark:0");
+      expect(output).toContain("--nv-is-light:1");
     });
 
     it("uses correct iOS-compatible variable names", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      // Should use --nk-safe-top, NOT --nk-safe-area-top
-      expect(output).toContain("--nk-safe-top:");
-      expect(output).not.toMatch(/--nk-safe-area-/);
+      // Should use --nv-safe-top, NOT --nv-safe-area-top
+      expect(output).toContain("--nv-safe-top:");
+      expect(output).not.toMatch(/--nv-safe-area-/);
     });
   });
 

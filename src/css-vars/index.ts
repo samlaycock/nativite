@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 
-// ─── NKVars — typed helpers for the --nk-* CSS variable system ───────────────
+// ─── NKVars — typed helpers for the --nv-* CSS variable system ───────────────
 //
 // Variables are set on document.documentElement by NativiteVars.swift via
 // window.__nk_patch(). When running in a browser (non-native) they are read
@@ -151,11 +151,11 @@ const DEFAULTS: Record<NKVarName, string> = {
 // ─── NKVars ───────────────────────────────────────────────────────────────────
 
 function cssVarName(name: NKVarName): string {
-  return `--nk-${name}`;
+  return `--nv-${name}`;
 }
 
 /**
- * Read the current value of a single --nk-* variable.
+ * Read the current value of a single --nv-* variable.
  * Returns the typed default when running outside a native WebView.
  */
 function get(name: NKVarName): string {
@@ -224,7 +224,7 @@ function getOrCreateObserver(): MutationObserver {
 }
 
 /**
- * Subscribe to changes on a --nk-* variable.
+ * Subscribe to changes on a --nv-* variable.
  * Uses a single shared MutationObserver for all subscriptions.
  * Returns an unsubscribe function.
  *

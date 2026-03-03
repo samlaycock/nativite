@@ -50,14 +50,14 @@ export function nativiteVarsTemplate(): string {
     let insetBottom = safeBottom + (tabVisible ? tabHeight : 0) + (toolbarVisible ? toolbarHeight : 0)
 
     patch([
-      "--nk-nav-height":      px(navHeight),
-      "--nk-nav-visible":     navVisible    ? "1" : "0",
-      "--nk-tab-height":      px(tabHeight),
-      "--nk-tab-visible":     tabVisible    ? "1" : "0",
-      "--nk-toolbar-height":  px(toolbarHeight),
-      "--nk-toolbar-visible": toolbarVisible ? "1" : "0",
-      "--nk-inset-top":       px(insetTop),
-      "--nk-inset-bottom":    px(insetBottom),
+      "--nv-nav-height":      px(navHeight),
+      "--nv-nav-visible":     navVisible    ? "1" : "0",
+      "--nv-tab-height":      px(tabHeight),
+      "--nv-tab-visible":     tabVisible    ? "1" : "0",
+      "--nv-toolbar-height":  px(toolbarHeight),
+      "--nv-toolbar-visible": toolbarVisible ? "1" : "0",
+      "--nv-inset-top":       px(insetTop),
+      "--nv-inset-bottom":    px(insetBottom),
     ])
   }`;
 
@@ -68,41 +68,41 @@ export function nativiteVarsTemplate(): string {
   private func buildInitScript() -> String {
     // These are static defaults; dynamic values are patched after load.
     let defaults = """
-      --nk-safe-top:0px;--nk-safe-bottom:0px;--nk-safe-left:0px;--nk-safe-right:0px;
-      --nk-nav-height:0px;--nk-nav-visible:0;
-      --nk-tab-height:0px;--nk-tab-visible:0;
-      --nk-toolbar-height:0px;--nk-toolbar-visible:0;
-      --nk-status-height:0px;
-      --nk-inset-top:0px;--nk-inset-bottom:0px;--nk-inset-left:0px;--nk-inset-right:0px;
-      --nk-keyboard-height:0px;--nk-keyboard-visible:0;
-      --nk-keyboard-floating:0;--nk-keyboard-inset:0px;
-      --nk-keyboard-duration:250ms;--nk-keyboard-curve:ease-in-out;
-      --nk-accessory-height:0px;
-      --nk-nav-depth:0;--nk-title-collapse:0;--nk-pop-gesture:0;
-      --nk-sidebar-width:0px;--nk-sidebar-visible:0;
-      --nk-sheet-visible:0;--nk-sheet-detent:0;
-      --nk-display-scale:2;--nk-display-corner:0px;
-      --nk-is-phone:0;--nk-is-tablet:0;--nk-is-desktop:0;
-      --nk-is-portrait:1;--nk-is-landscape:0;
-      --nk-is-compact-width:0;--nk-split-fraction:1;
-      --nk-is-dark:0;--nk-is-light:1;
-      --nk-contrast:0;--nk-reduced-motion:0;--nk-reduced-transparency:0;
-      --nk-accent-r:0;--nk-accent-g:122;--nk-accent-b:255;
-      --nk-accent:rgb(var(--nk-accent-r),var(--nk-accent-g),var(--nk-accent-b));
-      --nk-font-scale:1;
-      --nk-font-body:17px;--nk-font-callout:16px;--nk-font-caption1:12px;
-      --nk-font-caption2:11px;--nk-font-footnote:13px;--nk-font-headline:17px;
-      --nk-font-subheadline:15px;--nk-font-title1:28px;--nk-font-title2:22px;
-      --nk-font-title3:20px;--nk-font-largeTitle:34px;
+      --nv-safe-top:0px;--nv-safe-bottom:0px;--nv-safe-left:0px;--nv-safe-right:0px;
+      --nv-nav-height:0px;--nv-nav-visible:0;
+      --nv-tab-height:0px;--nv-tab-visible:0;
+      --nv-toolbar-height:0px;--nv-toolbar-visible:0;
+      --nv-status-height:0px;
+      --nv-inset-top:0px;--nv-inset-bottom:0px;--nv-inset-left:0px;--nv-inset-right:0px;
+      --nv-keyboard-height:0px;--nv-keyboard-visible:0;
+      --nv-keyboard-floating:0;--nv-keyboard-inset:0px;
+      --nv-keyboard-duration:250ms;--nv-keyboard-curve:ease-in-out;
+      --nv-accessory-height:0px;
+      --nv-nav-depth:0;--nv-title-collapse:0;--nv-pop-gesture:0;
+      --nv-sidebar-width:0px;--nv-sidebar-visible:0;
+      --nv-sheet-visible:0;--nv-sheet-detent:0;
+      --nv-display-scale:2;--nv-display-corner:0px;
+      --nv-is-phone:0;--nv-is-tablet:0;--nv-is-desktop:0;
+      --nv-is-portrait:1;--nv-is-landscape:0;
+      --nv-is-compact-width:0;--nv-split-fraction:1;
+      --nv-is-dark:0;--nv-is-light:1;
+      --nv-contrast:0;--nv-reduced-motion:0;--nv-reduced-transparency:0;
+      --nv-accent-r:0;--nv-accent-g:122;--nv-accent-b:255;
+      --nv-accent:rgb(var(--nv-accent-r),var(--nv-accent-g),var(--nv-accent-b));
+      --nv-font-scale:1;
+      --nv-font-body:17px;--nv-font-callout:16px;--nv-font-caption1:12px;
+      --nv-font-caption2:11px;--nv-font-footnote:13px;--nv-font-headline:17px;
+      --nv-font-subheadline:15px;--nv-font-title1:28px;--nv-font-title2:22px;
+      --nv-font-title3:20px;--nv-font-largeTitle:34px;
     """
     // Keep Vite's error overlay host inside native insets so its controls
     // remain reachable when debugging in WKWebView.
     let devOverlayInsets = """
       vite-error-overlay{
         position:fixed !important;
-        inset:var(--nk-inset-top,0px) 0 var(--nk-inset-bottom,0px) 0 !important;
+        inset:var(--nv-inset-top,0px) 0 var(--nv-inset-bottom,0px) 0 !important;
         height:auto !important;
-        max-height:calc(100vh - var(--nk-inset-top,0px) - var(--nk-inset-bottom,0px)) !important;
+        max-height:calc(100vh - var(--nv-inset-top,0px) - var(--nv-inset-bottom,0px)) !important;
         box-sizing:border-box !important;
       }
     """
@@ -177,7 +177,7 @@ export function nativiteVarsTemplate(): string {
 import UIKit
 import WebKit
 
-// NativiteVars manages the --nk-* CSS custom property layer.
+// NativiteVars manages the --nv-* CSS custom property layer.
 //
 // Variables are injected as a WKUserScript at documentStart so they exist
 // before any content renders. Updates are pushed via evaluateJavaScript
@@ -257,28 +257,28 @@ ${sharedInstallation}
     let insetBottom = safeBottom + (tabVisible ? tabHeight : 0) + (toolbarVisible ? toolbarHeight : 0)
 
     var vars: [String: String] = [
-      "--nk-safe-top":    px(safeTop),
-      "--nk-safe-bottom": px(safeBottom),
-      "--nk-safe-left":   px(safeLeft),
-      "--nk-safe-right":  px(safeRight),
-      "--nk-status-height": px(statusHeight),
-      "--nk-inset-top":    px(insetTop),
-      "--nk-inset-bottom": px(insetBottom),
-      "--nk-inset-left":   px(safeLeft),
-      "--nk-inset-right":  px(safeRight),
-      "--nk-is-phone":     isPhone  ? "1" : "0",
-      "--nk-is-tablet":    isTablet ? "1" : "0",
-      "--nk-is-desktop":   "0",
-      "--nk-is-portrait":  bounds.height >= bounds.width ? "1" : "0",
-      "--nk-is-landscape": bounds.width  >  bounds.height ? "1" : "0",
-      "--nk-display-scale": String(format: "%.0f", screen?.scale ?? 2.0),
-      "--nk-display-corner": px(screen?.displayCornerRadius ?? 0),
+      "--nv-safe-top":    px(safeTop),
+      "--nv-safe-bottom": px(safeBottom),
+      "--nv-safe-left":   px(safeLeft),
+      "--nv-safe-right":  px(safeRight),
+      "--nv-status-height": px(statusHeight),
+      "--nv-inset-top":    px(insetTop),
+      "--nv-inset-bottom": px(insetBottom),
+      "--nv-inset-left":   px(safeLeft),
+      "--nv-inset-right":  px(safeRight),
+      "--nv-is-phone":     isPhone  ? "1" : "0",
+      "--nv-is-tablet":    isTablet ? "1" : "0",
+      "--nv-is-desktop":   "0",
+      "--nv-is-portrait":  bounds.height >= bounds.width ? "1" : "0",
+      "--nv-is-landscape": bounds.width  >  bounds.height ? "1" : "0",
+      "--nv-display-scale": String(format: "%.0f", screen?.scale ?? 2.0),
+      "--nv-display-corner": px(screen?.displayCornerRadius ?? 0),
     ]
 
     // Keyboard inset = keyboard above safe area bottom (only when docked)
     let keyboardInset = keyboardVisible && !keyboardFloating
       ? max(0, keyboardHeight - safeBottom) : 0
-    vars["--nk-keyboard-inset"] = px(keyboardInset)
+    vars["--nv-keyboard-inset"] = px(keyboardInset)
 
     patch(vars)
   }
@@ -302,26 +302,26 @@ ${sharedInstallation}
     let fontSizes = dynamicTypeSizes(for: traitCollection)
 
     let vars: [String: String] = [
-      "--nk-is-dark":              isDark ? "1" : "0",
-      "--nk-is-light":             isDark ? "0" : "1",
-      "--nk-contrast":             isHighContrast ? "1" : "0",
-      "--nk-reduced-motion":       reducedMotion ? "1" : "0",
-      "--nk-reduced-transparency": reducedTransparency ? "1" : "0",
-      "--nk-font-scale":           String(format: "%.2f", fontScale),
-      "--nk-accent-r":             String(Int(r * 255)),
-      "--nk-accent-g":             String(Int(g * 255)),
-      "--nk-accent-b":             String(Int(b * 255)),
-      "--nk-font-body":       fontSizes.body,
-      "--nk-font-callout":    fontSizes.callout,
-      "--nk-font-caption1":   fontSizes.caption1,
-      "--nk-font-caption2":   fontSizes.caption2,
-      "--nk-font-footnote":   fontSizes.footnote,
-      "--nk-font-headline":   fontSizes.headline,
-      "--nk-font-subheadline":fontSizes.subheadline,
-      "--nk-font-title1":     fontSizes.title1,
-      "--nk-font-title2":     fontSizes.title2,
-      "--nk-font-title3":     fontSizes.title3,
-      "--nk-font-largeTitle": fontSizes.largeTitle,
+      "--nv-is-dark":              isDark ? "1" : "0",
+      "--nv-is-light":             isDark ? "0" : "1",
+      "--nv-contrast":             isHighContrast ? "1" : "0",
+      "--nv-reduced-motion":       reducedMotion ? "1" : "0",
+      "--nv-reduced-transparency": reducedTransparency ? "1" : "0",
+      "--nv-font-scale":           String(format: "%.2f", fontScale),
+      "--nv-accent-r":             String(Int(r * 255)),
+      "--nv-accent-g":             String(Int(g * 255)),
+      "--nv-accent-b":             String(Int(b * 255)),
+      "--nv-font-body":       fontSizes.body,
+      "--nv-font-callout":    fontSizes.callout,
+      "--nv-font-caption1":   fontSizes.caption1,
+      "--nv-font-caption2":   fontSizes.caption2,
+      "--nv-font-footnote":   fontSizes.footnote,
+      "--nv-font-headline":   fontSizes.headline,
+      "--nv-font-subheadline":fontSizes.subheadline,
+      "--nv-font-title1":     fontSizes.title1,
+      "--nv-font-title2":     fontSizes.title2,
+      "--nv-font-title3":     fontSizes.title3,
+      "--nv-font-largeTitle": fontSizes.largeTitle,
     ]
 
     patch(vars)
@@ -329,9 +329,9 @@ ${sharedInstallation}
 ${sharedChrome}
 
   // Called by NativiteKeyboard after its accessory view is laid out.
-  // Keeps --nk-accessory-height in sync with the native bar height.
+  // Keeps --nv-accessory-height in sync with the native bar height.
   func updateAccessoryHeight(_ height: CGFloat) {
-    patch(["--nk-accessory-height": px(height)])
+    patch(["--nv-accessory-height": px(height)])
   }
 
   // ── Keyboard notifications ───────────────────────────────────────────────────
@@ -340,8 +340,8 @@ ${sharedChrome}
     reducedMotion       = UIAccessibility.isReduceMotionEnabled
     reducedTransparency = UIAccessibility.isReduceTransparencyEnabled
     patch([
-      "--nk-reduced-motion":       reducedMotion       ? "1" : "0",
-      "--nk-reduced-transparency": reducedTransparency ? "1" : "0",
+      "--nv-reduced-motion":       reducedMotion       ? "1" : "0",
+      "--nv-reduced-transparency": reducedTransparency ? "1" : "0",
     ])
   }
 
@@ -364,12 +364,12 @@ ${sharedChrome}
     let keyboardInset = keyboardFloating ? 0 : max(0, keyboardHeight - safeBottom)
 
     patch([
-      "--nk-keyboard-height":   px(keyboardHeight),
-      "--nk-keyboard-visible":  "1",
-      "--nk-keyboard-floating": keyboardFloating ? "1" : "0",
-      "--nk-keyboard-inset":    px(keyboardInset),
-      "--nk-keyboard-duration": String(format: "%.0fms", keyboardDuration * 1000),
-      "--nk-keyboard-curve":    keyboardCurve,
+      "--nv-keyboard-height":   px(keyboardHeight),
+      "--nv-keyboard-visible":  "1",
+      "--nv-keyboard-floating": keyboardFloating ? "1" : "0",
+      "--nv-keyboard-inset":    px(keyboardInset),
+      "--nv-keyboard-duration": String(format: "%.0fms", keyboardDuration * 1000),
+      "--nv-keyboard-curve":    keyboardCurve,
     ])
   }
 
@@ -384,12 +384,12 @@ ${sharedChrome}
     let curve    = cssTimingFunction(from: UIView.AnimationCurve(rawValue: curveRaw) ?? .easeInOut)
 
     patch([
-      "--nk-keyboard-height":   "0px",
-      "--nk-keyboard-visible":  "0",
-      "--nk-keyboard-floating": "0",
-      "--nk-keyboard-inset":    "0px",
-      "--nk-keyboard-duration": String(format: "%.0fms", duration * 1000),
-      "--nk-keyboard-curve":    curve,
+      "--nv-keyboard-height":   "0px",
+      "--nv-keyboard-visible":  "0",
+      "--nv-keyboard-floating": "0",
+      "--nv-keyboard-inset":    "0px",
+      "--nv-keyboard-duration": String(format: "%.0fms", duration * 1000),
+      "--nv-keyboard-curve":    curve,
     ])
   }
 ${sharedHelpers}
@@ -464,7 +464,7 @@ private extension UIScreen {
 import Cocoa
 import WebKit
 
-// NativiteVars manages the --nk-* CSS custom property layer on macOS.
+// NativiteVars manages the --nv-* CSS custom property layer on macOS.
 // Same approach as iOS: inject a WKUserScript at documentStart, then patch
 // individual properties via evaluateJavaScript.
 
@@ -502,27 +502,27 @@ ${sharedInstallation}
     let scale = screen?.backingScaleFactor ?? 2.0
 
     let vars: [String: String] = [
-      "--nk-safe-top":    px(safeTop),
-      "--nk-safe-bottom": px(safeBottom),
-      "--nk-safe-left":   px(safeLeft),
-      "--nk-safe-right":  px(safeRight),
-      "--nk-status-height": "0px",
-      "--nk-inset-top":    px(insetTop),
-      "--nk-inset-bottom": px(insetBottom),
-      "--nk-inset-left":   px(safeLeft),
-      "--nk-inset-right":  px(safeRight),
-      "--nk-is-phone":     "0",
-      "--nk-is-tablet":    "0",
-      "--nk-is-desktop":   "1",
-      "--nk-is-portrait":  "0",
-      "--nk-is-landscape": "1",
-      "--nk-display-scale": String(format: "%.0f", scale),
-      "--nk-display-corner": "0px",
+      "--nv-safe-top":    px(safeTop),
+      "--nv-safe-bottom": px(safeBottom),
+      "--nv-safe-left":   px(safeLeft),
+      "--nv-safe-right":  px(safeRight),
+      "--nv-status-height": "0px",
+      "--nv-inset-top":    px(insetTop),
+      "--nv-inset-bottom": px(insetBottom),
+      "--nv-inset-left":   px(safeLeft),
+      "--nv-inset-right":  px(safeRight),
+      "--nv-is-phone":     "0",
+      "--nv-is-tablet":    "0",
+      "--nv-is-desktop":   "1",
+      "--nv-is-portrait":  "0",
+      "--nv-is-landscape": "1",
+      "--nv-display-scale": String(format: "%.0f", scale),
+      "--nv-display-corner": "0px",
       // No software keyboard on macOS
-      "--nk-keyboard-height":   "0px",
-      "--nk-keyboard-visible":  "0",
-      "--nk-keyboard-floating": "0",
-      "--nk-keyboard-inset":    "0px",
+      "--nv-keyboard-height":   "0px",
+      "--nv-keyboard-visible":  "0",
+      "--nv-keyboard-floating": "0",
+      "--nv-keyboard-inset":    "0px",
     ]
 
     patch(vars)
@@ -549,26 +549,26 @@ ${sharedInstallation}
     let fontSizes = macOSFontSizes()
 
     let vars: [String: String] = [
-      "--nk-is-dark":              isDark ? "1" : "0",
-      "--nk-is-light":             isDark ? "0" : "1",
-      "--nk-contrast":             "0",
-      "--nk-reduced-motion":       NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? "1" : "0",
-      "--nk-reduced-transparency": NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? "1" : "0",
-      "--nk-font-scale":           "1.00",
-      "--nk-accent-r":             String(Int(r * 255)),
-      "--nk-accent-g":             String(Int(g * 255)),
-      "--nk-accent-b":             String(Int(b * 255)),
-      "--nk-font-body":       fontSizes.body,
-      "--nk-font-callout":    fontSizes.callout,
-      "--nk-font-caption1":   fontSizes.caption1,
-      "--nk-font-caption2":   fontSizes.caption2,
-      "--nk-font-footnote":   fontSizes.footnote,
-      "--nk-font-headline":   fontSizes.headline,
-      "--nk-font-subheadline":fontSizes.subheadline,
-      "--nk-font-title1":     fontSizes.title1,
-      "--nk-font-title2":     fontSizes.title2,
-      "--nk-font-title3":     fontSizes.title3,
-      "--nk-font-largeTitle": fontSizes.largeTitle,
+      "--nv-is-dark":              isDark ? "1" : "0",
+      "--nv-is-light":             isDark ? "0" : "1",
+      "--nv-contrast":             "0",
+      "--nv-reduced-motion":       NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? "1" : "0",
+      "--nv-reduced-transparency": NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? "1" : "0",
+      "--nv-font-scale":           "1.00",
+      "--nv-accent-r":             String(Int(r * 255)),
+      "--nv-accent-g":             String(Int(g * 255)),
+      "--nv-accent-b":             String(Int(b * 255)),
+      "--nv-font-body":       fontSizes.body,
+      "--nv-font-callout":    fontSizes.callout,
+      "--nv-font-caption1":   fontSizes.caption1,
+      "--nv-font-caption2":   fontSizes.caption2,
+      "--nv-font-footnote":   fontSizes.footnote,
+      "--nv-font-headline":   fontSizes.headline,
+      "--nv-font-subheadline":fontSizes.subheadline,
+      "--nv-font-title1":     fontSizes.title1,
+      "--nv-font-title2":     fontSizes.title2,
+      "--nv-font-title3":     fontSizes.title3,
+      "--nv-font-largeTitle": fontSizes.largeTitle,
     ]
 
     patch(vars)

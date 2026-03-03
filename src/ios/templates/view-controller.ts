@@ -183,7 +183,7 @@ class ViewController: UIViewController {
     config.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "nativite")
     bridge.viewController = self
 
-    // Install --nk-* CSS variable defaults before any content renders.
+    // Install --nv-* CSS variable defaults before any content renders.
     vars.installUserScript(into: config)
 
     webView = NativiteWebView(frame: view.bounds, configuration: config)
@@ -320,7 +320,7 @@ extension ViewController: WKNavigationDelegate {
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     // The user script seeds :root with zero defaults at documentStart.
     // Re-push the real device values now that the JS context exists so
-    // all --nk-* variables reflect actual safe area, traits, etc.
+    // all --nv-* variables reflect actual safe area, traits, etc.
     vars.updateSafeArea(view.safeAreaInsets, in: self)
     vars.updateTraits(traitCollection)
 
@@ -568,7 +568,7 @@ extension ViewController: WKNavigationDelegate {
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     // The user script seeds :root with zero defaults at documentStart.
     // Re-push the real device values now that the JS context exists so
-    // all --nk-* variables reflect actual safe area, traits, etc.
+    // all --nv-* variables reflect actual safe area, traits, etc.
     vars.updateSafeArea(view.safeAreaInsets)
   }
 }

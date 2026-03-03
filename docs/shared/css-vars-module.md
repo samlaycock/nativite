@@ -2,7 +2,7 @@
 
 > Maps to: `src/css-vars/index.ts`
 
-The CSS variables module provides typed, observable access to `--nk-*` CSS custom properties set by native code. It works in both native and browser environments with sensible defaults.
+The CSS variables module provides typed, observable access to `--nv-*` CSS custom properties set by native code. It works in both native and browser environments with sensible defaults.
 
 ## API
 

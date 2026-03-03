@@ -7,7 +7,7 @@ Nativite gives you:
 - Native project generation for Apple and Android targets
 - A typed JS bridge for calling native code from web code
 - A declarative native chrome API (`title bar`, `navigation`, `toolbars`, sheets, drawers, etc.)
-- Live device CSS variables (`--nk-*`) for safe areas, keyboard, appearance, and more
+- Live device CSS variables (`--nv-*`) for safe areas, keyboard, appearance, and more
 
 > Status: early development. APIs are usable but may change between releases.
 
@@ -189,7 +189,7 @@ Also available on `chrome`:
 
 ### `nativite/css`
 
-Typed helpers for `--nk-*` device variables:
+Typed helpers for `--nv-*` device variables:
 
 ```ts
 import { NKVars } from "nativite/css";

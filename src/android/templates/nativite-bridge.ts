@@ -246,12 +246,12 @@ class NativiteBridge {
         val toolbarHeight = if (toolbarVisible && !navVisible) 80 else 0
 
         vars.pushCustomVars(mapOf(
-            "--nk-nav-height" to "\${navHeight}px",
-            "--nk-nav-visible" to if (titleBarVisible) "1" else "0",
-            "--nk-tab-height" to "\${tabHeight}px",
-            "--nk-tab-visible" to if (navVisible) "1" else "0",
-            "--nk-toolbar-height" to "\${toolbarHeight}px",
-            "--nk-toolbar-visible" to if (toolbarVisible) "1" else "0",
+            "--nv-nav-height" to "\${navHeight}px",
+            "--nv-nav-visible" to if (titleBarVisible) "1" else "0",
+            "--nv-tab-height" to "\${tabHeight}px",
+            "--nv-tab-visible" to if (navVisible) "1" else "0",
+            "--nv-toolbar-height" to "\${toolbarHeight}px",
+            "--nv-toolbar-visible" to if (toolbarVisible) "1" else "0",
         ))
     }
 

@@ -88,11 +88,11 @@ describe("nativiteBridgeTemplate", () => {
   it("pushes chrome geometry CSS vars on state update", () => {
     const output = nativiteBridgeTemplate(androidConfig);
     expect(output).toContain("pushChromeGeometryVars(state)");
-    expect(output).toContain("--nk-nav-height");
-    expect(output).toContain("--nk-tab-height");
-    expect(output).toContain("--nk-toolbar-height");
-    expect(output).toContain("--nk-nav-visible");
-    expect(output).toContain("--nk-tab-visible");
-    expect(output).toContain("--nk-toolbar-visible");
+    expect(output).toContain("--nv-nav-height");
+    expect(output).toContain("--nv-tab-height");
+    expect(output).toContain("--nv-toolbar-height");
+    expect(output).toContain("--nv-nav-visible");
+    expect(output).toContain("--nv-tab-visible");
+    expect(output).toContain("--nv-toolbar-visible");
   });
 });
