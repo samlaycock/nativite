@@ -1,9 +1,30 @@
 import { describe, expect, it } from "bun:test";
 
-import { baseConfig } from "../../../__tests__/fixtures.ts";
+import { baseConfig, otaConfig } from "../../../__tests__/fixtures.ts";
 import { nativiteBridgeTemplate } from "../nativite-bridge.ts";
 
 describe("nativiteBridgeTemplate", () => {
+  it("returns static ota status when updates are not configured", () => {
+    const output = nativiteBridgeTemplate(baseConfig);
+
+    expect(output).toContain(
+      'register(namespace: "__nativite__", method: "__ota_check__") { _, completion in',
+    );
+    expect(output).toContain('completion(.success(["available": false]))');
+    expect(output).not.toContain("let status = await OTAUpdater().checkStatus()");
+  });
+
+  it("checks OTA availability asynchronously when updates are configured", () => {
+    const output = nativiteBridgeTemplate(otaConfig);
+
+    expect(output).toContain(
+      'register(namespace: "__nativite__", method: "__ota_check__") { _, completion in',
+    );
+    expect(output).toContain("Task {");
+    expect(output).toContain("let status = await OTAUpdater().checkStatus()");
+    expect(output).toContain("completion(.success(status))");
+  });
+
   it("scopes chrome mutations to the primary webview", () => {
     const output = nativiteBridgeTemplate(baseConfig);
 

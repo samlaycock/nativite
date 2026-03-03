@@ -2,6 +2,7 @@ import type { NativiteConfig } from "../../index.ts";
 
 export function otaUpdaterTemplate(config: NativiteConfig): string {
   const otaUrl = config.updates?.url ?? "";
+  const otaChannel = config.updates?.channel ?? "";
 
   return `import Foundation
 
@@ -21,6 +22,7 @@ class OTAUpdater {
     }
     return url
   }()
+  private let updateChannel: String = "${otaChannel}"
   private let fileManager = FileManager.default
   private let expectedPlatform: String = {
     #if os(iOS)
@@ -34,6 +36,12 @@ class OTAUpdater {
 
   private var platformBundleBaseURL: URL {
     serverURL.appendingPathComponent(expectedPlatform, isDirectory: true)
+  }
+
+  private var channelBundleBaseURL: URL {
+    serverURL
+      .appendingPathComponent(updateChannel, isDirectory: true)
+      .appendingPathComponent(expectedPlatform, isDirectory: true)
   }
 
   private var stagedBundleURL: URL {
@@ -65,16 +73,37 @@ class OTAUpdater {
     return fileManager.fileExists(atPath: indexURL.path) ? indexURL : nil
   }
 
+  // Returns OTA status for bridge calls.
+  func checkStatus() async -> [String: Any] {
+    if fileManager.fileExists(atPath: stagedBundleURL.path) {
+      let stagedVersion = readVersion(at: stagedBundleURL)
+      if stagedVersion.isEmpty {
+        return ["available": true]
+      }
+      return ["available": true, "version": stagedVersion]
+    }
+
+    do {
+      let (manifest, _) = try await fetchManifest()
+      guard manifest.platform == expectedPlatform else {
+        return ["available": false]
+      }
+
+      let activeHash = readHash(at: activeBundleURL)
+      let stagedHash = readHash(at: stagedBundleURL)
+      guard manifest.hash != activeHash && manifest.hash != stagedHash else {
+        return ["available": false]
+      }
+      return ["available": true, "version": manifest.version]
+    } catch {
+      return ["available": false]
+    }
+  }
+
   // Fetches the remote manifest and downloads a new bundle if one is available.
   func checkForUpdate() async {
-    let manifestURL = platformBundleBaseURL.appendingPathComponent("manifest.json")
     do {
-      let (data, response) = try await URLSession.shared.data(from: manifestURL)
-      if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-        print("[OTAUpdater] Server returned HTTP \\(http.statusCode) for manifest")
-        return
-      }
-      let manifest = try JSONDecoder().decode(OTAManifest.self, from: data)
+      let (manifest, bundleBaseURL) = try await fetchManifest()
       guard manifest.platform == expectedPlatform else {
         print(
           "[OTAUpdater] Ignoring manifest for unexpected platform " +
@@ -83,29 +112,72 @@ class OTAUpdater {
         return
       }
 
-      let hashFile = activeBundleURL.appendingPathComponent(".hash")
-      let currentHash = (try? String(contentsOf: hashFile, encoding: .utf8)) ?? ""
+      let currentHash = readHash(at: activeBundleURL)
+      let stagedHash = readHash(at: stagedBundleURL)
 
-      guard manifest.hash != currentHash else {
+      guard manifest.hash != currentHash && manifest.hash != stagedHash else {
         print("[OTAUpdater] Bundle is up to date (\\(manifest.version))")
         return
       }
 
       print("[OTAUpdater] Update available: \\(manifest.version). Downloading...")
-      try await downloadBundle(manifest: manifest)
+      try await downloadBundle(manifest: manifest, bundleBaseURL: bundleBaseURL)
     } catch {
       print("[OTAUpdater] Update check failed: \\(error)")
     }
   }
 
-  private func downloadBundle(manifest: OTAManifest) async throws {
+  private func candidateBundleBaseURLs() -> [URL] {
+    var baseURLs: [URL] = []
+    if !updateChannel.isEmpty {
+      baseURLs.append(channelBundleBaseURL)
+    }
+    baseURLs.append(platformBundleBaseURL)
+    return baseURLs
+  }
+
+  private func fetchManifest() async throws -> (manifest: OTAManifest, bundleBaseURL: URL) {
+    var lastError: Error?
+
+    for baseURL in candidateBundleBaseURLs() {
+      let manifestURL = baseURL.appendingPathComponent("manifest.json")
+      do {
+        let (data, response) = try await URLSession.shared.data(from: manifestURL)
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+          print("[OTAUpdater] Server returned HTTP \\(http.statusCode) for manifest")
+          continue
+        }
+
+        let manifest = try JSONDecoder().decode(OTAManifest.self, from: data)
+        return (manifest, baseURL)
+      } catch {
+        lastError = error
+      }
+    }
+
+    throw lastError ?? URLError(.cannotLoadFromNetwork)
+  }
+
+  private func readHash(at bundleURL: URL) -> String {
+    let hashFile = bundleURL.appendingPathComponent(".hash")
+    let hash = (try? String(contentsOf: hashFile, encoding: .utf8)) ?? ""
+    return hash.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func readVersion(at bundleURL: URL) -> String {
+    let versionFile = bundleURL.appendingPathComponent(".version")
+    let version = (try? String(contentsOf: versionFile, encoding: .utf8)) ?? ""
+    return version.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func downloadBundle(manifest: OTAManifest, bundleBaseURL: URL) async throws {
     if fileManager.fileExists(atPath: stagedBundleURL.path) {
       try fileManager.removeItem(at: stagedBundleURL)
     }
     try fileManager.createDirectory(at: stagedBundleURL, withIntermediateDirectories: true)
 
     for asset in manifest.assets {
-      let assetURL = platformBundleBaseURL.appendingPathComponent(asset)
+      let assetURL = bundleBaseURL.appendingPathComponent(asset)
       let destination = stagedBundleURL.appendingPathComponent(asset)
 
       try fileManager.createDirectory(
@@ -119,6 +191,11 @@ class OTAUpdater {
 
     try manifest.hash.write(
       to: stagedBundleURL.appendingPathComponent(".hash"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try manifest.version.write(
+      to: stagedBundleURL.appendingPathComponent(".version"),
       atomically: true,
       encoding: .utf8
     )

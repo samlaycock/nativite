@@ -1,6 +1,18 @@
 import type { NativiteConfig } from "../../index.ts";
 
-export function nativiteBridgeTemplate(_config: NativiteConfig): string {
+export function nativiteBridgeTemplate(config: NativiteConfig): string {
+  const hasOta = Boolean(config.updates);
+  const otaCheckHandler = hasOta
+    ? `    register(namespace: "__nativite__", method: "__ota_check__") { _, completion in
+      Task {
+        let status = await OTAUpdater().checkStatus()
+        completion(.success(status))
+      }
+    }`
+    : `    register(namespace: "__nativite__", method: "__ota_check__") { _, completion in
+      completion(.success(["available": false]))
+    }`;
+
   return `import WebKit
 
 // NativiteHandler receives (args, completion) and must call completion exactly once.
@@ -168,9 +180,7 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
       completion(.success("pong"))
     }
 
-    register(namespace: "__nativite__", method: "__ota_check__") { _, completion in
-      completion(.success(["available": false]))
-    }
+${otaCheckHandler}
   }
 }
 

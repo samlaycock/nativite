@@ -101,6 +101,11 @@ if (status.available) {
 
 When not in a native environment, returns `{ available: false }`.
 
+Platform notes:
+
+- iOS/macOS: Returns live status from the native OTA updater.
+- Android: Returns `{ available: false }` placeholder status (no Android OTA runtime yet).
+
 ## Event Delivery Chain
 
 When native sends an event:

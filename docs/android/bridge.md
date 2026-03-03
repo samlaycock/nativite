@@ -68,6 +68,13 @@ Cleans up ports and references when a webview is destroyed.
 
 ## Message Handling
 
+### Built-in `__nativite__` Handlers
+
+| Handler                      | Description                                       |
+| ---------------------------- | ------------------------------------------------- |
+| `__nativite__.__ping__`      | Returns `"pong"`                                  |
+| `__nativite__.__ota_check__` | Returns `{ available: false }` placeholder status |
+
 ### Built-in Chrome Handlers
 
 | Handler                                          | Description                                                                                                      |

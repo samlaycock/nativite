@@ -25,6 +25,8 @@ otaUpdater.checkForUpdate()
 This:
 
 1. Fetches a manifest from the configured update server.
+   - Primary path: `<updates.url>/<updates.channel>/<platform>/manifest.json`
+   - Fallback path: `<updates.url>/<platform>/manifest.json`
 2. Compares the remote version/hash against the currently active bundle.
 3. If a newer version is available, downloads the bundle asynchronously.
 4. Stages the downloaded bundle separately from the active bundle.
@@ -59,12 +61,18 @@ Network errors during update checks or downloads are handled gracefully:
 
 The bridge exposes a built-in handler for JavaScript to query OTA status:
 
-| Namespace      | Method          | Response                             |
-| -------------- | --------------- | ------------------------------------ |
-| `__nativite__` | `__ota_check__` | `{ available: false }` (placeholder) |
+| Namespace      | Method          | Response                                   |
+| -------------- | --------------- | ------------------------------------------ |
+| `__nativite__` | `__ota_check__` | `{ available: boolean, version?: string }` |
 
 JavaScript can call this via:
 
 ```javascript
 const status = await bridge.call("__nativite__", "__ota_check__");
 ```
+
+The status call returns:
+
+- `{ available: true, version }` when a newer remote bundle is detected.
+- `{ available: true, version }` when a bundle is already staged for next launch.
+- `{ available: false }` when up to date, unavailable, or on transient network failure.

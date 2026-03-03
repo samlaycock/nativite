@@ -65,14 +65,14 @@ This allows O(1) lookup and prevents namespace collisions between plugins.
 
 ## Built-in Handlers
 
-| Namespace      | Method                                | Description                            |
-| -------------- | ------------------------------------- | -------------------------------------- |
-| `__nativite__` | `__ping__`                            | Returns `"pong"`                       |
-| `__nativite__` | `__ota_check__`                       | Returns OTA update status              |
-| `__chrome__`   | `__chrome_set_state__`                | Applies chrome state (fire-and-forget) |
-| `__chrome__`   | `__chrome_messaging_post_to_parent__` | Inter-webview messaging                |
-| `__chrome__`   | `__chrome_messaging_post_to_child__`  | Inter-webview messaging                |
-| `__chrome__`   | `__chrome_messaging_broadcast__`      | Inter-webview messaging                |
+| Namespace      | Method                                | Description                                         |
+| -------------- | ------------------------------------- | --------------------------------------------------- |
+| `__nativite__` | `__ping__`                            | Returns `"pong"`                                    |
+| `__nativite__` | `__ota_check__`                       | Returns OTA update status (`available`, `version?`) |
+| `__chrome__`   | `__chrome_set_state__`                | Applies chrome state (fire-and-forget)              |
+| `__chrome__`   | `__chrome_messaging_post_to_parent__` | Inter-webview messaging                             |
+| `__chrome__`   | `__chrome_messaging_post_to_child__`  | Inter-webview messaging                             |
+| `__chrome__`   | `__chrome_messaging_broadcast__`      | Inter-webview messaging                             |
 
 ## Plugin Resolution
 

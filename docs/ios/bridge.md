@@ -56,10 +56,10 @@ Handlers are stored as `"namespace.method"` keys in a dictionary for O(1) lookup
 
 ## Built-in Handlers
 
-| Namespace      | Method          | Description                                 |
-| -------------- | --------------- | ------------------------------------------- |
-| `__nativite__` | `__ping__`      | Returns `"pong"` (connectivity check)       |
-| `__nativite__` | `__ota_check__` | Returns `{ available: false }` (OTA status) |
+| Namespace      | Method          | Description                                       |
+| -------------- | --------------- | ------------------------------------------------- |
+| `__nativite__` | `__ping__`      | Returns `"pong"` (connectivity check)             |
+| `__nativite__` | `__ota_check__` | Returns live OTA status (`available`, `version?`) |
 
 ## Chrome Handlers
 

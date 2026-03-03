@@ -34,8 +34,22 @@ class NativiteBridge {
     private val childWebViews = mutableMapOf<String, WebView>()
     private val childPorts = mutableMapOf<String, WebMessagePortCompat>()
 
+    init {
+        registerBuiltinHandlers()
+    }
+
     fun register(namespace: String, method: String, handler: NativiteHandler) {
         handlers["$namespace.$method"] = handler
+    }
+
+    private fun registerBuiltinHandlers() {
+        register(namespace: "__nativite__", method: "__ping__") { _, completion ->
+            completion(Result.success("pong"))
+        }
+
+        register(namespace: "__nativite__", method: "__ota_check__") { _, completion ->
+            completion(Result.success(mapOf("available" to false)))
+        }
     }
 
     fun attachWebView(webView: WebView, instanceName: String = "main") {

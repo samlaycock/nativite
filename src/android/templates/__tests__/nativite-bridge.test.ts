@@ -4,6 +4,16 @@ import { androidChromeConfig, androidConfig } from "../../../__tests__/fixtures.
 import { nativiteBridgeTemplate } from "../nativite-bridge.ts";
 
 describe("nativiteBridgeTemplate", () => {
+  it("registers built-in __nativite__ handlers for ping and OTA status", () => {
+    const output = nativiteBridgeTemplate(androidConfig);
+
+    expect(output).toContain("init {");
+    expect(output).toContain("registerBuiltinHandlers()");
+    expect(output).toContain('register(namespace: "__nativite__", method: "__ping__")');
+    expect(output).toContain('register(namespace: "__nativite__", method: "__ota_check__")');
+    expect(output).toContain('completion(Result.success(mapOf("available" to false)))');
+  });
+
   it("uses the correct package name", () => {
     const output = nativiteBridgeTemplate(androidConfig);
     expect(output).toContain("package com.example.testapp");
