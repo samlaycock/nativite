@@ -33,6 +33,10 @@ The following internal wire/build types are no longer exported:
 - `DevJson`
 - `BuildManifest`
 
+### Renamed export
+
+- `nativite/css-vars` → `nativite/css`
+
 ### Documentation alignment
 
 - CLI docs now reflect the currently supported command surface.

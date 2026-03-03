@@ -8,7 +8,7 @@
 // or fall back to their specified defaults.
 //
 // Usage:
-//   import { NKVars } from 'nativite/css-vars'
+//   import { NKVars } from 'nativite/css'
 //
 //   const kbHeight = NKVars.get('keyboard-height')   // → "0px" | "336px" etc.
 //   const unsub = NKVars.observe('is-dark', (v) => {

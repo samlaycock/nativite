@@ -9,7 +9,7 @@ The CSS variables module provides typed, observable access to `--nk-*` CSS custo
 ### Reading Values
 
 ```typescript
-import { NKVars } from "nativite/css-vars";
+import { NKVars } from "nativite/css";
 
 // Raw string value
 NKVars.get("keyboard-height"); // → "0px" or "336px"

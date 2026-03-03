@@ -45,7 +45,7 @@
       "import": "./dist/chrome/public.mjs",
       "require": "./dist/chrome/public.js"
     },
-    "./css-vars": {
+    "./css": {
       "types": "./dist/css-vars/index.d.ts",
       "import": "./dist/css-vars/index.mjs",
       "require": "./dist/css-vars/index.js"

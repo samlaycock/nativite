@@ -165,7 +165,7 @@ function nativeEnvironmentOptions(platform: Platform, mode: string): Environment
     // so the optimizer does not try to bundle native-only runtime modules
     // that rely on the webkit message handler bridge.
     optimizeDeps: {
-      exclude: ["nativite", "nativite/chrome", "nativite/client", "nativite/css-vars"],
+      exclude: ["nativite", "nativite/chrome", "nativite/client", "nativite/css"],
     },
   };
 }
@@ -285,7 +285,7 @@ function nativiteCorePlugin(): Plugin {
           ...(userOptimizeDeps.exclude ?? []),
           "nativite/chrome",
           "nativite/client",
-          "nativite/css-vars",
+          "nativite/css",
         ]),
       );
 

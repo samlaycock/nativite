@@ -85,7 +85,7 @@ Each environment gets platform-specific `define` values:
 And excludes nativite packages from dependency optimisation:
 
 ```
-optimizeDeps.exclude: ["nativite", "nativite/chrome", "nativite/client", "nativite/css-vars"]
+optimizeDeps.exclude: ["nativite", "nativite/chrome", "nativite/client", "nativite/css"]
 ```
 
 ### User-Agent Based Routing
