@@ -1,6 +1,6 @@
 # Nativite
 
-Build native iOS and macOS apps using your existing web stack — React, Vue, Svelte, or plain TypeScript. Nativite wraps your Vite web app in a `WKWebView` and gives you a typed JavaScript bridge to control native UIKit/AppKit chrome, CSS variables that reflect live device state, and a CLI that generates and launches an Xcode project automatically. You can also register third-party platform plugins for non-Apple WebView shells.
+Build native iOS, macOS, and Android apps using your existing web stack — React, Vue, Svelte, or plain TypeScript. Nativite wraps your Vite web app in a native WebView and gives you a typed JavaScript bridge to control native platform chrome, CSS variables that reflect live device state, and a CLI that generates and launches native projects automatically. You can also register third-party platform plugins for additional WebView shells.
 
 > **Status:** Early development. The API is functional but not yet stable.
 
@@ -11,19 +11,19 @@ Build native iOS and macOS apps using your existing web stack — React, Vue, Sv
 ```
 your web app  ──→  Vite build  ──→  dist-<platform>/
                                       ↓
-nativite.config.ts  ──→  nativite generate  ──→  built-in Xcode generation or platform plugin hooks
+nativite.config.ts  ──→  nativite generate  ──→  Xcode / Gradle project (or platform plugin hooks)
                                                            ↓
-                                                     WKWebView loads dist/
+                                                   Native WebView loads dist/
                                                            ↕
-                                               JS bridge (webkit.messageHandlers)
+                                                     JS bridge (typed RPC)
                                                            ↕
-                                               NativiteBridge.swift (Swift RPC)
+                                                   NativiteBridge (Swift / Kotlin)
 ```
 
-1. You write a web app with Vite. Nativite registers per-platform native Vite environments (`ios`, `ipad`, `macos`, plus plugin-defined environments) while `client` remains the web environment.
-2. `nativite generate` (or the Vite plugin) generates a complete Xcode project for built-in Apple targets, or calls `generate` hooks for third-party platform plugins.
-3. The generated app loads a bundled `dist/` directory inside `WKWebView` (from `dist-<platform>/`). In dev mode it loads from the Vite dev server instead.
-4. Your JavaScript talks to Swift over a typed async RPC bridge. Native chrome (nav bars, tab bars, keyboards, etc.) is controlled declaratively with singleton namespaces like `chrome.navigationBar.setTitle()`, `chrome.tabBar.setTabs()`, etc.
+1. You write a web app with Vite. Nativite registers per-platform native Vite environments (`ios`, `ipad`, `macos`, `android`, plus plugin-defined environments) while `client` remains the web environment.
+2. `nativite generate` (or the Vite plugin) generates native projects — an Xcode project for Apple targets, a Gradle project for Android, or calls `generate` hooks for third-party platform plugins.
+3. The generated app loads a bundled `dist/` directory inside a native WebView (from `dist-<platform>/`). In dev mode it loads from the Vite dev server instead.
+4. Your JavaScript talks to Swift/Kotlin over a typed async RPC bridge. Native chrome (title bars, navigation, toolbars, keyboards, etc.) is controlled declaratively by passing element descriptors to a stackable `chrome()` function — e.g. `chrome(titleBar({ title: "Home" }), navigation({ items: [...] }))`.
 
 ---
 
@@ -44,7 +44,7 @@ bun add nativite
 ### 1. Create `nativite.config.ts`
 
 ```ts
-import { defineConfig, ios, macos } from "nativite";
+import { defineConfig, ios, macos, android } from "nativite";
 
 export default defineConfig({
   app: {
@@ -56,6 +56,7 @@ export default defineConfig({
   platforms: [
     ios({ minimumVersion: "17.0" }),
     macos({ minimumVersion: "14.0" }), // optional — adds a macOS target
+    // android({ minSdk: 26 }),        // optional — adds an Android target
   ],
 });
 ```
@@ -90,7 +91,7 @@ For third-party targets, add `platform("<name>", {...})` entries and matching `p
 All configuration lives in `nativite.config.ts`. Use `defineConfig` for TypeScript inference.
 
 ```ts
-import { defineConfig, definePlatformPlugin, ios, macos, platform } from "nativite";
+import { defineConfig, definePlatformPlugin, ios, macos, android, platform } from "nativite";
 
 export default defineConfig({
   // ── Required ──────────────────────────────────────────────────────────────
@@ -117,15 +118,15 @@ export default defineConfig({
       minimumVersion: "14.0",
       overrides: { app: { bundleId: "com.example.myapp.macos" } },
     }), // optional — MACOSX_DEPLOYMENT_TARGET
-    // platform("android", { minSdk: 26 }), // third-party example
+    // android({ minSdk: 26 }),              // optional — adds an Android target
   ],
 
   platformPlugins: [
     definePlatformPlugin({
-      name: "android-platform",
-      platform: "android",
-      environments: ["android"], // default: [platform]
-      extensions: [".android", ".mobile", ".native"], // default: [`.${platform}`, ".native"]
+      name: "electron-platform",
+      platform: "electron",
+      environments: ["electron"], // default: [platform]
+      extensions: [".electron", ".desktop", ".native"], // default: [`.${platform}`, ".native"]
     }),
   ],
 
@@ -155,7 +156,7 @@ export default defineConfig({
   // ── Initial native chrome state (optional) ────────────────────────────────
   // Applied before the WebView loads its first frame — no flash of wrong UI.
   defaultChrome: {
-    navigationBar: { title: "Home", largeTitleMode: "always" },
+    titleBar: { title: "Home", largeTitleMode: "large" },
     statusBar: { style: "light" },
   },
 });
@@ -169,16 +170,21 @@ export default defineConfig({
 | `app.bundleId`           | `string`                      | ✅       | Reverse-domain bundle ID (`com.example.app`)                                                                   |
 | `app.version`            | `string`                      | ✅       | Marketing version string (`1.0.0`)                                                                             |
 | `app.buildNumber`        | `number`                      | ✅       | Integer build number, incremented on each release                                                              |
-| `platforms`              | `NativitePlatformConfig[]`    | ✅       | Platform entries such as `ios({...})`, `macos({...})`                                                          |
+| `platforms`              | `NativitePlatformConfig[]`    | ✅       | Platform entries such as `ios({...})`, `macos({...})`, `android({...})`                                        |
+| `plugins`                | `NativitePlugin[]`            | —        | Native bridge plugins (camera, location, etc.) — adds namespaces, Swift/Kotlin sources, and resources          |
 | `platformPlugins`        | `NativitePlatformPlugin[]`    | —        | Third-party platform integration hooks                                                                         |
 | `platform().overrides`   | `NativiteRootConfigOverrides` | —        | Per-platform root overrides (`app`, `signing`, `updates`, `plugins`, `defaultChrome`, `icon`, `splash`, `dev`) |
-| `ios().minimumVersion`   | `string`                      | —        | iOS deployment target                                                                                          |
+| `ios().minimumVersion`   | `string`                      | ✅       | iOS deployment target                                                                                          |
 | `ios().target`           | `"simulator" \| "device"`     | —        | Optional iOS dev launch target                                                                                 |
 | `ios().simulator`        | `string`                      | —        | Optional iOS Simulator name                                                                                    |
 | `ios().errorOverlay`     | `boolean`                     | —        | Optional native dev runtime error overlay toggle (default: `false`)                                            |
-| `macos().minimumVersion` | `string`                      | —        | macOS deployment target                                                                                        |
-| `signing.ios.mode`       | `"automatic" \| "manual"`     | —        | Xcode code signing mode                                                                                        |
-| `signing.ios.teamId`     | `string`                      | —        | Apple Developer Team ID                                                                                        |
+| `macos().minimumVersion` | `string`                      | ✅       | macOS deployment target                                                                                        |
+| `android().minSdk`       | `number`                      | ✅       | Android minimum SDK version                                                                                    |
+| `android().targetSdk`    | `number`                      | —        | Android target SDK version (optional)                                                                          |
+| `signing.ios.mode`       | `"automatic" \| "manual"`     | —        | iOS code signing mode                                                                                          |
+| `signing.ios.teamId`     | `string`                      | —        | Apple Developer Team ID (iOS)                                                                                  |
+| `signing.macos.mode`     | `"automatic" \| "manual"`     | —        | macOS code signing mode                                                                                        |
+| `signing.macos.teamId`   | `string`                      | —        | Apple Developer Team ID (macOS)                                                                                |
 | `updates.url`            | `string`                      | —        | OTA update server URL                                                                                          |
 | `updates.channel`        | `string`                      | —        | OTA release channel                                                                                            |
 | `icon`                   | `string`                      | —        | Path to 1024×1024 PNG app icon (relative to project root)                                                      |
@@ -192,10 +198,10 @@ export default defineConfig({
 
 ```ts
 definePlatformPlugin({
-  name: "android-platform",
-  platform: "android",
-  environments: ["android"], // optional, defaults to ["android"]
-  extensions: [".android", ".mobile", ".native"], // optional, defaults to [".android", ".native"]
+  name: "electron-platform",
+  platform: "electron",
+  environments: ["electron"], // optional, defaults to ["electron"]
+  extensions: [".electron", ".desktop", ".native"], // optional, defaults to [".electron", ".native"]
   async generate(ctx) {
     // Create/update native project artifacts for this platform
   },
@@ -241,7 +247,7 @@ npx nativite dev --target device
 
 ### `nativite/client` — bridge & events
 
-The core transport layer between your JavaScript and Swift.
+The core transport layer between your JavaScript and native code.
 
 ```ts
 import { bridge } from "nativite/client";
@@ -275,163 +281,308 @@ const { available, version } = await ota.check();
 
 ### `nativite/chrome` — native UI chrome
 
-Control native UIKit chrome declaratively from JavaScript using singleton namespaces with named setters, `configure(...)`, and `on*` subscriptions. Only the keys you provide are changed — absent keys are left unchanged.
+Control native platform chrome declaratively from JavaScript. The `chrome()` function takes element descriptors created by factory functions and returns a cleanup function. Layers stack — calling `chrome()` multiple times merges state, and cleanup restores only the areas declared in that call.
+
+```ts
+import {
+  chrome,
+  titleBar,
+  navigation,
+  toolbar,
+  statusBar,
+  homeIndicator,
+  keyboard,
+  sheet,
+  button,
+  navItem,
+} from "nativite/chrome";
+
+// Apply a layer of chrome — returns a cleanup function
+const cleanup = chrome(
+  titleBar({
+    title: "Settings",
+    largeTitleMode: "inline",
+    trailingItems: [{ id: "save", label: "Save", style: "primary" }],
+  }),
+  navigation({
+    items: [
+      { id: "home", label: "Home", icon: "house.fill" },
+      { id: "search", label: "Search", icon: "magnifyingglass" },
+      { id: "profile", label: "Profile", icon: "person.fill" },
+    ],
+    activeItem: "home",
+  }),
+  statusBar({ style: "light" }),
+  homeIndicator({ hidden: true }),
+);
+
+// Listen for events
+const unsub = chrome.on("navigation.itemPressed", ({ id }) => {
+  navigateTo(id);
+});
+
+// Cleanup removes this layer — other layers remain
+cleanup();
+unsub();
+```
+
+Title bar and toolbar buttons can expose native menus with nested submenus:
+
+```ts
+chrome(
+  toolbar({
+    items: [
+      {
+        id: "more",
+        icon: "ellipsis.circle",
+        menu: {
+          items: [
+            { id: "refresh", label: "Refresh" },
+            {
+              id: "sort",
+              label: "Sort",
+              children: [
+                { id: "sort.date", label: "By Date" },
+                { id: "sort.name", label: "By Name" },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  }),
+);
+```
+
+#### Factory functions
+
+Each area of native chrome has a factory function that returns a `ChromeElement` descriptor:
+
+| Factory              | Config type              | Description                                                          |
+| -------------------- | ------------------------ | -------------------------------------------------------------------- |
+| `titleBar(config)`   | `TitleBarConfig`         | Title, subtitle, leading/trailing buttons, search bar, tint          |
+| `navigation(config)` | `NavigationConfig`       | Primary navigation items (tab bar on mobile, sidebar on desktop)     |
+| `toolbar(config)`    | `ToolbarConfig`          | Bottom toolbar items and menus                                       |
+| `sidebarPanel(config)` | `SidebarPanelConfig`   | Collapsible sidebar with nested items (iPad/macOS)                   |
+| `statusBar(config)`  | `StatusBarConfig`        | Status bar style and visibility                                      |
+| `homeIndicator(config)` | `HomeIndicatorConfig` | Home indicator visibility (iOS)                                      |
+| `keyboard(config)`   | `KeyboardConfig`         | Input accessory toolbar, dismiss mode                                |
+| `menuBar(config)`    | `MenuBarConfig`          | macOS menu bar menus                                                 |
+| `tabBottomAccessory(config)` | `TabBottomAccessoryConfig` | Webview accessory below the tab bar                          |
+
+Named child webviews (each takes a name string and config):
+
+| Factory                    | Config type       | Description                              |
+| -------------------------- | ----------------- | ---------------------------------------- |
+| `sheet(name, config)`      | `SheetConfig`     | Modal bottom sheet with detents          |
+| `drawer(name, config)`     | `DrawerConfig`    | Side drawer (leading or trailing)        |
+| `appWindow(name, config)`  | `AppWindowConfig` | macOS secondary window                   |
+| `popover(name, config)`    | `PopoverConfig`   | Floating popover anchored to an element  |
+
+#### Item constructors
+
+Identity wrappers that help with type inference:
+
+```ts
+import { button, navItem, menuItem } from "nativite/chrome";
+
+const saveBtn = button({ id: "save", label: "Save", style: "primary" });
+const homeTab = navItem({ id: "home", label: "Home", icon: "house.fill" });
+const refreshAction = menuItem({ id: "refresh", label: "Refresh" });
+```
+
+#### Item types
+
+**`ButtonItem`** — used in title bar leading/trailing items, toolbar items, and keyboard accessory:
+
+| Property   | Type                                       | Description                                 |
+| ---------- | ------------------------------------------ | ------------------------------------------- |
+| `id`       | `string`                                   | Unique identifier                           |
+| `label`    | `string?`                                  | Visible label (omit when using icon alone)  |
+| `icon`     | `string?`                                  | SF Symbol (iOS/macOS) or Material Icon (Android) |
+| `style`    | `"plain" \| "primary" \| "destructive"`    | Semantic style                              |
+| `disabled` | `boolean?`                                 | Greyed out                                  |
+| `tint`     | `string?`                                  | Custom foreground hex colour                |
+| `badge`    | `string \| number \| null`                 | Badge overlay                               |
+| `menu`     | `MenuConfig?`                              | Dropdown menu attached to this button       |
+
+**`BarItem`** — `ButtonItem | FlexibleSpace | FixedSpace`:
+
+```ts
+// Spacers:
+{ type: "flexible-space" }
+{ type: "fixed-space", width: 16 }
+```
+
+**`NavigationItem`** — used in `navigation()`:
+
+| Property   | Type                         | Description                                      |
+| ---------- | ---------------------------- | ------------------------------------------------ |
+| `id`       | `string`                     | Unique identifier                                |
+| `label`    | `string`                     | Display label                                    |
+| `icon`     | `string`                     | Required icon (SF Symbol / Material Icon)        |
+| `subtitle` | `string?`                    | Secondary text (iOS 18+)                         |
+| `badge`    | `string \| number \| null`   | Badge overlay                                    |
+| `disabled` | `boolean?`                   | Greyed out                                       |
+| `role`     | `"search"?`                  | iOS 18+ search tab                               |
+
+**`MenuItem`** — used in menus and `menuBar()`:
+
+| Property        | Type                                   | Description                             |
+| --------------- | -------------------------------------- | --------------------------------------- |
+| `id`            | `string`                               | Unique identifier                       |
+| `label`         | `string`                               | Display label                           |
+| `icon`          | `string?`                              | Icon                                    |
+| `disabled`      | `boolean?`                             | Greyed out                              |
+| `checked`       | `boolean?`                             | Renders with a checkmark                |
+| `style`         | `"plain" \| "destructive"`             | Semantic style                          |
+| `keyEquivalent` | `string?`                              | macOS shortcut (e.g. `"s"` for Cmd+S)  |
+| `children`      | `MenuItem[]?`                          | Nested submenu                          |
+
+#### Event subscription
+
+Use `chrome.on()` to listen for native events. Returns an unsubscribe function.
+
+```ts
+// Typed — handler receives the correct event shape
+const unsub = chrome.on("titleBar.trailingItemPressed", ({ id }) => {
+  if (id === "save") saveChanges();
+});
+
+// Wildcard — fires for every chrome event
+const unsubAll = chrome.on((event) => {
+  analytics.track("chrome_event", { type: event.type });
+});
+
+unsub();
+unsubAll();
+```
+
+#### Chrome events reference
+
+| Event                              | Payload                              | Description                              |
+| ---------------------------------- | ------------------------------------ | ---------------------------------------- |
+| `titleBar.leadingItemPressed`      | `{ id }`                             | A leading title bar button was pressed   |
+| `titleBar.trailingItemPressed`     | `{ id }`                             | A trailing title bar button was pressed  |
+| `titleBar.menuItemPressed`         | `{ id }`                             | A title bar menu item was pressed        |
+| `titleBar.backPressed`             | `{}`                                 | The back button was pressed              |
+| `titleBar.searchChanged`           | `{ value }`                          | Title bar search text changed            |
+| `titleBar.searchSubmitted`         | `{ value }`                          | Title bar search submitted               |
+| `titleBar.searchCancelled`         | `{}`                                 | Title bar search cancelled               |
+| `navigation.itemPressed`           | `{ id }`                             | A navigation item was pressed            |
+| `navigation.backPressed`           | `{}`                                 | Navigation back was pressed              |
+| `navigation.searchChanged`         | `{ value }`                          | Navigation search text changed           |
+| `navigation.searchSubmitted`       | `{ value }`                          | Navigation search submitted              |
+| `navigation.searchCancelled`       | `{}`                                 | Navigation search cancelled              |
+| `sidebarPanel.itemPressed`         | `{ id }`                             | Sidebar item selected                    |
+| `toolbar.itemPressed`              | `{ id }`                             | A toolbar button was pressed             |
+| `toolbar.menuItemPressed`          | `{ id }`                             | A toolbar menu item was pressed          |
+| `keyboard.itemPressed`             | `{ id }`                             | Keyboard accessory button pressed        |
+| `menuBar.itemPressed`              | `{ id }`                             | macOS menu item selected                 |
+| `sheet.presented`                  | `{ name }`                           | Sheet was presented                      |
+| `sheet.dismissed`                  | `{ name }`                           | Sheet was dismissed                      |
+| `sheet.detentChanged`              | `{ name, detent }`                   | Sheet dragged to a new detent            |
+| `sheet.loadFailed`                 | `{ name, message, code }`            | Sheet webview load failed                |
+| `drawer.presented`                 | `{ name }`                           | Drawer was presented                     |
+| `drawer.dismissed`                 | `{ name }`                           | Drawer was dismissed                     |
+| `appWindow.presented`              | `{ name }`                           | App window was presented                 |
+| `appWindow.dismissed`              | `{ name }`                           | App window was dismissed                 |
+| `popover.presented`                | `{ name }`                           | Popover was presented                    |
+| `popover.dismissed`                | `{ name }`                           | Popover was dismissed                    |
+| `tabBottomAccessory.presented`     | `{}`                                 | Tab bottom accessory was presented       |
+| `tabBottomAccessory.dismissed`     | `{}`                                 | Tab bottom accessory was dismissed       |
+| `tabBottomAccessory.loadFailed`    | `{ message, code }`                  | Tab bottom accessory load failed         |
+| `message`                          | `{ from, payload }`                  | Inter-webview message received           |
+| `safeArea.changed`                 | `{ top, right, bottom, left }`       | Safe area changed (load / rotation)      |
+
+#### Child webviews (sheets, drawers, windows, popovers)
+
+Named child webviews each load their own URL in a separate native webview. They are controlled declaratively — set `presented: true` to show, `false` (or remove the element) to dismiss.
+
+```ts
+// Present a sheet
+const cleanup = chrome(
+  sheet("details", {
+    url: "/details",
+    presented: true,
+    detents: ["medium", "large"],
+    activeDetent: "medium",
+    grabberVisible: true,
+  }),
+);
+
+// Listen for sheet events
+chrome.on("sheet.dismissed", ({ name }) => {
+  if (name === "details") cleanup();
+});
+
+// Present a drawer
+chrome(
+  drawer("settings", {
+    url: "/settings",
+    presented: true,
+    side: "trailing",
+    width: "medium",
+  }),
+);
+
+// Present a macOS window
+chrome(
+  appWindow("editor", {
+    url: "/editor",
+    presented: true,
+    title: "Editor",
+    size: { width: 800, height: 600 },
+    resizable: true,
+  }),
+);
+
+// Present a popover anchored to a DOM element
+chrome(
+  popover("tooltip", {
+    url: "/tooltip",
+    presented: true,
+    size: { width: 300, height: 200 },
+    anchorElementId: "help-button",
+  }),
+);
+```
+
+#### Inter-webview messaging
+
+Use `chrome.messaging` to communicate between the main webview and child webviews (sheets, drawers, etc.):
+
+```ts
+// From the main webview — send to a child by name
+chrome.messaging.postToChild("details", { type: "init", theme: "light" });
+
+// From the main webview — broadcast to all children
+chrome.messaging.broadcast({ type: "themeChanged", dark: true });
+
+// From a child webview — send to the parent
+chrome.messaging.postToParent({ type: "ready" });
+
+// Listen for incoming messages (works in both main and child webviews)
+const unsub = chrome.messaging.onMessage((from, payload) => {
+  console.log(`Message from ${from}:`, payload);
+});
+```
+
+#### Splash screen control
+
+Control when the splash screen hides. By default it auto-hides when the page finishes loading.
 
 ```ts
 import { chrome } from "nativite/chrome";
 
-// Configure the navigation bar
-chrome.navigationBar.setTitle("Settings");
-chrome.navigationBar.configure({ largeTitleMode: "never" });
-chrome.navigationBar.setToolbarRight([
-  { type: "button", id: "save", title: "Save", style: "done" },
-]);
-const unsubNav = chrome.navigationBar.onButtonTap(({ id }) => {
-  if (id === "save") saveChanges();
-});
+// Must be called synchronously at module top level — before any async work
+chrome.splash.preventAutoHide();
 
-// Configure the tab bar
-chrome.tabBar.setTabs([
-  { id: "home", title: "Home", systemImage: "house.fill" },
-  { id: "search", title: "Search", systemImage: "magnifyingglass" },
-  { id: "profile", title: "Profile", systemImage: "person.fill" },
-]);
-chrome.tabBar.setActiveTab("home");
-const unsubTab = chrome.tabBar.onSelect(({ id }) => navigateTo(id));
-
-// Simple elements
-chrome.statusBar.setStyle("light");
-chrome.homeIndicator.hide();
-```
-
-Toolbar and navigation-bar buttons can also expose native iOS menus and nested submenus:
-
-```ts
-chrome.toolbar.setItems([
-  {
-    type: "button",
-    id: "more",
-    systemImage: "ellipsis.circle",
-    menu: {
-      items: [
-        { id: "refresh", title: "Refresh" },
-        {
-          id: "sort",
-          title: "Sort",
-          submenu: [
-            { id: "sort.date", title: "By Date" },
-            { id: "sort.name", title: "By Name" },
-          ],
-        },
-      ],
-    },
-  },
-]);
-```
-
-Each namespace exposes dedicated setters and subscriptions. Event handlers are additive and return unsubscribe functions.
-
-#### Per-element namespaces
-
-| Namespace              | Key methods                                                                                   | Description                                     |
-| ---------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `chrome.navigationBar` | `show`, `hide`, `setTitle`, `setToolbar*`, `configure`                                        | Navigation bar title, buttons, menus, tint      |
-| `chrome.tabBar`        | `show`, `hide`, `setTabs`, `setActiveTab`, `configure`                                        | Tab bar items, selection, badges                |
-| `chrome.toolbar`       | `show`, `hide`, `setItems`, `configure`                                                       | Bottom toolbar items and iOS menus              |
-| `chrome.searchBar`     | `setText`, `setPlaceholder`, `configure`                                                      | Search bar text and actions                     |
-| `chrome.sheet`         | `present`, `dismiss`, `setDetents`, `setSelectedDetent`, `setURL`, `postMessage`, `configure` | Modal sheet detents, URL content, and messaging |
-| `chrome.keyboard`      | `setAccessory`, `configure`                                                                   | Input accessory bar, dismiss mode               |
-| `chrome.sidebar`       | `show`, `hide`, `setItems`, `setActiveItem`                                                   | iPad/macOS sidebar                              |
-| `chrome.menuBar`       | `setMenus`                                                                                    | macOS menu bar                                  |
-| `chrome.statusBar`     | `show`, `hide`, `setStyle`                                                                    | Status bar style, visibility                    |
-| `chrome.homeIndicator` | `show`, `hide`                                                                                | Home indicator visibility                       |
-| `chrome.window`        | `setTitle`, `setSubtitle`, `configure`                                                        | macOS window title bar                          |
-
-#### Batch updates
-
-Use `chrome.set()` to update multiple elements at once. This does not register event listeners:
-
-```ts
-chrome.set({
-  statusBar: { style: "light" },
-  homeIndicator: { hidden: true },
-  navigationBar: { title: "Home" },
-});
-```
-
-#### Event escape hatch
-
-For cases where you need multiple listeners on the same event, or want to listen from a different part of your code, use `chrome.on()`:
-
-```ts
-// Stacking listeners — all fire for the same event
-const unsub = chrome.on("tabBar.tabSelected", ({ id }) => {
-  analytics.track("tab_switch", { id });
-});
-
-unsub(); // stop listening
-```
-
-Per-element `on*` listeners and `chrome.on()` listeners both fire for the same event — they don't interfere with each other.
-
-#### Chrome events reference
-
-| Event                           | Payload                           | Description                         |
-| ------------------------------- | --------------------------------- | ----------------------------------- |
-| `navigationBar.buttonTapped`    | `{ id }`                          | A nav bar button was tapped         |
-| `navigationBar.backTapped`      | `{}`                              | The back button was tapped          |
-| `tabBar.tabSelected`            | `{ id }`                          | A tab was selected                  |
-| `toolbar.buttonTapped`          | `{ id }`                          | A toolbar button was tapped         |
-| `searchBar.textChanged`         | `{ text }`                        | Search text changed                 |
-| `searchBar.submitted`           | `{ text }`                        | Return key tapped in search bar     |
-| `searchBar.cancelled`           | `{}`                              | Cancel button tapped                |
-| `sheet.detentChanged`           | `{ detent }`                      | Sheet dragged to a new detent       |
-| `sheet.dismissed`               | `{}`                              | Sheet dismissed                     |
-| `sheet.message`                 | `{ message }`                     | Message posted from sheet webview   |
-| `sheet.loadFailed`              | `{ message, code, domain, url? }` | Sheet webview load failed           |
-| `sidebar.itemSelected`          | `{ id }`                          | Sidebar item selected               |
-| `menuBar.itemSelected`          | `{ id }`                          | macOS menu item selected            |
-| `keyboard.accessory.itemTapped` | `{ id }`                          | Keyboard accessory button tapped    |
-| `safeArea.changed`              | `{ top, left, bottom, right }`    | Safe area changed (load / rotation) |
-
-#### Sheet URL + messaging
-
-Load a dedicated page in the sheet webview and exchange messages with the main webview.
-
-- `chrome.sheet.setURL("/sheet")`:
-  - Dev: loads `http(s)://<dev-host>/sheet`
-  - Prod bundle: always loads bundled `dist/index.html` and applies `/sheet` via `history.replaceState(...)` (SPA-style, no hash routing)
-- `chrome.sheet.setURL("./sheet/index.html")`: loads an explicit file relative to the current main webview URL.
-- Calls to `chrome.*` from inside the sheet webview are ignored; only the primary app webview can mutate native chrome state.
-
-```ts
-chrome.sheet.setDetents(["small", "medium", "large"]);
-chrome.sheet.setURL("/sheet");
-chrome.sheet.present();
-
-chrome.sheet.postMessage({ type: "init", theme: "light" });
-const unsubSheetMessage = chrome.sheet.onMessage(({ message }) => {
-  console.log("sheet -> main", message);
-});
-```
-
-Inside the sheet page, use `window.nativiteSheet`:
-
-```ts
-window.nativiteSheet.postMessage({ type: "ready" });
-const off = window.nativiteSheet.onMessage((message) => {
-  console.log("main -> sheet", message);
-});
-```
-
-If you already use `nativite/chrome` inside the sheet page, `chrome.sheet.postMessage(...)` also routes to the host app in that context.
-
-Optional diagnostic hook while integrating:
-
-```ts
-const unsubSheetError = chrome.sheet.onLoadFailed((error) => {
-  console.error("sheet load failed", error);
-});
+// Later, when your app is ready:
+async function init() {
+  await loadData();
+  chrome.splash.hide();
+}
 ```
 
 #### Keyboard input accessory
@@ -439,29 +590,33 @@ const unsubSheetError = chrome.sheet.onLoadFailed((error) => {
 A native toolbar rendered above the software keyboard, useful for custom "Done" buttons or form navigation:
 
 ```ts
-chrome.keyboard.setAccessory({
-  items: [
-    { type: "button", id: "prev", systemImage: "chevron.up" },
-    { type: "button", id: "next", systemImage: "chevron.down" },
-    { type: "flexibleSpace" },
-    { type: "button", id: "done", title: "Done", style: "prominent" },
-  ],
-});
-chrome.keyboard.configure({ dismissMode: "interactive" });
-const unsubKeyboard = chrome.keyboard.onAccessoryItemTap(({ id }) => {
+const cleanup = chrome(
+  keyboard({
+    accessory: {
+      items: [
+        { id: "prev", icon: "chevron.up" },
+        { id: "next", icon: "chevron.down" },
+        { type: "flexible-space" },
+        { id: "done", label: "Done", style: "primary" },
+      ],
+    },
+    dismissMode: "interactive",
+  }),
+);
+
+chrome.on("keyboard.itemPressed", ({ id }) => {
   if (id === "done") (document.activeElement as HTMLElement)?.blur();
 });
 
 // Remove the accessory bar
-chrome.keyboard.setAccessory(null);
-unsubKeyboard();
+cleanup();
 ```
 
 ---
 
 ### `nativite/css-vars` — live device CSS variables
 
-Nativite injects 50+ `--nk-*` CSS custom properties onto `:root` before any content renders, and keeps them live as the device state changes (rotation, dark mode, keyboard, Dynamic Type, etc.).
+Nativite injects `--nk-*` CSS custom properties onto `:root` before any content renders, and keeps them live as the device state changes (rotation, dark mode, keyboard, Dynamic Type, etc.).
 
 ```ts
 import { NKVars } from "nativite/css-vars";
@@ -524,15 +679,23 @@ Use them directly in CSS — they update without any JavaScript:
 | `--nk-keyboard-duration`                               | `ms`          | Keyboard animation duration                |
 | `--nk-keyboard-curve`                                  | easing        | Keyboard animation curve                   |
 | `--nk-accessory-height`                                | `px`          | Input accessory bar height                 |
+| `--nk-nav-depth`                                       | number        | Navigation stack depth                     |
+| `--nk-title-collapse`                                  | `0\|1`        | Title bar collapsed state                  |
+| `--nk-pop-gesture`                                     | `0\|1`        | Back swipe gesture in progress             |
+| `--nk-sheet-visible`                                   | `0\|1`        | Sheet currently visible                    |
+| `--nk-sheet-detent`                                    | number        | Current sheet detent fraction              |
 | `--nk-is-dark` / `--nk-is-light`                       | `0\|1`        | Dark/light mode                            |
 | `--nk-contrast`                                        | `0\|1`        | High contrast enabled                      |
 | `--nk-reduced-motion`                                  | `0\|1`        | Reduce motion enabled                      |
+| `--nk-reduced-transparency`                            | `0\|1`        | Reduce transparency enabled                |
 | `--nk-accent-r/g/b`                                    | `0–255`       | System accent colour channels              |
 | `--nk-accent`                                          | `rgb(…)`      | System accent colour                       |
 | `--nk-font-scale`                                      | number        | Dynamic Type scale factor                  |
 | `--nk-font-body` … `--nk-font-largeTitle`              | `px`          | All 11 Dynamic Type sizes                  |
 | `--nk-is-phone` / `--nk-is-tablet` / `--nk-is-desktop` | `0\|1`        | Device class                               |
 | `--nk-is-portrait` / `--nk-is-landscape`               | `0\|1`        | Orientation                                |
+| `--nk-is-compact-width`                                | `0\|1`        | Compact horizontal size class              |
+| `--nk-split-fraction`                                  | number        | Split view fraction (1 = full width)       |
 | `--nk-display-scale`                                   | number        | Screen scale factor (2 or 3)               |
 | `--nk-display-corner`                                  | `px`          | Display corner radius                      |
 
@@ -588,7 +751,7 @@ export default defineConfig({
 
 The plugin does the following:
 
-- **Registers native platform environments** (`ios`, `ipad`, `macos`, plus plugin-defined ones) alongside `client`, each with `__PLATFORM__`, `__IS_NATIVE__`, and `VITE_NATIVITE` defines.
+- **Registers native platform environments** (`ios`, `ipad`, `macos`, `android`, plus plugin-defined ones) alongside `client`, each with `__PLATFORM__`, `__IS_NATIVE__`, and `VITE_NATIVITE` defines.
 - **Resolves platform file extensions** using built-in suffix sets (`.ios/.mobile/.native`, `.macos/.desktop/.native`) or plugin-provided suffixes for custom platforms.
 - **Auto-generates the Xcode project** when Apple targets are configured and the config hash changes.
 - **Builds and launches Apple targets in dev** (iOS Simulator and/or macOS app), and runs third-party platform `dev` hooks when configured.
@@ -616,7 +779,7 @@ Available in all your source files without an import:
 | Constant        | Type                                                   | Example                       |
 | --------------- | ------------------------------------------------------ | ----------------------------- |
 | `__PLATFORM__`  | `"ios" \| "ipad" \| "macos" \| "web" \| (string & {})` | `"ios"`, `"web"`, `"android"` |
-| `__IS_NATIVE__` | `boolean`                                              | `true` inside WKWebView       |
+| `__IS_NATIVE__` | `boolean`                                              | `true` inside native WebView  |
 | `__DEV__`       | `boolean`                                              | `true` during `vite dev`      |
 
 Add `nativite/globals` to your project's type declarations to get full TypeScript support for these constants:
@@ -629,7 +792,7 @@ Add `nativite/globals` to your project's type declarations to get full TypeScrip
 
 ```ts
 if (__IS_NATIVE__) {
-  // Only runs inside the native WKWebView build
+  // Only runs inside the native WebView build
 }
 ```
 
@@ -662,15 +825,15 @@ Set `defaultChrome` in your config to apply chrome state before the WebView has 
 ```ts
 export default defineConfig({
   defaultChrome: {
-    navigationBar: {
+    titleBar: {
       title: "Home",
-      largeTitleMode: "always",
-      barTintColor: "#1A1A2E",
+      largeTitleMode: "large",
+      tint: "#1A1A2E",
     },
-    tabBar: {
+    navigation: {
       items: [
-        { id: "home", title: "Home", systemImage: "house.fill" },
-        { id: "profile", title: "Profile", systemImage: "person.fill" },
+        { id: "home", label: "Home", icon: "house.fill" },
+        { id: "profile", label: "Profile", icon: "person.fill" },
       ],
     },
     statusBar: { style: "light" },
@@ -699,10 +862,10 @@ export default defineConfig({
 The macOS target:
 
 - Creates an `NSWindow` with `WKWebView` (same bridge, same RPC protocol)
-- Supports `chrome.window.*` for title bar customisation (title, subtitle, separator style, full-size content)
-- Supports `chrome.menuBar.*` for building native `NSMenu` hierarchies with key equivalents
-- Supports `chrome.sidebar.*` for sidebar item selection events
-- iOS-only chrome elements (`navigationBar`, `tabBar`, `toolbar`, `statusBar`, `homeIndicator`, `sheet`, `keyboard`) are silently ignored on macOS
+- Supports `titleBar()` for window title bar customisation (title, subtitle, separator style, full-size content)
+- Supports `menuBar()` for building native `NSMenu` hierarchies with key equivalents
+- Supports `sidebarPanel()` for sidebar item selection events
+- iOS-only chrome elements (`navigation`, `toolbar`, `statusBar`, `homeIndicator`, `keyboard`) are silently ignored on macOS
 - Sets `--nk-is-desktop: 1`, `--nk-is-phone: 0`, `--nk-is-tablet: 0`
 - No software keyboard variables (always zero on macOS)
 
@@ -727,15 +890,16 @@ Deploy updates by uploading `dist-ios/` to `<updates.url>/ios/` and `dist-macos/
 
 ## Package exports
 
-| Import              | Contents                                                                                                          |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `nativite`          | `defineConfig`, `ios`, `macos`, `platform`, `definePlatformPlugin`, `NativiteConfigSchema`, `NativiteConfig` type |
-| `nativite/vite`     | `nativite()` plugin, `platformExtensionsPlugin`, re-exports `defineConfig`                                        |
-| `nativite/client`   | `bridge`, `ota`                                                                                                   |
-| `nativite/chrome`   | `chrome`, all chrome state/options types                                                                          |
-| `nativite/css-vars` | `NKVars`, `NKVarName`                                                                                             |
-| `nativite/globals`  | Ambient types for `__PLATFORM__`, `__IS_NATIVE__`, `__DEV__`                                                      |
-| `nativite/cli`      | CLI entry point (`nativite` binary)                                                                               |
+| Import              | Contents                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `nativite`          | `defineConfig`, `ios`, `macos`, `android`, `platform`, `definePlatformPlugin`, `definePlugin`, `NativiteConfigSchema`, all types |
+| `nativite/vite`     | `nativite()` plugin, `platformExtensionsPlugin`, re-exports `defineConfig`                                                       |
+| `nativite/client`   | `bridge`, `ota`                                                                                                                  |
+| `nativite/chrome`   | `chrome`, factory functions (`titleBar`, `navigation`, `toolbar`, etc.), item constructors (`button`, `navItem`, `menuItem`), all chrome types |
+| `nativite/css-vars` | `NKVars`, `NKVarName`                                                                                                            |
+| `nativite/utils`    | `platform()`, `web()`, `ios()`, `android()`, `macos()`, `windows()`, `linux()` — platform-specific value selection helpers       |
+| `nativite/globals`  | Ambient types for `__PLATFORM__`, `__IS_NATIVE__`, `__DEV__`                                                                     |
+| `nativite/cli`      | CLI entry point (`nativite` binary)                                                                                              |
 
 ---
 
