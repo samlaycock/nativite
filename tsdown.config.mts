@@ -13,7 +13,7 @@ export default defineConfig([
   {
     entry: [
       "./src/client/index.ts",
-      "./src/chrome/index.ts",
+      "./src/chrome/public.ts",
       "./src/css-vars/index.ts",
       "./src/utils.ts",
     ],

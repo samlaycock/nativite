@@ -11,7 +11,7 @@ Build native iOS, macOS, and Android apps using your existing web stack — Reac
 ```
 your web app  ──→  Vite build  ──→  dist-<platform>/
                                       ↓
-nativite.config.ts  ──→  nativite generate  ──→  Xcode / Gradle project (or platform plugin hooks)
+nativite.config.ts  ──→  nativite dev / Vite plugin hooks  ──→  Xcode / Gradle project (or platform plugin hooks)
                                                            ↓
                                                    Native WebView loads dist/
                                                            ↕
@@ -21,7 +21,7 @@ nativite.config.ts  ──→  nativite generate  ──→  Xcode / Gradle proj
 ```
 
 1. You write a web app with Vite. Nativite registers per-platform native Vite environments (`ios`, `ipad`, `macos`, `android`, plus plugin-defined environments) while `client` remains the web environment.
-2. `nativite generate` (or the Vite plugin) generates native projects — an Xcode project for Apple targets, a Gradle project for Android, or calls `generate` hooks for third-party platform plugins.
+2. `nativite dev` (or the Vite plugin) generates native projects — an Xcode project for Apple targets, a Gradle project for Android, or calls `generate` hooks for third-party platform plugins.
 3. The generated app loads a bundled `dist/` directory inside a native WebView (from `dist-<platform>/`). In dev mode it loads from the Vite dev server instead.
 4. Your JavaScript talks to Swift/Kotlin over a typed async RPC bridge. Native chrome (title bars, navigation, toolbars, keyboards, etc.) is controlled declaratively by passing element descriptors to a stackable `chrome()` function — e.g. `chrome(titleBar({ title: "Home" }), navigation({ items: [...] }))`.
 
@@ -224,21 +224,8 @@ Per-platform `overrides` let you override root config defaults for each platform
 # Start dev server + platform launch hooks
 npx nativite dev
 
-# Run platform generation (Xcode for built-in Apple targets, plugin hooks for custom targets)
-npx nativite generate
-
-# Force-regenerate regardless of config hash
-npx nativite generate --force
-
-# Production builds (platform-specific output directories)
-npx nativite build --platform ios
-npx nativite build --platform macos
-
-# Target a specific platform
-npx nativite generate --platform ios
-npx nativite generate --platform android
-npx nativite dev --simulator "iPhone 15"
-npx nativite dev --target device
+# Explicit dev server URL override (otherwise reads .nativite/dev.json)
+npx nativite dev --url http://10.0.0.5:5173
 ```
 
 ---
@@ -358,53 +345,41 @@ chrome(
 
 Each area of native chrome has a factory function that returns a `ChromeElement` descriptor:
 
-| Factory              | Config type              | Description                                                          |
-| -------------------- | ------------------------ | -------------------------------------------------------------------- |
-| `titleBar(config)`   | `TitleBarConfig`         | Title, subtitle, leading/trailing buttons, search bar, tint          |
-| `navigation(config)` | `NavigationConfig`       | Primary navigation items (tab bar on mobile, sidebar on desktop)     |
-| `toolbar(config)`    | `ToolbarConfig`          | Bottom toolbar items and menus                                       |
-| `sidebarPanel(config)` | `SidebarPanelConfig`   | Collapsible sidebar with nested items (iPad/macOS)                   |
-| `statusBar(config)`  | `StatusBarConfig`        | Status bar style and visibility                                      |
-| `homeIndicator(config)` | `HomeIndicatorConfig` | Home indicator visibility (iOS)                                      |
-| `keyboard(config)`   | `KeyboardConfig`         | Input accessory toolbar, dismiss mode                                |
-| `menuBar(config)`    | `MenuBarConfig`          | macOS menu bar menus                                                 |
-| `tabBottomAccessory(config)` | `TabBottomAccessoryConfig` | Webview accessory below the tab bar                          |
+| Factory                      | Config type                | Description                                                      |
+| ---------------------------- | -------------------------- | ---------------------------------------------------------------- |
+| `titleBar(config)`           | `TitleBarConfig`           | Title, subtitle, leading/trailing buttons, search bar, tint      |
+| `navigation(config)`         | `NavigationConfig`         | Primary navigation items (tab bar on mobile, sidebar on desktop) |
+| `toolbar(config)`            | `ToolbarConfig`            | Bottom toolbar items and menus                                   |
+| `sidebarPanel(config)`       | `SidebarPanelConfig`       | Collapsible sidebar with nested items (iPad/macOS)               |
+| `statusBar(config)`          | `StatusBarConfig`          | Status bar style and visibility                                  |
+| `homeIndicator(config)`      | `HomeIndicatorConfig`      | Home indicator visibility (iOS)                                  |
+| `keyboard(config)`           | `KeyboardConfig`           | Input accessory toolbar, dismiss mode                            |
+| `menuBar(config)`            | `MenuBarConfig`            | macOS menu bar menus                                             |
+| `tabBottomAccessory(config)` | `TabBottomAccessoryConfig` | Webview accessory below the tab bar                              |
 
 Named child webviews (each takes a name string and config):
 
-| Factory                    | Config type       | Description                              |
-| -------------------------- | ----------------- | ---------------------------------------- |
-| `sheet(name, config)`      | `SheetConfig`     | Modal bottom sheet with detents          |
-| `drawer(name, config)`     | `DrawerConfig`    | Side drawer (leading or trailing)        |
-| `appWindow(name, config)`  | `AppWindowConfig` | macOS secondary window                   |
-| `popover(name, config)`    | `PopoverConfig`   | Floating popover anchored to an element  |
-
-#### Item constructors
-
-Identity wrappers that help with type inference:
-
-```ts
-import { button, navItem, menuItem } from "nativite/chrome";
-
-const saveBtn = button({ id: "save", label: "Save", style: "primary" });
-const homeTab = navItem({ id: "home", label: "Home", icon: "house.fill" });
-const refreshAction = menuItem({ id: "refresh", label: "Refresh" });
-```
+| Factory                   | Config type       | Description                             |
+| ------------------------- | ----------------- | --------------------------------------- |
+| `sheet(name, config)`     | `SheetConfig`     | Modal bottom sheet with detents         |
+| `drawer(name, config)`    | `DrawerConfig`    | Side drawer (leading or trailing)       |
+| `appWindow(name, config)` | `AppWindowConfig` | macOS secondary window                  |
+| `popover(name, config)`   | `PopoverConfig`   | Floating popover anchored to an element |
 
 #### Item types
 
 **`ButtonItem`** — used in title bar leading/trailing items, toolbar items, and keyboard accessory:
 
-| Property   | Type                                       | Description                                 |
-| ---------- | ------------------------------------------ | ------------------------------------------- |
-| `id`       | `string`                                   | Unique identifier                           |
-| `label`    | `string?`                                  | Visible label (omit when using icon alone)  |
-| `icon`     | `string?`                                  | SF Symbol (iOS/macOS) or Material Icon (Android) |
-| `style`    | `"plain" \| "primary" \| "destructive"`    | Semantic style                              |
-| `disabled` | `boolean?`                                 | Greyed out                                  |
-| `tint`     | `string?`                                  | Custom foreground hex colour                |
-| `badge`    | `string \| number \| null`                 | Badge overlay                               |
-| `menu`     | `MenuConfig?`                              | Dropdown menu attached to this button       |
+| Property   | Type                                    | Description                                      |
+| ---------- | --------------------------------------- | ------------------------------------------------ |
+| `id`       | `string`                                | Unique identifier                                |
+| `label`    | `string?`                               | Visible label (omit when using icon alone)       |
+| `icon`     | `string?`                               | SF Symbol (iOS/macOS) or Material Icon (Android) |
+| `style`    | `"plain" \| "primary" \| "destructive"` | Semantic style                                   |
+| `disabled` | `boolean?`                              | Greyed out                                       |
+| `tint`     | `string?`                               | Custom foreground hex colour                     |
+| `badge`    | `string \| number \| null`              | Badge overlay                                    |
+| `menu`     | `MenuConfig?`                           | Dropdown menu attached to this button            |
 
 **`BarItem`** — `ButtonItem | FlexibleSpace | FixedSpace`:
 
@@ -416,28 +391,28 @@ const refreshAction = menuItem({ id: "refresh", label: "Refresh" });
 
 **`NavigationItem`** — used in `navigation()`:
 
-| Property   | Type                         | Description                                      |
-| ---------- | ---------------------------- | ------------------------------------------------ |
-| `id`       | `string`                     | Unique identifier                                |
-| `label`    | `string`                     | Display label                                    |
-| `icon`     | `string`                     | Required icon (SF Symbol / Material Icon)        |
-| `subtitle` | `string?`                    | Secondary text (iOS 18+)                         |
-| `badge`    | `string \| number \| null`   | Badge overlay                                    |
-| `disabled` | `boolean?`                   | Greyed out                                       |
-| `role`     | `"search"?`                  | iOS 18+ search tab                               |
+| Property   | Type                       | Description                               |
+| ---------- | -------------------------- | ----------------------------------------- |
+| `id`       | `string`                   | Unique identifier                         |
+| `label`    | `string`                   | Display label                             |
+| `icon`     | `string`                   | Required icon (SF Symbol / Material Icon) |
+| `subtitle` | `string?`                  | Secondary text (iOS 18+)                  |
+| `badge`    | `string \| number \| null` | Badge overlay                             |
+| `disabled` | `boolean?`                 | Greyed out                                |
+| `role`     | `"search"?`                | iOS 18+ search tab                        |
 
 **`MenuItem`** — used in menus and `menuBar()`:
 
-| Property        | Type                                   | Description                             |
-| --------------- | -------------------------------------- | --------------------------------------- |
-| `id`            | `string`                               | Unique identifier                       |
-| `label`         | `string`                               | Display label                           |
-| `icon`          | `string?`                              | Icon                                    |
-| `disabled`      | `boolean?`                             | Greyed out                              |
-| `checked`       | `boolean?`                             | Renders with a checkmark                |
-| `style`         | `"plain" \| "destructive"`             | Semantic style                          |
-| `keyEquivalent` | `string?`                              | macOS shortcut (e.g. `"s"` for Cmd+S)  |
-| `children`      | `MenuItem[]?`                          | Nested submenu                          |
+| Property        | Type                       | Description                           |
+| --------------- | -------------------------- | ------------------------------------- |
+| `id`            | `string`                   | Unique identifier                     |
+| `label`         | `string`                   | Display label                         |
+| `icon`          | `string?`                  | Icon                                  |
+| `disabled`      | `boolean?`                 | Greyed out                            |
+| `checked`       | `boolean?`                 | Renders with a checkmark              |
+| `style`         | `"plain" \| "destructive"` | Semantic style                        |
+| `keyEquivalent` | `string?`                  | macOS shortcut (e.g. `"s"` for Cmd+S) |
+| `children`      | `MenuItem[]?`              | Nested submenu                        |
 
 #### Event subscription
 
@@ -460,40 +435,40 @@ unsubAll();
 
 #### Chrome events reference
 
-| Event                              | Payload                              | Description                              |
-| ---------------------------------- | ------------------------------------ | ---------------------------------------- |
-| `titleBar.leadingItemPressed`      | `{ id }`                             | A leading title bar button was pressed   |
-| `titleBar.trailingItemPressed`     | `{ id }`                             | A trailing title bar button was pressed  |
-| `titleBar.menuItemPressed`         | `{ id }`                             | A title bar menu item was pressed        |
-| `titleBar.backPressed`             | `{}`                                 | The back button was pressed              |
-| `titleBar.searchChanged`           | `{ value }`                          | Title bar search text changed            |
-| `titleBar.searchSubmitted`         | `{ value }`                          | Title bar search submitted               |
-| `titleBar.searchCancelled`         | `{}`                                 | Title bar search cancelled               |
-| `navigation.itemPressed`           | `{ id }`                             | A navigation item was pressed            |
-| `navigation.backPressed`           | `{}`                                 | Navigation back was pressed              |
-| `navigation.searchChanged`         | `{ value }`                          | Navigation search text changed           |
-| `navigation.searchSubmitted`       | `{ value }`                          | Navigation search submitted              |
-| `navigation.searchCancelled`       | `{}`                                 | Navigation search cancelled              |
-| `sidebarPanel.itemPressed`         | `{ id }`                             | Sidebar item selected                    |
-| `toolbar.itemPressed`              | `{ id }`                             | A toolbar button was pressed             |
-| `toolbar.menuItemPressed`          | `{ id }`                             | A toolbar menu item was pressed          |
-| `keyboard.itemPressed`             | `{ id }`                             | Keyboard accessory button pressed        |
-| `menuBar.itemPressed`              | `{ id }`                             | macOS menu item selected                 |
-| `sheet.presented`                  | `{ name }`                           | Sheet was presented                      |
-| `sheet.dismissed`                  | `{ name }`                           | Sheet was dismissed                      |
-| `sheet.detentChanged`              | `{ name, detent }`                   | Sheet dragged to a new detent            |
-| `sheet.loadFailed`                 | `{ name, message, code }`            | Sheet webview load failed                |
-| `drawer.presented`                 | `{ name }`                           | Drawer was presented                     |
-| `drawer.dismissed`                 | `{ name }`                           | Drawer was dismissed                     |
-| `appWindow.presented`              | `{ name }`                           | App window was presented                 |
-| `appWindow.dismissed`              | `{ name }`                           | App window was dismissed                 |
-| `popover.presented`                | `{ name }`                           | Popover was presented                    |
-| `popover.dismissed`                | `{ name }`                           | Popover was dismissed                    |
-| `tabBottomAccessory.presented`     | `{}`                                 | Tab bottom accessory was presented       |
-| `tabBottomAccessory.dismissed`     | `{}`                                 | Tab bottom accessory was dismissed       |
-| `tabBottomAccessory.loadFailed`    | `{ message, code }`                  | Tab bottom accessory load failed         |
-| `message`                          | `{ from, payload }`                  | Inter-webview message received           |
-| `safeArea.changed`                 | `{ top, right, bottom, left }`       | Safe area changed (load / rotation)      |
+| Event                           | Payload                        | Description                             |
+| ------------------------------- | ------------------------------ | --------------------------------------- |
+| `titleBar.leadingItemPressed`   | `{ id }`                       | A leading title bar button was pressed  |
+| `titleBar.trailingItemPressed`  | `{ id }`                       | A trailing title bar button was pressed |
+| `titleBar.menuItemPressed`      | `{ id }`                       | A title bar menu item was pressed       |
+| `titleBar.backPressed`          | `{}`                           | The back button was pressed             |
+| `titleBar.searchChanged`        | `{ value }`                    | Title bar search text changed           |
+| `titleBar.searchSubmitted`      | `{ value }`                    | Title bar search submitted              |
+| `titleBar.searchCancelled`      | `{}`                           | Title bar search cancelled              |
+| `navigation.itemPressed`        | `{ id }`                       | A navigation item was pressed           |
+| `navigation.backPressed`        | `{}`                           | Navigation back was pressed             |
+| `navigation.searchChanged`      | `{ value }`                    | Navigation search text changed          |
+| `navigation.searchSubmitted`    | `{ value }`                    | Navigation search submitted             |
+| `navigation.searchCancelled`    | `{}`                           | Navigation search cancelled             |
+| `sidebarPanel.itemPressed`      | `{ id }`                       | Sidebar item selected                   |
+| `toolbar.itemPressed`           | `{ id }`                       | A toolbar button was pressed            |
+| `toolbar.menuItemPressed`       | `{ id }`                       | A toolbar menu item was pressed         |
+| `keyboard.itemPressed`          | `{ id }`                       | Keyboard accessory button pressed       |
+| `menuBar.itemPressed`           | `{ id }`                       | macOS menu item selected                |
+| `sheet.presented`               | `{ name }`                     | Sheet was presented                     |
+| `sheet.dismissed`               | `{ name }`                     | Sheet was dismissed                     |
+| `sheet.detentChanged`           | `{ name, detent }`             | Sheet dragged to a new detent           |
+| `sheet.loadFailed`              | `{ name, message, code }`      | Sheet webview load failed               |
+| `drawer.presented`              | `{ name }`                     | Drawer was presented                    |
+| `drawer.dismissed`              | `{ name }`                     | Drawer was dismissed                    |
+| `appWindow.presented`           | `{ name }`                     | App window was presented                |
+| `appWindow.dismissed`           | `{ name }`                     | App window was dismissed                |
+| `popover.presented`             | `{ name }`                     | Popover was presented                   |
+| `popover.dismissed`             | `{ name }`                     | Popover was dismissed                   |
+| `tabBottomAccessory.presented`  | `{}`                           | Tab bottom accessory was presented      |
+| `tabBottomAccessory.dismissed`  | `{}`                           | Tab bottom accessory was dismissed      |
+| `tabBottomAccessory.loadFailed` | `{ message, code }`            | Tab bottom accessory load failed        |
+| `message`                       | `{ from, payload }`            | Inter-webview message received          |
+| `safeArea.changed`              | `{ top, right, bottom, left }` | Safe area changed (load / rotation)     |
 
 #### Child webviews (sheets, drawers, windows, popovers)
 
@@ -705,7 +680,7 @@ All variables have sensible defaults and are available immediately in both nativ
 
 ## Project generation
 
-When at least one built-in Apple platform is configured (`ios(...)` and/or `macos(...)`), `nativite generate` (or starting the Vite dev server) writes a complete, ready-to-open Xcode project under `.nativite/ios/`:
+When at least one built-in Apple platform is configured (`ios(...)` and/or `macos(...)`), `nativite dev` (or starting the Vite dev server) writes a complete, ready-to-open Xcode project under `.nativite/ios/`:
 
 ```
 .nativite/
@@ -734,7 +709,7 @@ The project is always **fully regenerated from scratch** when the config hash ch
 
 ### Dirty-checking
 
-The generator SHA-256 hashes the normalised config (with plugins sorted by name for stability) and skips regeneration when the hash matches the previous run. Force a regeneration with `nativite generate --force`.
+The generator SHA-256 hashes the normalised config (with plugins sorted by name for stability) and skips regeneration when the hash matches the previous run. Change the config or restart `nativite dev` to trigger regeneration.
 
 ---
 
@@ -893,9 +868,9 @@ Deploy updates by uploading `dist-ios/` to `<updates.url>/ios/` and `dist-macos/
 | Import              | Contents                                                                                                                         |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `nativite`          | `defineConfig`, `ios`, `macos`, `android`, `platform`, `definePlatformPlugin`, `definePlugin`, `NativiteConfigSchema`, all types |
-| `nativite/vite`     | `nativite()` plugin, `platformExtensionsPlugin`, re-exports `defineConfig`                                                       |
+| `nativite/vite`     | `nativite()` plugin                                                                                                              |
 | `nativite/client`   | `bridge`, `ota`                                                                                                                  |
-| `nativite/chrome`   | `chrome`, factory functions (`titleBar`, `navigation`, `toolbar`, etc.), item constructors (`button`, `navItem`, `menuItem`), all chrome types |
+| `nativite/chrome`   | `chrome`, factory functions (`titleBar`, `navigation`, `toolbar`, etc.), all chrome types                                        |
 | `nativite/css-vars` | `NKVars`, `NKVarName`                                                                                                            |
 | `nativite/utils`    | `platform()`, `web()`, `ios()`, `android()`, `macos()`, `windows()`, `linux()` — platform-specific value selection helpers       |
 | `nativite/globals`  | Ambient types for `__PLATFORM__`, `__IS_NATIVE__`, `__DEV__`                                                                     |

@@ -49,18 +49,6 @@ Each `chrome()` call returns a cleanup function. When called, it removes that la
 
 Named areas (sheets, drawers, etc.) are grouped under plural keys in the state (`sheets`, `drawers`, `appWindows`, `popovers`).
 
-### Item Constructors
-
-Identity wrappers that provide type inference:
-
-```javascript
-import { button, navItem, menuItem } from "nativite/chrome";
-
-button({ id: "save", label: "Save", icon: "square.and.arrow.down" });
-navItem({ id: "home", label: "Home", icon: "house.fill" });
-menuItem({ id: "copy", label: "Copy", keyEquivalent: "c" });
-```
-
 ## Event System
 
 ### Specific Event Subscription
@@ -197,11 +185,3 @@ chrome(titleBar({ title: "B" }));
 ```
 
 This ensures synchronous React-like effect cleanup + reapply cycles result in a single native state update.
-
-## Test Helpers
-
-For unit testing chrome behaviour:
-
-- `_handleIncoming(event)` — Simulate native event delivery
-- `_resetChromeState()` — Clear all state, listeners, and layers
-- `_drainFlush()` — Synchronously flush pending state

@@ -41,9 +41,9 @@
       "require": "./dist/cli/index.js"
     },
     "./chrome": {
-      "types": "./dist/chrome/index.d.ts",
-      "import": "./dist/chrome/index.mjs",
-      "require": "./dist/chrome/index.js"
+      "types": "./dist/chrome/public.d.ts",
+      "import": "./dist/chrome/public.mjs",
+      "require": "./dist/chrome/public.js"
     },
     "./css-vars": {
       "types": "./dist/css-vars/index.d.ts",

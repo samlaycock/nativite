@@ -167,7 +167,13 @@ export type NativitePlatformDevContext = NativitePlatformHookContext & {
 
 export type NativitePlatformBuildContext = NativitePlatformHookContext & {
   outDir: string;
-  manifest: BuildManifest;
+  manifest: {
+    platform: BundlePlatform;
+    version: string;
+    hash: string;
+    assets: string[];
+    builtAt: string;
+  };
 };
 
 export type NativitePlatformPlugin = {
@@ -615,8 +621,7 @@ export type NativiteConfig = z.output<typeof NativiteConfigSchema>;
 
 /**
  * Identity helper for type inference in `nativite.config.ts`.
- * Available from both `nativite` and `nativite/vite` — prefer `nativite`
- * if you don't otherwise need the Vite peer dependency.
+ * Available from `nativite`.
  *
  * @example
  * import { defineConfig } from 'nativite'
@@ -632,49 +637,3 @@ export function defineConfig<T extends NativiteUserConfig>(config: T): T {
 // and mode detection.
 export type Platform = "ios" | "ipad" | "macos" | "web" | (string & {});
 export type BundlePlatform = "ios" | "macos" | (string & {});
-
-// ─── RPC Bridge Message Protocol ─────────────────────────────────────────────
-// These types describe the wire format between JS and Swift. They are exported
-// so that advanced users can build custom transports or plugins, but they are
-// not part of the everyday Nativite API — most code only needs `bridge`.
-
-/** @internal */
-export type BridgeCallMessage = {
-  /** null for fire-and-forget messages (e.g. chrome setState). */
-  id: string | null;
-  type: "call";
-  /** Plugin namespace, e.g. "camera", "__nativite__", "__chrome__". */
-  namespace: string;
-  method: string;
-  args: unknown;
-};
-
-/** @internal */
-export type BridgeEventMessage = {
-  id: null;
-  type: "event";
-  event: string;
-  data: unknown;
-};
-
-/** @internal */
-export type JsToNativeMessage = BridgeCallMessage;
-
-/** @internal */
-export type NativeToJsMessage = BridgeEventMessage;
-
-// ─── Dev / Build State ────────────────────────────────────────────────────────
-
-/** @internal */
-export type DevJson = {
-  devURL: string;
-};
-
-/** @internal */
-export type BuildManifest = {
-  platform: BundlePlatform;
-  version: string;
-  hash: string;
-  assets: string[];
-  builtAt: string;
-};

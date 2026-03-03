@@ -1,6 +1,19 @@
 /// <reference lib="dom" />
 
-import type { BridgeCallMessage, NativeToJsMessage } from "../index.ts";
+type BridgeCallMessage = {
+  id: string | null;
+  type: "call";
+  namespace: string;
+  method: string;
+  args: unknown;
+};
+
+type NativeToJsMessage = {
+  id: null;
+  type: "event";
+  event: string;
+  data: unknown;
+};
 
 // ─── Native Transport ────────────────────────────────────────────────────────
 // Every webview (main and children) has its own native message handler registered

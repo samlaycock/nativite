@@ -14,7 +14,6 @@ import { join } from "node:path";
 import {
   NativiteConfigSchema,
   type BundlePlatform,
-  type BuildManifest,
   type NativiteConfig,
   type Platform,
 } from "../index.ts";
@@ -27,8 +26,6 @@ import { platformExtensionsPlugin } from "./platform-extensions-plugin.ts";
 import { shouldTransformNativeRequest } from "./request-routing.ts";
 
 export type { NativiteConfig, Platform };
-export { defineConfig } from "../index.ts";
-export { platformExtensionsPlugin };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,6 +57,14 @@ type PlatformRuntimeMetadata = {
   extensions: string[];
   environments: string[];
   bundlePlatform: string;
+};
+
+type BuildManifest = {
+  platform: BundlePlatform;
+  version: string;
+  hash: string;
+  assets: string[];
+  builtAt: string;
 };
 
 function runtimeMetadataFromEnv(): Record<string, PlatformRuntimeMetadata> {
