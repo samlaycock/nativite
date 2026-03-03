@@ -34,10 +34,11 @@ Uses `WebViewAssetLoader` to serve bundled assets from `context.assets`:
 
 ### Page Lifecycle
 
-**`onPageStarted`**: Injects `window.__nativekit_instance_name__` to identify the webview instance (e.g., `"main"`, `"settings-sheet"`).
+**`onPageStarted`**: Injects `window.__nativekit_instance_name__`, sets `data-nv-platform="android"` on `<html>`, and initializes CSS variable defaults.
 
 **`onPageFinished`**:
 
+- Reapplies `data-nv-platform="android"` on the final loaded document (helps ensure visibility in DevTools after navigation commits).
 - Calls `bridge.attachWebView()` to set up the message channel.
 - If a SPA route was deferred (for child webviews with relative URLs in production), applies it via `history.replaceState()` + `popstate` event.
 

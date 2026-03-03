@@ -9,8 +9,10 @@ describe("nativiteBridgeTemplate", () => {
 
     expect(output).toContain("init {");
     expect(output).toContain("registerBuiltinHandlers()");
-    expect(output).toContain('register(namespace: "__nativite__", method: "__ping__")');
-    expect(output).toContain('register(namespace: "__nativite__", method: "__ota_check__")');
+    expect(output).toContain('register(namespace = "__nativite__", method = "__ping__")');
+    expect(output).toContain('register(namespace = "__nativite__", method = "__ota_check__")');
+    expect(output).not.toContain('register(namespace: "__nativite__", method: "__ping__")');
+    expect(output).not.toContain('register(namespace: "__nativite__", method: "__ota_check__")');
     expect(output).toContain('completion(Result.success(mapOf("available" to false)))');
   });
 

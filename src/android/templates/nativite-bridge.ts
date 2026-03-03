@@ -52,11 +52,11 @@ class NativiteBridge {
     }
 
     private fun registerBuiltinHandlers() {
-        register(namespace: "__nativite__", method: "__ping__") { _, completion ->
+        register(namespace = "__nativite__", method = "__ping__") { _, completion ->
             completion(Result.success("pong"))
         }
 
-        register(namespace: "__nativite__", method: "__ota_check__") { _, completion ->
+        register(namespace = "__nativite__", method = "__ota_check__") { _, completion ->
             completion(Result.success(mapOf("available" to false)))
         }
     }

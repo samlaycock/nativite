@@ -89,6 +89,14 @@ Cleans up ports and references when a webview is destroyed.
 
 Plugins register via `handlers["$namespace.$method"]` with a callback receiving `(args, completion)`.
 
+Built-ins (and plugins calling `register`) use Kotlin named arguments:
+
+```kotlin
+register(namespace = "__nativite__", method = "__ping__") { _, completion ->
+    completion(Result.success("pong"))
+}
+```
+
 ## Chrome Geometry CSS Variables
 
 When chrome state updates, `pushChromeGeometryVars()` calculates and pushes:

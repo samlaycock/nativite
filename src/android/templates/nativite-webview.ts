@@ -27,6 +27,7 @@ import android.net.Uri
 import androidx.webkit.WebViewAssetLoader
 
 private const val PRODUCTION_BASE_URL = "https://appassets.androidplatform.net/assets/dist/index.html"
+private const val SET_PLATFORM_ATTRIBUTE_SCRIPT = "document.documentElement.setAttribute('data-nv-platform','android');"
 
 @SuppressLint("SetJavaScriptEnabled")
 fun createNativiteWebView(
@@ -72,7 +73,7 @@ fun createNativiteWebView(
             // content renders.
             view.evaluateJavascript(
                 "window.__nativekit_instance_name__ = '\${instanceName}';" +
-                "document.documentElement.setAttribute('data-nv-platform','android');" +
+                SET_PLATFORM_ATTRIBUTE_SCRIPT +
                 NativiteVars.buildInitScript(),
                 null,
             )
@@ -80,6 +81,10 @@ fun createNativiteWebView(
 
         override fun onPageFinished(view: WebView, url: String?) {
             super.onPageFinished(view, url)
+            // Reapply platform attribute on the final document after
+            // navigation commits so it is visible in DevTools and available
+            // to runtime selectors.
+            view.evaluateJavascript(SET_PLATFORM_ATTRIBUTE_SCRIPT, null)
             // Attach the bridge port after page load
             bridge.attachWebView(view, instanceName)
             // Apply pending SPA route for child webviews in production

@@ -27,6 +27,13 @@ describe("nativiteWebViewTemplate", () => {
     expect(output).toContain("document.documentElement.setAttribute('data-nv-platform','android')");
   });
 
+  it("reapplies data-nv-platform attribute on page finish for the final document", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("override fun onPageFinished");
+    expect(output).toContain("SET_PLATFORM_ATTRIBUTE_SCRIPT");
+    expect(output).toContain("view.evaluateJavascript(SET_PLATFORM_ATTRIBUTE_SCRIPT, null)");
+  });
+
   it("injects CSS variable defaults via NativiteVars.buildInitScript on page start", () => {
     const output = nativiteWebViewTemplate(androidConfig);
     expect(output).toContain("NativiteVars.buildInitScript()");
