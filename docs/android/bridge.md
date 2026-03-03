@@ -70,12 +70,13 @@ Cleans up ports and references when a webview is destroyed.
 
 ### Built-in Chrome Handlers
 
-| Handler                                          | Description                                                     |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| `__chrome__.__chrome_set_state__`                | Updates `chromeState.value` and pushes chrome geometry CSS vars |
-| `__chrome__.__chrome_messaging_post_to_parent__` | Routes message from child to main webview                       |
-| `__chrome__.__chrome_messaging_post_to_child__`  | Routes message from main to named child                         |
-| `__chrome__.__chrome_messaging_broadcast__`      | Sends to all webviews except sender                             |
+| Handler                                          | Description                                                                                                      |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `__chrome__.__chrome_set_state__`                | Updates `chromeState.value` and pushes chrome geometry CSS vars                                                  |
+| `__chrome__.__chrome_splash_hide__`              | Sets `splashKeepOnScreen = false` to dismiss the splash. See [Splash Screen Control](../shared/splash-screen.md) |
+| `__chrome__.__chrome_messaging_post_to_parent__` | Routes message from child to main webview                                                                        |
+| `__chrome__.__chrome_messaging_post_to_child__`  | Routes message from main to named child                                                                          |
+| `__chrome__.__chrome_messaging_broadcast__`      | Sends to all webviews except sender                                                                              |
 
 ### Plugin Handlers
 

@@ -61,11 +61,15 @@ Handlers are stored as `"namespace.method"` keys in a dictionary for O(1) lookup
 | `__nativite__` | `__ping__`      | Returns `"pong"` (connectivity check)       |
 | `__nativite__` | `__ota_check__` | Returns `{ available: false }` (OTA status) |
 
-## Chrome State Handler
+## Chrome Handlers
 
-The special handler `__chrome__.__chrome_set_state__` receives the full chrome state snapshot from JavaScript and applies it to the native UI. This is fire-and-forget (no reply needed).
+### `__chrome__.__chrome_set_state__`
 
-Only the **primary webview** is allowed to set chrome state. Child webviews (in sheets, drawers, etc.) are blocked from this call.
+Receives the full chrome state snapshot from JavaScript and applies it to the native UI. Fire-and-forget (no reply needed). Only the **primary webview** is allowed to set chrome state.
+
+### `__chrome__.__chrome_splash_hide__`
+
+Manually hides the splash overlay by setting `chromeState.splashVisible = false`. Only accepted from the primary webview. See [Splash Screen Control](../shared/splash-screen.md).
 
 ## Inter-Webview Messaging
 

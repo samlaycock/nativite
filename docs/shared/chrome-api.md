@@ -129,6 +129,27 @@ Chrome events are a discriminated union on `type`:
 - `safeArea.changed` — `{ top, right, bottom, left }`
 - `message` — `{ from, payload }` (inter-webview messaging)
 
+## Splash Screen
+
+See [Splash Screen Control](./splash-screen.md) for full details.
+
+### `chrome.splash.preventAutoHide()`
+
+Prevents the splash screen from automatically hiding on page load. Call at the top level of your module.
+
+### `chrome.splash.hide()`
+
+Manually hides the splash screen.
+
+```javascript
+import { chrome } from "nativite/chrome";
+
+chrome.splash.preventAutoHide();
+
+// ... fetch data, check auth, etc.
+chrome.splash.hide();
+```
+
 ## Messaging
 
 ### `chrome.messaging.postToParent(payload)`

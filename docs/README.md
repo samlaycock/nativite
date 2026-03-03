@@ -33,6 +33,7 @@ Technical reference for how nativite features are implemented on each native pla
 ## Shared / Cross-Platform
 
 - [Chrome API](./shared/chrome-api.md) — JavaScript runtime for controlling native chrome
+- [Splash Screen Control](./shared/splash-screen.md) — Manual splash screen hide with `chrome.splash`
 - [Chrome Types](./shared/chrome-types.md) — Full type definitions for all chrome areas and events
 - [Client Bridge](./shared/client-bridge.md) — Low-level RPC and event subscription API
 - [CSS Variables Module](./shared/css-vars-module.md) — Observable access to `--nk-*` variables

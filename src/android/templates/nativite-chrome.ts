@@ -961,7 +961,7 @@ private fun materialIcon(name: String?): ImageVector {
     for (source in sources) {
         try {
             val getter = source.javaClass.methods.firstOrNull {
-                it.name == "get\$name" && it.parameterCount == 0
+                it.name == "get$name" && it.parameterCount == 0
             }
             val icon = getter?.invoke(source) as? ImageVector
             if (icon != null) {

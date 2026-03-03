@@ -11,8 +11,9 @@ For testing conventions, see [TESTING.md](conventions/TESTING.md)
 
 For TypeScript conventions, see [TYPESCRIPT.md](conventions/TYPESCRIPT.md)
 
+For references of specific details of implementation, see the relevant files listed in [docs/](docs/README.md)
 
-To references platform-specific details of implementation, see the relevant files listed in [docs/](docs/README.md)
+Ensure to ALWASY keep the files in [docs/](docs/README.md) up to date with any changes you make to the implementation, and to add new files to that directory if you make changes that aren't already covered by an existing file.
 
 Ensure to ALWAYS include a changeset when making a pull request, and to include a detailed description of the changes made in the PR description.
 

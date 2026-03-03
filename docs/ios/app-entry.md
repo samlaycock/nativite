@@ -69,11 +69,12 @@ A `UIViewControllerRepresentable` (iOS) / `NSViewControllerRepresentable` (macOS
 
 ## Splash Overlay (iOS Only)
 
-The splash overlay appears on top of all content and fades out when the first page load completes:
+The splash overlay appears on top of all content and fades out when the page load completes (or when manually hidden):
 
 - **Background**: Uses `config.splash.backgroundColor` or falls back to `systemBackground`.
 - **Image**: Optional centred image from `config.splash.image`.
 - **Animation**: Smooth opacity transition when `chromeState.splashVisible` becomes `false`.
+- **Manual control**: Developers can call `chrome.splash.preventAutoHide()` to keep the splash visible, then `chrome.splash.hide()` when ready. See [Splash Screen Control](../shared/splash-screen.md).
 
 The overlay prevents the user from seeing a blank webview while content loads.
 

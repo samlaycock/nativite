@@ -32,9 +32,11 @@ class NativiteChromeState {
 
 ### Splash Overlay (iOS)
 
-| Property        | Type   | Description                                               |
-| --------------- | ------ | --------------------------------------------------------- |
-| `splashVisible` | `Bool` | Starts `true`, set `false` when first page load completes |
+| Property        | Type   | Description                                                                    |
+| --------------- | ------ | ------------------------------------------------------------------------------ |
+| `splashVisible` | `Bool` | Starts `true`, set `false` on page load or manually via `chrome.splash.hide()` |
+
+If the developer calls `chrome.splash.preventAutoHide()` at module top level, the `didFinish` handler skips setting `splashVisible = false`. The splash stays visible until `chrome.splash.hide()` sends the `__chrome_splash_hide__` bridge message. See [Splash Screen Control](../shared/splash-screen.md).
 
 ### Title Bar
 

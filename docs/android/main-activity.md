@@ -23,7 +23,10 @@ class MainActivity : ComponentActivity() {
     private val bridge = NativiteBridge()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()   // If splash configured
+        // If splash configured:
+        bridge.splashKeepOnScreen.value = true
+        installSplashScreen().setKeepOnScreenCondition { bridge.splashKeepOnScreen.value }
+
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
@@ -42,7 +45,7 @@ class MainActivity : ComponentActivity() {
 
 ### Key Steps
 
-1. **Splash Screen** (optional): If configured, calls `installSplashScreen()` using the Material 3 `SplashScreen` API (Android 12+).
+1. **Splash Screen** (optional): If configured, sets `bridge.splashKeepOnScreen = true` and calls `installSplashScreen().setKeepOnScreenCondition { ... }` to keep the OS splash visible until the webview finishes loading (or until `chrome.splash.hide()` is called from JS). See [Splash Screen Control](../shared/splash-screen.md).
 2. **Edge-to-Edge**: Calls `enableEdgeToEdge()` to render behind the status bar and navigation bar with transparent system bars.
 3. **Default Chrome**: If the configuration includes a `defaultChrome` state, it is parsed from an embedded JSON string and applied to `bridge.chromeState.value` before content renders.
 4. **Compose Content**: Sets the activity content to `NativiteTheme { NativiteApp(bridge) }`.
