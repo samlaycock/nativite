@@ -35,6 +35,17 @@ export interface ButtonItem {
    * itemTapped event.
    */
   readonly menu?: MenuConfig;
+  /**
+   * macOS toolbar customisation behaviour for this item.
+   * Only meaningful when the parent toolbar has `customizable` enabled.
+   *
+   * "default"  — included by default, user can remove
+   * "hidden"   — not shown by default, user can add via customise
+   * "required" — always visible, cannot be removed
+   *
+   * Ignored on iOS and Android.
+   */
+  readonly customization?: "default" | "hidden" | "required";
 }
 
 export interface MenuConfig {
@@ -166,9 +177,70 @@ export interface NavigationConfig {
   readonly minimizeBehavior?: "automatic" | "never" | "onScrollDown" | "onScrollUp";
 }
 
-export interface ToolbarConfig {
+export interface ToolbarGroup {
+  /**
+   * Where to position items in the macOS window toolbar.
+   * On iOS/Android, placements are ignored — groups are flattened into
+   * a single bottom-bar list.
+   *
+   * "automatic"       — system decides (default)
+   * "principal"       — centre of the toolbar
+   * "secondaryAction" — overflow / secondary actions area
+   * "navigation"      — leading navigation area
+   * "primaryAction"   — trailing primary action area
+   */
+  readonly placement:
+    | "automatic"
+    | "principal"
+    | "secondaryAction"
+    | "navigation"
+    | "primaryAction";
   readonly items: readonly BarItem[];
+}
+
+export interface ToolbarConfig {
+  /**
+   * Flat list of items. Placed in `.automatic` on macOS, `.bottomBar` on iOS.
+   * For simple cross-platform toolbars, use this property alone.
+   */
+  readonly items?: readonly BarItem[];
+  /**
+   * Items grouped by placement zone. On macOS, each group is rendered in
+   * its specified toolbar placement. On iOS/Android, groups are flattened
+   * into a single bottom-bar list.
+   *
+   * When both `items` and `groups` are provided, macOS uses `groups`;
+   * iOS/Android prefers `items` and falls back to flattened `groups`.
+   */
+  readonly groups?: readonly ToolbarGroup[];
   readonly hidden?: boolean;
+  /**
+   * macOS only: enable native toolbar customisation via right-click →
+   * Customise Toolbar. Requires `id` to be set for persistence.
+   * Ignored on iOS and Android.
+   */
+  readonly customizable?: boolean;
+  /**
+   * macOS only: stable identifier for the toolbar. Required when
+   * `customizable` is true so the system can persist user preferences.
+   * Ignored on iOS and Android.
+   */
+  readonly id?: string;
+  /**
+   * macOS only: how toolbar items are displayed.
+   * "iconAndLabel" — show both icon and label (default)
+   * "iconOnly"     — show only icons
+   * "labelOnly"    — show only labels
+   * Ignored on iOS and Android.
+   */
+  readonly displayMode?: "iconAndLabel" | "iconOnly" | "labelOnly";
+  /**
+   * macOS only: toolbar visual style applied at the window level.
+   * "unified"  — compact toolbar integrated with the title bar (default)
+   * "expanded" — larger toolbar with a separate area below the title
+   * Ignored on iOS and Android.
+   */
+  readonly toolbarStyle?: "unified" | "expanded";
 }
 
 export interface SidebarPanelConfig {

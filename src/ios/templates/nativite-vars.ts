@@ -96,7 +96,9 @@ export function nativiteVarsTemplate(): string {
       --nv-font-title3:20px;--nv-font-largeTitle:34px;
     """
     // Keep Vite's error overlay host inside native insets so its controls
-    // remain reachable when debugging in WKWebView.
+    // remain reachable when debugging in WKWebView. Do not emit this CSS in
+    // release builds where the Vite overlay does not exist.
+    #if DEBUG
     let devOverlayInsets = """
       vite-error-overlay{
         position:fixed !important;
@@ -106,6 +108,9 @@ export function nativiteVarsTemplate(): string {
         box-sizing:border-box !important;
       }
     """
+    #else
+    let devOverlayInsets = ""
+    #endif
     // Resolve the platform string at runtime so iPad is distinguished from iPhone.
     #if os(iOS)
     let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"

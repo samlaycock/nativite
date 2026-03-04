@@ -5,6 +5,8 @@
 
 The Chrome reconciler translates declarative JavaScript chrome state into imperative UIKit/SwiftUI native UI components.
 
+On macOS, the same reconciler now primarily writes to `NativiteChromeState` for SwiftUI rendering and only applies window-level `NSWindow` title-bar flags directly (title/subtitle/separator/full-size-content/visibility).
+
 ## Architecture
 
 ```swift
@@ -36,34 +38,35 @@ The reconciler tracks which areas were applied in the previous state. When an ar
 
 Each chrome area has a dedicated apply method:
 
-| Area           | Method                          | UIKit Component                   |
-| -------------- | ------------------------------- | --------------------------------- |
-| Title Bar      | `applyTitleBar()`               | `UINavigationItem`                |
-| Navigation     | `applyNavigation()`             | `UITabBar` / `UITabBarController` |
-| Toolbar        | `applyToolbar()`                | `UIToolbar`                       |
-| Status Bar     | via `chromeState`               | `UIViewController` overrides      |
-| Home Indicator | via `chromeState`               | `UIViewController` overrides      |
-| Sheets         | via `chromeState`               | SwiftUI sheet modifier            |
-| Keyboard       | `NativiteKeyboard.applyState()` | Input accessory view              |
+| Area           | Method                          | Native Path                                                 |
+| -------------- | ------------------------------- | ----------------------------------------------------------- |
+| Title Bar      | `applyTitleBar()`               | SwiftUI `NavigationStack` modifiers + UIKit subtitle bridge |
+| Navigation     | `applyNavigation()`             | `UITabBar` / `UITabBarController`                           |
+| Toolbar        | `applyToolbar()`                | SwiftUI `.toolbar` bottom bar modifier                      |
+| Status Bar     | via `chromeState`               | `UIViewController` overrides                                |
+| Home Indicator | via `chromeState`               | `UIViewController` overrides                                |
+| Sheets         | via `chromeState`               | SwiftUI `sheet()` modifier                                  |
+| Keyboard       | `NativiteKeyboard.applyState()` | Input accessory view                                        |
 
 ## Title Bar
 
-Configures `UINavigationItem` on the view controller:
+`applyTitleBar()` writes into `NativiteChromeState`; `NativiteTitleBarModifier` renders the UI in SwiftUI inside `NavigationStack`.
 
-- **title** / **subtitle** (via `navigationItem.prompt` for UIKit subtitle)
-- **largeTitleMode**: `.automatic`, `.always` (large), `.never` (inline)
-- **leadingItems** / **trailingItems**: Mapped to `UIBarButtonItem` arrays
-- **searchBar**: `UISearchBar` integrated into the navigation item
-- **tint**: Custom `tintColor` on the navigation bar
-- **hidden**: Hides the entire navigation bar
-- **backLabel**: Custom back button text (or `nil` for default)
+- **title**: SwiftUI `.navigationTitle`
+- **subtitle**: UIKit `navigationItem.prompt` bridge (SwiftUI iOS has no subtitle API)
+- **largeTitleMode**: SwiftUI `.navigationBarTitleDisplayMode`
+- **leadingItems** / **trailingItems**: SwiftUI `ToolbarItemGroup` buttons/menus
+- **searchBar**: SwiftUI `.searchable`
+- **tint**: SwiftUI `.tint`
+- **hidden**: SwiftUI toolbar visibility
+- **backLabel**: Stored in chrome state for compatibility
 
 Bar items support:
 
-- SF Symbol icons via `UIImage(systemName:)`
+- SF Symbol icons
 - Text labels
-- Badges (via a custom badge overlay)
-- Dropdown menus (via `UIMenu`)
+- Badges (via SwiftUI overlay)
+- Dropdown menus (SwiftUI `Menu`)
 - Styles: `.plain`, `.primary` (bold), `.destructive` (red)
 
 ## Navigation (Tab Bar)
@@ -94,11 +97,11 @@ Self-managed `UITabBar`:
 
 ## Toolbar
 
-Configures `UIToolbar` with `UIBarButtonItem` entries:
+`applyToolbar()` writes into `NativiteChromeState`; `NativiteToolbarModifier` renders the bottom bar in SwiftUI.
 
 - Buttons, flexible spaces, fixed spaces
 - Same item rendering as title bar (icons, labels, menus, badges)
-- Events: `toolbar.itemPressed`, `toolbar.menuItemPressed`
+- Events: `toolbar.itemPressed`
 
 ## CSS Variable Sync
 
@@ -116,6 +119,6 @@ These are passed to `NativiteVars.updateChrome()` to set:
 
 ## SwiftUI Integration
 
-Areas that are better expressed in SwiftUI (status bar, home indicator, sheets, alerts, title bar overlays) are routed through `NativiteChromeState` — an `@Observable` model that SwiftUI views observe. The `NativiteChrome` class updates this model, and SwiftUI views react automatically.
+SwiftUI-driven areas (title bar, toolbar, sheets, alerts, status bar, home indicator) are routed through `NativiteChromeState` — an `@Observable` model that SwiftUI views observe. The `NativiteChrome` class updates this model, and SwiftUI views react automatically.
 
 Event callbacks from SwiftUI interactions flow back through `chromeState.onChromeEvent`, which the bridge picks up and delivers to JavaScript.

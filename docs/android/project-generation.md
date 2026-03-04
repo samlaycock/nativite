@@ -30,7 +30,7 @@ The generator creates a complete Android Gradle project from the user's configur
 │   │   │       └── ic_launcher.xml     (adaptive icon)
 │   │   ├── assets/
 │   │   │   ├── dist/                   (web bundle, copied at build)
-│   │   │   └── dev.json                (dev URL, written at dev time)
+│   │   │   └── dev.json                (dev URL, debug/dev only)
 │   │   └── AndroidManifest.xml
 │   └── build.gradle.kts
 ├── gradle/
@@ -56,6 +56,7 @@ The generator creates a complete Android Gradle project from the user's configur
 7. Writes resource XML files (strings, colours, themes).
 8. Optional: Writes splash screen XML and copies icon file.
 9. Writes `.hash-android` for dirty-check optimization.
+10. In non-dev generation modes, removes stale `assets/dev.json` so production builds do not carry dev server configuration.
 
 ## Dirty-Check Optimization
 

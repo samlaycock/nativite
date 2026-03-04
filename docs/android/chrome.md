@@ -63,11 +63,12 @@ Renders a `BasicTextField` with search icon below the title bar.
 
 ### Configuration
 
-| Property     | Type               | Description                      |
-| ------------ | ------------------ | -------------------------------- |
-| `items`      | `NavigationItem[]` | Tab items (label, icon required) |
-| `activeItem` | `String?`          | Currently selected tab ID        |
-| `hidden`     | `Boolean`          | Whether to hide the nav bar      |
+| Property     | Type               | Description                           |
+| ------------ | ------------------ | ------------------------------------- |
+| `items`      | `NavigationItem[]` | Tab items (label, icon required)      |
+| `activeItem` | `String?`          | Currently selected tab ID             |
+| `searchBar`  | `SearchBarConfig?` | Search field used by search-role item |
+| `hidden`     | `Boolean`          | Whether to hide the nav bar           |
 
 ### Icon Resolution
 
@@ -76,6 +77,9 @@ Icons are resolved via reflection against `androidx.compose.material.icons.Icons
 ### Events
 
 - `navigation.itemPressed` with `{ id }`
+- `navigation.searchChanged` with `{ value }`
+- `navigation.searchSubmitted` with `{ value }`
+- `navigation.searchCancelled`
 
 ### Item Features
 
@@ -249,6 +253,8 @@ A 44dp tall content area docked above the navigation bar or toolbar, containing 
 ### Events
 
 - `tabBottomAccessory.presented`
+- `tabBottomAccessory.dismissed`
+- `tabBottomAccessory.loadFailed` with `{ message, code }`
 
 ## Shared Components
 
@@ -265,7 +271,7 @@ Renders individual bar items across all chrome areas with:
 
 ### NativiteDropdownMenu
 
-Material 3 `DropdownMenu` with `DropdownMenuItem` entries supporting nested submenus.
+Material 3 `DropdownMenu` with single-level `DropdownMenuItem` entries.
 
 ### materialIcon()
 

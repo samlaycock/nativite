@@ -99,18 +99,18 @@ register(namespace = "__nativite__", method = "__ping__") { _, completion ->
 
 ## Chrome Geometry CSS Variables
 
-When chrome state updates, `pushChromeGeometryVars()` calculates and pushes:
+When chrome state or measured chrome layout changes, `updateRenderedChromeGeometry()` pushes:
 
-| Variable               | Value         | Description                             |
-| ---------------------- | ------------- | --------------------------------------- |
-| `--nv-nav-height`      | `64dp` or `0` | Title bar height (Material 3 TopAppBar) |
-| `--nv-nav-visible`     | `0` / `1`     | Whether title bar is visible            |
-| `--nv-tab-height`      | `80dp` or `0` | Navigation bar height (Material 3)      |
-| `--nv-tab-visible`     | `0` / `1`     | Whether navigation bar is visible       |
-| `--nv-toolbar-height`  | `80dp` or `0` | Bottom app bar height (Material 3)      |
-| `--nv-toolbar-visible` | `0` / `1`     | Whether toolbar is visible              |
+| Variable               | Value              | Description                             |
+| ---------------------- | ------------------ | --------------------------------------- |
+| `--nv-nav-height`      | `<measured>px`/`0` | Measured rendered title bar height      |
+| `--nv-nav-visible`     | `0` / `1`          | Whether title bar is visible            |
+| `--nv-tab-height`      | `<measured>px`/`0` | Measured rendered navigation bar height |
+| `--nv-tab-visible`     | `0` / `1`          | Whether navigation bar is visible       |
+| `--nv-toolbar-height`  | `<measured>px`/`0` | Measured rendered bottom toolbar height |
+| `--nv-toolbar-visible` | `0` / `1`          | Whether toolbar is visible              |
 
-Heights use Material 3 standard dimensions (64dp for top bar, 80dp for bottom bars).
+Heights are measured from actual Compose layout (`onGloballyPositioned`) instead of fixed constants.
 
 ## Inter-Webview Messaging
 

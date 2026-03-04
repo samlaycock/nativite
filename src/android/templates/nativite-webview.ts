@@ -9,6 +9,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -23,7 +24,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import android.net.Uri
 import androidx.webkit.WebViewAssetLoader
 
 private const val PRODUCTION_BASE_URL = "https://appassets.androidplatform.net/assets/dist/index.html"
@@ -34,6 +34,7 @@ fun createNativiteWebView(
     context: Context,
     bridge: NativiteBridge,
     instanceName: String = "main",
+    chromeArea: String? = null,
 ): WebView {
     val webView = WebView(context).apply {
         settings.javaScriptEnabled = true
@@ -49,15 +50,38 @@ fun createNativiteWebView(
         }
     }
 
-    WebView.setWebContentsDebuggingEnabled(
-        context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
-    )
+    WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 
     val assetLoader = WebViewAssetLoader.Builder()
         .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context))
         .build()
 
     webView.webViewClient = object : WebViewClient() {
+        var didReportLoadFailure = false
+
+        fun reportLoadFailure(message: String, code: Int) {
+            if (didReportLoadFailure) return
+            didReportLoadFailure = true
+
+            when (chromeArea) {
+                "sheet" -> bridge.sendEventToPrimary(
+                    "sheet.loadFailed",
+                    mapOf(
+                        "name" to instanceName,
+                        "message" to message,
+                        "code" to code,
+                    ),
+                )
+                "tabBottomAccessory" -> bridge.sendEventToPrimary(
+                    "tabBottomAccessory.loadFailed",
+                    mapOf(
+                        "message" to message,
+                        "code" to code,
+                    ),
+                )
+            }
+        }
+
         override fun shouldInterceptRequest(
             view: WebView,
             request: WebResourceRequest,
@@ -67,6 +91,7 @@ fun createNativiteWebView(
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
+            didReportLoadFailure = false
             // Inject instance name, platform attribute, and CSS variable
             // defaults as early as possible so CSS selectors like
             // [data-nv-platform="android"] and var(--nv-*) work before
@@ -106,6 +131,32 @@ fun createNativiteWebView(
                 }
             }
         }
+
+        override fun onReceivedError(
+            view: WebView,
+            request: WebResourceRequest,
+            error: WebResourceError,
+        ) {
+            super.onReceivedError(view, request, error)
+            if (!request.isForMainFrame) return
+            reportLoadFailure(
+                message = error.description?.toString() ?: "Load failed",
+                code = error.errorCode,
+            )
+        }
+
+        override fun onReceivedHttpError(
+            view: WebView,
+            request: WebResourceRequest,
+            errorResponse: WebResourceResponse,
+        ) {
+            super.onReceivedHttpError(view, request, errorResponse)
+            if (!request.isForMainFrame) return
+            reportLoadFailure(
+                message = errorResponse.reasonPhrase ?: "HTTP \${errorResponse.statusCode}",
+                code = errorResponse.statusCode,
+            )
+        }
     }
 
     webView.webChromeClient = WebChromeClient()
@@ -118,13 +169,14 @@ fun NativiteWebView(
     bridge: NativiteBridge,
     modifier: Modifier = Modifier,
     instanceName: String = "main",
+    chromeArea: String? = null,
     url: String? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val webView = remember {
-        createNativiteWebView(context, bridge, instanceName)
+        createNativiteWebView(context, bridge, instanceName, chromeArea)
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -164,6 +216,7 @@ fun NativiteWebView(
 }
 
 private fun getDevUrl(context: Context): String? {
+    if (!BuildConfig.DEBUG) return null
     try {
         val devJson = context.assets.open("dev.json").bufferedReader().readText()
         val parsed = org.json.JSONObject(devJson)

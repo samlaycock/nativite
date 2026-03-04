@@ -70,8 +70,21 @@ describe("nativite core build config", () => {
     expect(config.base).toBeUndefined();
   });
 
-  it("disables the Vite HMR error overlay during dev server runs", () => {
+  it("enables the Vite HMR error overlay by default during dev server runs", () => {
     process.env["NATIVITE_PLATFORM"] = "ios";
+
+    const plugin = getCorePlugin();
+    const config = runConfigHook(plugin, {}, { command: "serve", mode: "development" });
+    const hmr = config.server?.hmr as { overlay?: boolean } | undefined;
+
+    expect(config.server).toBeObject();
+    expect(hmr).toBeObject();
+    expect(hmr?.overlay).toBe(true);
+  });
+
+  it("disables the Vite HMR error overlay when NATIVITE_DEV_ERROR_OVERLAY is false", () => {
+    process.env["NATIVITE_PLATFORM"] = "ios";
+    process.env["NATIVITE_DEV_ERROR_OVERLAY"] = "false";
 
     const plugin = getCorePlugin();
     const config = runConfigHook(plugin, {}, { command: "serve", mode: "development" });
@@ -81,17 +94,35 @@ describe("nativite core build config", () => {
     expect(hmr).toBeObject();
     expect(hmr?.overlay).toBe(false);
   });
+});
 
-  it("enables the Vite HMR error overlay when NATIVITE_DEV_ERROR_OVERLAY is true", () => {
-    process.env["NATIVITE_PLATFORM"] = "ios";
-    process.env["NATIVITE_DEV_ERROR_OVERLAY"] = "true";
+describe("nativite dev error overlay plugin", () => {
+  it("registers the dev error overlay sub-plugin", () => {
+    const plugins = nativite();
+    const overlayPlugin = plugins.find((entry) => entry.name === "nativite:dev-error-overlay");
 
-    const plugin = getCorePlugin();
-    const config = runConfigHook(plugin, {}, { command: "serve", mode: "development" });
-    const hmr = config.server?.hmr as { overlay?: boolean } | undefined;
+    expect(overlayPlugin).toBeDefined();
+    expect(overlayPlugin!.apply).toBe("serve");
+  });
 
-    expect(config.server).toBeObject();
-    expect(hmr).toBeObject();
-    expect(hmr?.overlay).toBe(true);
+  it("injects chrome-aware CSS for vite-error-overlay via transformIndexHtml", () => {
+    const plugins = nativite();
+    const overlayPlugin = plugins.find((entry) => entry.name === "nativite:dev-error-overlay");
+    const hook = overlayPlugin!.transformIndexHtml;
+
+    expect(hook).toBeFunction();
+
+    const result = (hook as () => unknown[])();
+
+    expect(result).toBeArrayOfSize(1);
+    expect(result[0]).toMatchObject({
+      tag: "style",
+      injectTo: "head",
+    });
+
+    const children = (result[0] as { children: string }).children;
+    expect(children).toContain("vite-error-overlay");
+    expect(children).toContain("--nv-inset-top");
+    expect(children).toContain("--nv-inset-bottom");
   });
 });

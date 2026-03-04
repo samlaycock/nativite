@@ -56,11 +56,19 @@ The Vite dev server middleware reads this to route module requests to the Androi
 
 ## Build Mode
 
-When running `nativite build` for Android:
+When running `nativite build`:
 
-- Generates the project in build mode.
-- Writes `manifest.json` with version info and asset list.
+- The CLI runs production builds for each configured platform by default.
+- During the Android build pass, the Android platform plugin generates the project in build mode.
+- Writes `manifest.json` with version info and asset list to the Android-specific output directory.
+- Build/generate modes remove stale `assets/dev.json`, and release runtime code ignores dev URLs.
 - Does not automatically build the APK/AAB (left to the developer).
+
+To build only Android:
+
+```bash
+nativite build --platform android
+```
 
 ## Platform File Extensions
 

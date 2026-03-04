@@ -23,6 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -55,6 +58,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +73,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
@@ -373,6 +378,15 @@ fun NativiteTitleBarSearch(config: Map<*, *>, bridge: NativiteBridge) {
                     )
                 },
                 modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        bridge.sendEventToPrimary(
+                            "titleBar.searchSubmitted",
+                            mapOf("value" to query),
+                        )
+                    },
+                ),
                 singleLine = true,
                 decorationBox = { innerTextField ->
                     Box {
@@ -409,50 +423,137 @@ fun NativiteTitleBarSearch(config: Map<*, *>, bridge: NativiteBridge) {
 fun NativiteNavigationBar(config: Map<*, *>, bridge: NativiteBridge) {
     val items = extractNavItems(config["items"])
     val activeItem = config["activeItem"] as? String
+    val searchBar = config["searchBar"] as? Map<*, *>
+    val activeRole = items.firstOrNull { (it["id"] as? String) == activeItem }?.let { item ->
+        item["role"] as? String
+    }
+    val showSearch = activeRole == "search" && searchBar != null
 
     if (items.isEmpty()) return
 
-    NavigationBar {
-        for (item in items) {
-            val id = item["id"] as? String ?: continue
-            val label = item["label"] as? String ?: ""
-            val icon = item["icon"] as? String
-            val badge = item["badge"]?.toString()
-            val subtitle = item["subtitle"] as? String
-            val disabled = item["disabled"] as? Boolean ?: false
-            val selected = id == activeItem
+    Column {
+        if (showSearch) {
+            NativiteNavigationSearch(searchBar!!, bridge)
+        }
+        NavigationBar {
+            for (item in items) {
+                val id = item["id"] as? String ?: continue
+                val label = item["label"] as? String ?: ""
+                val icon = item["icon"] as? String
+                val badge = item["badge"]?.toString()
+                val subtitle = item["subtitle"] as? String
+                val disabled = item["disabled"] as? Boolean ?: false
+                val selected = id == activeItem
 
-            NavigationBarItem(
-                selected = selected,
-                enabled = !disabled,
-                onClick = {
-                    bridge.sendEventToPrimary("navigation.itemPressed", mapOf("id" to id))
-                },
-                icon = {
-                    val imageVector = materialIcon(icon)
-                    if (badge != null) {
-                        BadgedBox(badge = { Badge { Text(badge) } }) {
+                NavigationBarItem(
+                    selected = selected,
+                    enabled = !disabled,
+                    onClick = {
+                        bridge.sendEventToPrimary("navigation.itemPressed", mapOf("id" to id))
+                    },
+                    icon = {
+                        val imageVector = materialIcon(icon)
+                        if (badge != null) {
+                            BadgedBox(badge = { Badge { Text(badge) } }) {
+                                Icon(imageVector, contentDescription = label)
+                            }
+                        } else {
                             Icon(imageVector, contentDescription = label)
                         }
-                    } else {
-                        Icon(imageVector, contentDescription = label)
-                    }
-                },
-                label = {
-                    if (subtitle != null) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    },
+                    label = {
+                        if (subtitle != null) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(label)
+                                Text(
+                                    subtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
                             Text(label)
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun NativiteNavigationSearch(config: Map<*, *>, bridge: NativiteBridge) {
+    val placeholder = config["placeholder"] as? String ?: "Search"
+    val initialValue = config["value"] as? String ?: ""
+    val cancelButtonVisible = config["cancelButtonVisible"] == true
+    var query by remember { mutableStateOf(initialValue) }
+
+    LaunchedEffect(initialValue) {
+        query = initialValue
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            androidx.compose.foundation.text.BasicTextField(
+                value = query,
+                onValueChange = { newValue ->
+                    query = newValue
+                    bridge.sendEventToPrimary(
+                        "navigation.searchChanged",
+                        mapOf("value" to newValue),
+                    )
+                },
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        bridge.sendEventToPrimary(
+                            "navigation.searchSubmitted",
+                            mapOf("value" to query),
+                        )
+                    },
+                ),
+                singleLine = true,
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (query.isEmpty()) {
                             Text(
-                                subtitle,
-                                style = MaterialTheme.typography.labelSmall,
+                                placeholder,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    } else {
-                        Text(label)
+                        innerTextField()
                     }
                 },
             )
+            if (query.isNotEmpty() || cancelButtonVisible) {
+                IconButton(onClick = {
+                    query = ""
+                    bridge.sendEventToPrimary("navigation.searchCancelled", null)
+                }) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Clear",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }
@@ -461,7 +562,13 @@ fun NativiteNavigationBar(config: Map<*, *>, bridge: NativiteBridge) {
 
 @Composable
 fun NativiteToolbar(config: Map<*, *>, bridge: NativiteBridge) {
-    val items = extractItems(config["items"])
+    val items = extractItems(config["items"]).ifEmpty {
+        // Flatten placement groups into a single list for bottom bar rendering
+        val groups = config["groups"] as? List<*> ?: emptyList<Any>()
+        groups.filterIsInstance<Map<*, *>>().flatMap { group ->
+            extractItems(group["items"])
+        }
+    }
     if (items.isEmpty()) return
 
     BottomAppBar {
@@ -568,6 +675,7 @@ fun NativiteSheet(name: String, config: Map<*, *>, bridge: NativiteBridge) {
             bridge = bridge,
             instanceName = name,
             url = url,
+            chromeArea = "sheet",
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(heightFraction),
@@ -694,12 +802,13 @@ fun NativiteStatusBar(config: Map<*, *>?) {
     if (config == null) return
     val style = config["style"] as? String ?: "auto"
     val hidden = config["hidden"] as? Boolean ?: false
+    val isSystemDark = isSystemInDarkTheme()
 
     val activity = LocalContext.current as? ComponentActivity ?: return
     val window = activity.window
     val controller = WindowCompat.getInsetsController(window, window.decorView)
 
-    LaunchedEffect(style, hidden) {
+    LaunchedEffect(style, hidden, isSystemDark) {
         if (hidden) {
             controller.hide(WindowInsetsCompat.Type.statusBars())
         } else {
@@ -709,7 +818,7 @@ fun NativiteStatusBar(config: Map<*, *>?) {
         controller.isAppearanceLightStatusBars = when (style) {
             "dark" -> true   // dark icons on light background
             "light" -> false // light icons on dark background
-            else -> true     // auto — follow system
+            else -> !isSystemDark
         }
     }
 }
@@ -783,8 +892,11 @@ fun NativiteTabBottomAccessory(config: Map<*, *>, bridge: NativiteBridge) {
     val url = config["url"] as? String ?: return
     val bgColor = parseTintColor(config["backgroundColor"] as? String)
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(Unit) {
         bridge.sendEventToPrimary("tabBottomAccessory.presented", null)
+        onDispose {
+            bridge.sendEventToPrimary("tabBottomAccessory.dismissed", null)
+        }
     }
 
     Surface(
@@ -797,6 +909,7 @@ fun NativiteTabBottomAccessory(config: Map<*, *>, bridge: NativiteBridge) {
             bridge = bridge,
             instanceName = "tabBottomAccessory",
             url = url,
+            chromeArea = "tabBottomAccessory",
             modifier = Modifier.fillMaxSize(),
         )
     }

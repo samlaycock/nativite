@@ -6,7 +6,7 @@ Technical reference for how nativite features are implemented on each native pla
 
 - [View Controller](./ios/view-controller.md) — Primary UIViewController hosting WKWebView
 - [Native Bridge](./ios/bridge.md) — JS↔Swift communication via WKScriptMessageHandlerWithReply
-- [Chrome Reconciliation](./ios/chrome.md) — UIKit chrome state reconciliation
+- [Chrome Reconciliation](./ios/chrome.md) — iOS/macOS chrome state reconciliation (SwiftUI + UIKit/AppKit)
 - [Chrome State Model](./ios/chrome-state.md) — SwiftUI @Observable model for chrome areas
 - [CSS Variables](./ios/css-variables.md) — 70+ `--nv-*` CSS custom properties
 - [Keyboard & Input Accessory](./ios/keyboard.md) — Keyboard dismiss modes and accessory bar

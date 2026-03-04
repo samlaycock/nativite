@@ -98,6 +98,21 @@ bunx nativite dev --url http://127.0.0.1:5173
 The CLI shows configured platforms with a hotkey per platform (for example `i + enter` for ios).
 Press that hotkey to build and launch that platform runtime.
 
+### 6. Build production bundles for native platforms
+
+```bash
+bunx nativite build
+```
+
+This runs a production Vite build for each configured native platform and writes
+platform-specific bundles (for example `dist-ios`, `dist-macos`, `dist-android`).
+
+Optional single-platform build:
+
+```bash
+bunx nativite build --platform ios
+```
+
 ## Configuration Overview
 
 ### Required fields

@@ -18,6 +18,7 @@ interface ButtonItem {
   readonly tint?: string; // Hex colour override
   readonly badge?: string | number | null;
   readonly menu?: MenuConfig; // Dropdown menu
+  readonly customization?: "default" | "hidden" | "required"; // macOS toolbar only
 }
 ```
 
@@ -111,12 +112,31 @@ interface NavigationConfig {
 }
 ```
 
+### ToolbarGroup
+
+```typescript
+interface ToolbarGroup {
+  readonly placement:
+    | "automatic"
+    | "principal"
+    | "secondaryAction"
+    | "navigation"
+    | "primaryAction";
+  readonly items: readonly BarItem[];
+}
+```
+
 ### ToolbarConfig
 
 ```typescript
 interface ToolbarConfig {
-  readonly items: readonly BarItem[];
+  readonly items?: readonly BarItem[];
+  readonly groups?: readonly ToolbarGroup[];
   readonly hidden?: boolean;
+  readonly customizable?: boolean; // macOS only
+  readonly id?: string; // macOS only
+  readonly displayMode?: "iconAndLabel" | "iconOnly" | "labelOnly"; // macOS only
+  readonly toolbarStyle?: "unified" | "expanded"; // macOS only
 }
 ```
 

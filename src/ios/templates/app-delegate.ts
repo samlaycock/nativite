@@ -50,7 +50,7 @@ import Cocoa
 
 #if os(iOS)
 struct NativiteRootView: View {
-  @State private var chromeState = NativiteChromeState()
+  let chromeState: NativiteChromeState
 
   var body: some View {
     ZStack {
@@ -69,11 +69,18 @@ ${splashOverlay}
 }
 #else
 struct NativiteRootView: View {
-  @State private var chromeState = NativiteChromeState()
+  let chromeState: NativiteChromeState
 
   var body: some View {
     NativiteViewControllerRepresentable(chromeState: chromeState)
       .ignoresSafeArea()
+      .nativiteMacTitleBar(chromeState: chromeState)
+      .nativiteMacToolbar(chromeState: chromeState)
+      .nativiteMacNavigation(chromeState: chromeState)
+      .nativiteMacSidebar(chromeState: chromeState)
+      .nativiteMacDrawers(chromeState: chromeState)
+      .nativiteMacPopovers(chromeState: chromeState)
+      .nativiteMacAppWindows(chromeState: chromeState)
       .nativiteSheets(chromeState: chromeState)
       .nativiteAlerts(chromeState: chromeState)
   }

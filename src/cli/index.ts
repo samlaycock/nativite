@@ -6,6 +6,7 @@ import { createInterface, type Interface as ReadlineInterface } from "node:readl
 import pc from "picocolors";
 
 import { resolveConfiguredPlatformRuntimes } from "../platforms/registry.ts";
+import { runBuildCommand } from "./build-command.ts";
 import { createBuildManager } from "./build-manager.ts";
 import { loadConfig } from "./config.ts";
 import { createDevUrlResolver } from "./dev-url.ts";
@@ -27,8 +28,19 @@ const program = new Command();
 
 program
   .name("nativite")
-  .description("Nativite CLI — manage native platform dev builds")
+  .description("Nativite CLI — manage native platform builds")
   .version(version);
+
+// ─── nativite build ──────────────────────────────────────────────────────────
+
+program
+  .command("build")
+  .description("Build configured platforms for production")
+  .option("--platform <platform>", "Build only one configured platform")
+  .action(async (options: { platform?: string }) => {
+    const exitCode = await runBuildCommand(options);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
 
 // ─── nativite dev ────────────────────────────────────────────────────────────
 

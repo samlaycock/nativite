@@ -6,10 +6,11 @@ The Vite plugin integrates nativite into the Vite build pipeline, providing plat
 
 ## Plugin Composition
 
-`nativite()` returns an array of two sub-plugins:
+`nativite()` returns an array of three sub-plugins:
 
 1. **`nativite:platform-extensions`** — Resolves platform-specific file variants at import time.
 2. **`nativite`** (core) — Dev server middleware, HMR bridging, build output.
+3. **`nativite:dev-error-overlay`** — Dev-only error overlay positioning for native chrome.
 
 ## Platform Extensions Plugin
 
@@ -130,11 +131,31 @@ When a native variant file changes (e.g., `Button.ios.tsx`), the plugin bridges 
 
 This ensures hot reloading works for platform-specific files without a full page refresh.
 
+## Dev Error Overlay
+
+Vite's built-in error overlay (`vite-error-overlay`) is **enabled by default** in dev mode. On iOS, native chrome elements (navigation bar, toolbar, tab bar) render on top of the webview, which can obscure the overlay content. The `nativite:dev-error-overlay` sub-plugin injects CSS that repositions the overlay to sit between chrome elements using the `--nv-inset-top` and `--nv-inset-bottom` CSS variables:
+
+```css
+vite-error-overlay {
+  top: var(--nv-inset-top, 0px);
+  bottom: var(--nv-inset-bottom, 0px);
+}
+```
+
+This plugin only runs in dev mode (`apply: 'serve'`) — no CSS is injected in production builds.
+
+To disable the error overlay:
+
+```bash
+NATIVITE_DEV_ERROR_OVERLAY=false vite dev
+```
+
 ## Build Output
 
 ### Manifest Generation
 
-After the build completes, the plugin generates `dist/manifest.json`:
+After the build completes, the plugin generates `manifest.json` inside the
+active build output directory (for example `dist-ios/manifest.json`):
 
 ```json
 {
@@ -161,4 +182,8 @@ The plugin loads `nativite.config.ts` using Vite's own `loadConfigFromFile()` ut
 
 ## CLI ↔ Vite Handoff
 
-Platform metadata is serialized by the CLI into the `NATIVITE_PLATFORM_METADATA` environment variable and deserialized by the Vite plugin. This allows the Vite plugin to know which platforms are configured and their file extension priorities without re-resolving plugins.
+Platform metadata is serialized by the CLI into the `NATIVITE_PLATFORM_METADATA`
+environment variable and deserialized by the Vite plugin. For production builds,
+the CLI iterates configured platforms and sets `NATIVITE_PLATFORM` before each
+Vite build pass, so the plugin can emit platform-specific output directories and
+invoke the correct platform plugin `build()` hook.

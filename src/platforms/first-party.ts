@@ -8,6 +8,7 @@ import type { AppleTargetPlatform } from "../ios/index.ts";
 import { generateProject as generateAndroidProject } from "../android/index.ts";
 import { runGradle } from "../cli/gradle.ts";
 import { runXcodebuild } from "../cli/xcodebuild.ts";
+import { definePlatformPlugin } from "../index.ts";
 import { generateProject } from "../ios/index.ts";
 
 async function buildAndLaunchSimulator(
@@ -124,7 +125,7 @@ async function generateAppleProject(
   }
 }
 
-const iosPlatformPlugin: NativitePlatformPlugin = {
+const iosPlatformPlugin = definePlatformPlugin({
   name: "nativite-ios",
   platform: "ios",
   environments: ["ios", "ipad"],
@@ -167,9 +168,9 @@ const iosPlatformPlugin: NativitePlatformPlugin = {
   async build(ctx) {
     await generateProject(ctx.rootConfig, ctx.projectRoot, false, "build", "ios");
   },
-};
+});
 
-const macosPlatformPlugin: NativitePlatformPlugin = {
+const macosPlatformPlugin = definePlatformPlugin({
   name: "nativite-macos",
   platform: "macos",
   environments: ["macos"],
@@ -202,9 +203,9 @@ const macosPlatformPlugin: NativitePlatformPlugin = {
   async build(ctx) {
     await generateProject(ctx.rootConfig, ctx.projectRoot, false, "build", "macos");
   },
-};
+});
 
-const androidPlatformPlugin: NativitePlatformPlugin = {
+const androidPlatformPlugin = definePlatformPlugin({
   name: "nativite-android",
   platform: "android",
   environments: ["android"],
@@ -272,7 +273,7 @@ const androidPlatformPlugin: NativitePlatformPlugin = {
   async build(ctx) {
     await generateAndroidProject(ctx.rootConfig, ctx.projectRoot, false, "build");
   },
-};
+});
 
 export const FIRST_PARTY_PLATFORM_PLUGINS: ReadonlyArray<NativitePlatformPlugin> = [
   iosPlatformPlugin,

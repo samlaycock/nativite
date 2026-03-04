@@ -90,7 +90,9 @@ describe("factory functions", () => {
   });
 
   it("navigation() returns a ChromeElement with _area 'navigation'", () => {
-    const el = navigation({ items: [{ id: "home", label: "Home", icon: "house" }] });
+    const el = navigation({
+      items: [{ id: "home", label: "Home", icon: "house" }],
+    });
     expect(el._area).toBe("navigation");
     expect(el._config).toMatchObject({ items: [{ id: "home" }] });
   });
@@ -99,7 +101,12 @@ describe("factory functions", () => {
     const el = navigation({
       items: [
         { id: "home", label: "Home", icon: "house" },
-        { id: "search", label: "Search", icon: "magnifyingglass", role: "search" },
+        {
+          id: "search",
+          label: "Search",
+          icon: "magnifyingglass",
+          role: "search",
+        },
       ],
     });
     expect(el._area).toBe("navigation");
@@ -121,7 +128,12 @@ describe("factory functions", () => {
     const el = navigation({
       items: [
         { id: "home", label: "Home", icon: "house" },
-        { id: "search", label: "Search", icon: "magnifyingglass", role: "search" },
+        {
+          id: "search",
+          label: "Search",
+          icon: "magnifyingglass",
+          role: "search",
+        },
       ],
       searchBar: { placeholder: "Search...", value: "" },
     });
@@ -423,7 +435,12 @@ describe("chrome()", () => {
       navigation({
         items: [
           { id: "home", label: "Home", icon: "house" },
-          { id: "search", label: "Search", icon: "magnifyingglass", role: "search" },
+          {
+            id: "search",
+            label: "Search",
+            icon: "magnifyingglass",
+            role: "search",
+          },
         ],
         searchBar: { placeholder: "Search items...", value: "query" },
       }),
@@ -432,7 +449,10 @@ describe("chrome()", () => {
     const state = lastState() as Record<string, unknown>;
     const nav = state["navigation"] as { items: unknown[]; searchBar: unknown };
     expect(nav.items[1]).toMatchObject({ id: "search", role: "search" });
-    expect(nav.searchBar).toEqual({ placeholder: "Search items...", value: "query" });
+    expect(nav.searchBar).toEqual({
+      placeholder: "Search items...",
+      value: "query",
+    });
   });
 
   it("sends navigation with subtitle to native", () => {
@@ -463,7 +483,10 @@ describe("chrome()", () => {
     _drainFlush();
     const state = lastState() as Record<string, unknown>;
     expect(state["navigation"]).toMatchObject({ items: [{ id: "home" }] });
-    expect(state["tabBottomAccessory"]).toEqual({ url: "/now-playing", presented: true });
+    expect(state["tabBottomAccessory"]).toEqual({
+      url: "/now-playing",
+      presented: true,
+    });
   });
 
   it("cleanup of tabBottomAccessory layer restores outer layer value", () => {
@@ -531,7 +554,10 @@ describe("chrome.on(type, handler)", () => {
     const unsub = chrome.on("titleBar.trailingItemPressed", handler);
     simulateEvent("titleBar.trailingItemPressed", { id: "save" });
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({ type: "titleBar.trailingItemPressed", id: "save" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "titleBar.trailingItemPressed",
+      id: "save",
+    });
     unsub();
   });
 
@@ -570,7 +596,10 @@ describe("chrome.on(type, handler)", () => {
     const handler = mock((event: unknown) => event);
     const unsub = chrome.on("navigation.itemPressed", handler);
     simulateEvent("navigation.itemPressed", { id: "inbox" });
-    expect(handler).toHaveBeenCalledWith({ type: "navigation.itemPressed", id: "inbox" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "navigation.itemPressed",
+      id: "inbox",
+    });
     unsub();
   });
 
@@ -587,7 +616,10 @@ describe("chrome.on(type, handler)", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("titleBar.searchChanged", handler);
     simulateEvent("titleBar.searchChanged", { value: "query" });
-    expect(handler).toHaveBeenCalledWith({ type: "titleBar.searchChanged", value: "query" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "titleBar.searchChanged",
+      value: "query",
+    });
     unsub();
   });
 
@@ -595,7 +627,10 @@ describe("chrome.on(type, handler)", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("keyboard.itemPressed", handler);
     simulateEvent("keyboard.itemPressed", { id: "done" });
-    expect(handler).toHaveBeenCalledWith({ type: "keyboard.itemPressed", id: "done" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "keyboard.itemPressed",
+      id: "done",
+    });
     unsub();
   });
 
@@ -603,7 +638,10 @@ describe("chrome.on(type, handler)", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("toolbar.menuItemPressed", handler);
     simulateEvent("toolbar.menuItemPressed", { id: "sort-name" });
-    expect(handler).toHaveBeenCalledWith({ type: "toolbar.menuItemPressed", id: "sort-name" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "toolbar.menuItemPressed",
+      id: "sort-name",
+    });
     unsub();
   });
 
@@ -611,7 +649,10 @@ describe("chrome.on(type, handler)", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("sidebarPanel.itemPressed", handler);
     simulateEvent("sidebarPanel.itemPressed", { id: "nav" });
-    expect(handler).toHaveBeenCalledWith({ type: "sidebarPanel.itemPressed", id: "nav" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "sidebarPanel.itemPressed",
+      id: "nav",
+    });
     unsub();
   });
 
@@ -619,7 +660,10 @@ describe("chrome.on(type, handler)", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("menuBar.itemPressed", handler);
     simulateEvent("menuBar.itemPressed", { id: "zoom-in" });
-    expect(handler).toHaveBeenCalledWith({ type: "menuBar.itemPressed", id: "zoom-in" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "menuBar.itemPressed",
+      id: "zoom-in",
+    });
     unsub();
   });
 });
@@ -652,7 +696,10 @@ describe("chrome.on(handler) — wildcard", () => {
     const handler = mock((event: unknown) => event);
     const unsub = chrome.on(handler);
     simulateEvent("navigation.itemPressed", { id: "inbox" });
-    expect(handler).toHaveBeenCalledWith({ type: "navigation.itemPressed", id: "inbox" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "navigation.itemPressed",
+      id: "inbox",
+    });
     unsub();
   });
 
@@ -688,7 +735,10 @@ describe("sheet events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("sheet.presented", handler);
     simulateEvent("sheet.presented", { name: "settings" });
-    expect(handler).toHaveBeenCalledWith({ type: "sheet.presented", name: "settings" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "sheet.presented",
+      name: "settings",
+    });
     unsub();
   });
 
@@ -696,7 +746,10 @@ describe("sheet events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("sheet.dismissed", handler);
     simulateEvent("sheet.dismissed", { name: "settings" });
-    expect(handler).toHaveBeenCalledWith({ type: "sheet.dismissed", name: "settings" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "sheet.dismissed",
+      name: "settings",
+    });
     unsub();
   });
 
@@ -715,7 +768,11 @@ describe("sheet events", () => {
   it("sheet.loadFailed fires with name, message and code", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("sheet.loadFailed", handler);
-    simulateEvent("sheet.loadFailed", { name: "settings", message: "Not found", code: 404 });
+    simulateEvent("sheet.loadFailed", {
+      name: "settings",
+      message: "Not found",
+      code: 404,
+    });
     expect(handler).toHaveBeenCalledWith({
       type: "sheet.loadFailed",
       name: "settings",
@@ -733,7 +790,10 @@ describe("navigation search events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("navigation.searchChanged", handler);
     simulateEvent("navigation.searchChanged", { value: "hello" });
-    expect(handler).toHaveBeenCalledWith({ type: "navigation.searchChanged", value: "hello" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "navigation.searchChanged",
+      value: "hello",
+    });
     unsub();
   });
 
@@ -752,7 +812,9 @@ describe("navigation search events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("navigation.searchCancelled", handler);
     simulateEvent("navigation.searchCancelled", {});
-    expect(handler).toHaveBeenCalledWith({ type: "navigation.searchCancelled" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "navigation.searchCancelled",
+    });
     unsub();
   });
 });
@@ -764,7 +826,10 @@ describe("child webview events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("drawer.presented", handler);
     simulateEvent("drawer.presented", { name: "sidebar" });
-    expect(handler).toHaveBeenCalledWith({ type: "drawer.presented", name: "sidebar" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "drawer.presented",
+      name: "sidebar",
+    });
     unsub();
   });
 
@@ -772,7 +837,10 @@ describe("child webview events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("appWindow.dismissed", handler);
     simulateEvent("appWindow.dismissed", { name: "prefs" });
-    expect(handler).toHaveBeenCalledWith({ type: "appWindow.dismissed", name: "prefs" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "appWindow.dismissed",
+      name: "prefs",
+    });
     unsub();
   });
 
@@ -780,7 +848,10 @@ describe("child webview events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("popover.presented", handler);
     simulateEvent("popover.presented", { name: "ctx" });
-    expect(handler).toHaveBeenCalledWith({ type: "popover.presented", name: "ctx" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "popover.presented",
+      name: "ctx",
+    });
     unsub();
   });
 });
@@ -792,7 +863,9 @@ describe("tabBottomAccessory events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("tabBottomAccessory.presented", handler);
     simulateEvent("tabBottomAccessory.presented", {});
-    expect(handler).toHaveBeenCalledWith({ type: "tabBottomAccessory.presented" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "tabBottomAccessory.presented",
+    });
     unsub();
   });
 
@@ -800,14 +873,19 @@ describe("tabBottomAccessory events", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("tabBottomAccessory.dismissed", handler);
     simulateEvent("tabBottomAccessory.dismissed", {});
-    expect(handler).toHaveBeenCalledWith({ type: "tabBottomAccessory.dismissed" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "tabBottomAccessory.dismissed",
+    });
     unsub();
   });
 
   it("tabBottomAccessory.loadFailed fires with message and code", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("tabBottomAccessory.loadFailed", handler);
-    simulateEvent("tabBottomAccessory.loadFailed", { message: "Not found", code: 404 });
+    simulateEvent("tabBottomAccessory.loadFailed", {
+      message: "Not found",
+      code: 404,
+    });
     expect(handler).toHaveBeenCalledWith({
       type: "tabBottomAccessory.loadFailed",
       message: "Not found",
@@ -823,7 +901,12 @@ describe("safeArea.changed event", () => {
   it("fires handler with all four inset values", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("safeArea.changed", handler);
-    simulateEvent("safeArea.changed", { top: 44, right: 0, bottom: 34, left: 0 });
+    simulateEvent("safeArea.changed", {
+      top: 44,
+      right: 0,
+      bottom: 34,
+      left: 0,
+    });
     expect(handler).toHaveBeenCalledWith({
       type: "safeArea.changed",
       top: 44,
@@ -935,7 +1018,10 @@ describe("nativiteReceive", () => {
     receive({ event: "toolbar.itemPressed", data: { id: "share" } });
 
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({ type: "toolbar.itemPressed", id: "share" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "toolbar.itemPressed",
+      id: "share",
+    });
     unsub();
   });
 });
@@ -1039,5 +1125,72 @@ describe("unified ButtonItem across chrome areas", () => {
     const items = (state["toolbar"] as { items: unknown[] }).items;
     expect(items[1]).toEqual({ type: "flexible-space" });
     expect(items[2]).toEqual({ type: "fixed-space", width: 8 });
+  });
+
+  it("toolbar() passes groups to native state", () => {
+    chrome(
+      toolbar({
+        groups: [
+          {
+            placement: "navigation",
+            items: [button({ id: "back", icon: "chevron.left" })],
+          },
+          {
+            placement: "primaryAction",
+            items: [button({ id: "share", icon: "square.and.arrow.up" })],
+          },
+        ],
+      }),
+    );
+    _drainFlush();
+    const state = lastState() as Record<string, unknown>;
+    const tb = state["toolbar"] as {
+      groups: { placement: string; items: unknown[] }[];
+    };
+    expect(tb.groups).toHaveLength(2);
+    expect(tb.groups[0]!.placement).toBe("navigation");
+    expect(tb.groups[1]!.placement).toBe("primaryAction");
+  });
+
+  it("toolbar() passes macOS-specific properties to native state", () => {
+    chrome(
+      toolbar({
+        items: [button({ id: "bold", icon: "bold" })],
+        customizable: true,
+        id: "document-toolbar",
+        displayMode: "iconOnly",
+        toolbarStyle: "expanded",
+      }),
+    );
+    _drainFlush();
+    const state = lastState() as Record<string, unknown>;
+    const tb = state["toolbar"] as Record<string, unknown>;
+    expect(tb["customizable"]).toBe(true);
+    expect(tb["id"]).toBe("document-toolbar");
+    expect(tb["displayMode"]).toBe("iconOnly");
+    expect(tb["toolbarStyle"]).toBe("expanded");
+  });
+
+  it("button() with customization property passes through", () => {
+    const btn = button({
+      id: "sidebar",
+      icon: "sidebar.left",
+      customization: "required",
+    });
+    expect(btn.customization).toBe("required");
+
+    chrome(toolbar({ items: [btn] }));
+    _drainFlush();
+    const state = lastState() as Record<string, unknown>;
+    const items = (state["toolbar"] as { items: { customization?: string }[] }).items;
+    expect(items[0]!.customization).toBe("required");
+  });
+
+  it("toolbar() without items or groups sends empty config", () => {
+    chrome(toolbar({ hidden: true }));
+    _drainFlush();
+    const state = lastState() as Record<string, unknown>;
+    const tb = state["toolbar"] as Record<string, unknown>;
+    expect(tb["hidden"]).toBe(true);
   });
 });

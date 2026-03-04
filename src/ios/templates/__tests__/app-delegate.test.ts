@@ -63,6 +63,20 @@ describe("appDelegateTemplate", () => {
     expect(macosSection).not.toContain("ZStack");
   });
 
+  it("applies macOS SwiftUI chrome modifiers", () => {
+    const output = appDelegateTemplate(baseConfig);
+    const macosRootStart = output.indexOf("#else\nstruct NativiteRootView: View");
+    expect(macosRootStart).toBeGreaterThan(-1);
+    const macosSection = output.slice(macosRootStart);
+    expect(macosSection).toContain(".nativiteMacTitleBar(chromeState: chromeState)");
+    expect(macosSection).toContain(".nativiteMacToolbar(chromeState: chromeState)");
+    expect(macosSection).toContain(".nativiteMacNavigation(chromeState: chromeState)");
+    expect(macosSection).toContain(".nativiteMacSidebar(chromeState: chromeState)");
+    expect(macosSection).toContain(".nativiteMacDrawers(chromeState: chromeState)");
+    expect(macosSection).toContain(".nativiteMacPopovers(chromeState: chromeState)");
+    expect(macosSection).toContain(".nativiteMacAppWindows(chromeState: chromeState)");
+  });
+
   it("shows a SwiftUI splash overlay with ProgressView spinner when no splash config", () => {
     const output = appDelegateTemplate(baseConfig);
     expect(output).toContain("chromeState.splashVisible");

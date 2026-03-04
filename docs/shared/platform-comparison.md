@@ -15,20 +15,20 @@ A side-by-side comparison of how nativite features are implemented across iOS, A
 
 ## Chrome Areas
 
-| Area               | iOS                                         | Android                             | macOS                              |
-| ------------------ | ------------------------------------------- | ----------------------------------- | ---------------------------------- |
-| Title Bar          | `UINavigationItem`                          | `TopAppBar` / `LargeTopAppBar`      | `UINavigationItem` (shared w/ iOS) |
-| Navigation         | `UITabBar` / `UITabBarController` (iOS 18+) | `NavigationBar`                     | Sidebar preferred                  |
-| Toolbar            | `UIToolbar`                                 | `BottomAppBar`                      | `UIToolbar`                        |
-| Status Bar         | `preferredStatusBarStyle`                   | `WindowInsetsController`            | N/A                                |
-| Home Indicator     | `prefersHomeIndicatorAutoHidden`            | `WindowInsetsController` (nav bars) | N/A                                |
-| Keyboard Accessory | `inputAccessoryView` override               | `Surface` above IME                 | N/A                                |
-| Sidebar Panel      | N/A (iPad uses tabs/sidebar)                | N/A                                 | SwiftUI sidebar                    |
-| Menu Bar           | N/A                                         | N/A                                 | `NSMenu` / SwiftUI                 |
-| Sheets             | SwiftUI `sheet()`                           | `ModalBottomSheet`                  | SwiftUI `sheet()`                  |
-| Drawers            | N/A                                         | `ModalNavigationDrawer`             | SwiftUI / AppKit                   |
-| App Windows        | N/A                                         | N/A                                 | Separate `NSWindow`                |
-| Popovers           | N/A                                         | `Popup`                             | `NSPopover`                        |
+| Area               | iOS                                                                 | Android                             | macOS                                                                                |
+| ------------------ | ------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| Title Bar          | SwiftUI `NavigationStack` toolbar modifiers + UIKit subtitle bridge | `TopAppBar` / `LargeTopAppBar`      | SwiftUI toolbar modifiers + `NSWindow` title properties                              |
+| Navigation         | `UITabBar` / `UITabBarController` (iOS 18+)                         | `NavigationBar`                     | `NSSegmentedControl` + sidebar patterns                                              |
+| Toolbar            | SwiftUI `.toolbar` (bottom bar)                                     | `BottomAppBar`                      | SwiftUI `.toolbar` with placement groups, customisation, display mode, toolbar style |
+| Status Bar         | `preferredStatusBarStyle`                                           | `WindowInsetsController`            | N/A                                                                                  |
+| Home Indicator     | `prefersHomeIndicatorAutoHidden`                                    | `WindowInsetsController` (nav bars) | N/A                                                                                  |
+| Keyboard Accessory | `inputAccessoryView` override                                       | `Surface` above IME                 | N/A                                                                                  |
+| Sidebar Panel      | N/A (iPad uses tabs/sidebar)                                        | N/A                                 | SwiftUI sidebar                                                                      |
+| Menu Bar           | N/A                                                                 | N/A                                 | `NSMenu` / SwiftUI                                                                   |
+| Sheets             | SwiftUI `sheet()`                                                   | `ModalBottomSheet`                  | SwiftUI `sheet()`                                                                    |
+| Drawers            | N/A                                                                 | `ModalNavigationDrawer`             | SwiftUI / AppKit                                                                     |
+| App Windows        | N/A                                                                 | N/A                                 | Separate `NSWindow`                                                                  |
+| Popovers           | N/A                                                                 | `Popup`                             | `NSPopover`                                                                          |
 
 ## Bridge Transport
 
@@ -42,15 +42,15 @@ A side-by-side comparison of how nativite features are implemented across iOS, A
 
 ## CSS Variables
 
-| Category        | iOS                                    | Android                                 | macOS                         |
-| --------------- | -------------------------------------- | --------------------------------------- | ----------------------------- |
-| Safe Area       | `view.safeAreaInsets`                  | `WindowInsetsCompat.systemBars()`       | Limited                       |
-| Chrome Geometry | UIKit frame measurements               | Material 3 standard heights (64dp/80dp) | UIKit frame measurements      |
-| Keyboard        | `keyboardWillChangeFrame` notification | `WindowInsetsCompat.ime()`              | N/A                           |
-| Dark Mode       | `UITraitUserInterfaceStyle`            | Not yet exposed                         | `NSApplication` notifications |
-| Dynamic Type    | `UIFont.preferredFont` sizes           | Not yet exposed                         | Fixed HIG sizes               |
-| Accent Colour   | `UIColor.tintColor` components         | Not yet exposed                         | `NSColor.controlAccentColor`  |
-| Display         | `UIScreen` properties                  | Not yet exposed                         | `NSScreen` properties         |
+| Category        | iOS                                    | Android                           | macOS                                 |
+| --------------- | -------------------------------------- | --------------------------------- | ------------------------------------- |
+| Safe Area       | `view.safeAreaInsets`                  | `WindowInsetsCompat.systemBars()` | Limited                               |
+| Chrome Geometry | UIKit frame measurements               | Compose runtime measurements      | `NSWindow` + AppKit view measurements |
+| Keyboard        | `keyboardWillChangeFrame` notification | `WindowInsetsCompat.ime()`        | N/A                                   |
+| Dark Mode       | `UITraitUserInterfaceStyle`            | Not yet exposed                   | `NSApplication` notifications         |
+| Dynamic Type    | `UIFont.preferredFont` sizes           | Not yet exposed                   | Fixed HIG sizes                       |
+| Accent Colour   | `UIColor.tintColor` components         | Not yet exposed                   | `NSColor.controlAccentColor`          |
+| Display         | `UIScreen` properties                  | Not yet exposed                   | `NSScreen` properties                 |
 
 ## Icon Systems
 

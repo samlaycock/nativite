@@ -102,7 +102,10 @@ export async function generateProject(
   }
 
   // Swift source files — shared across both platforms (use #if os() guards)
-  writeFileSync(join(appDir, "NativiteApp.swift"), mainEntryTemplate());
+  writeFileSync(
+    join(appDir, "NativiteApp.swift"),
+    mainEntryTemplate({ toolbarStyle: config.defaultChrome?.toolbar?.toolbarStyle }),
+  );
   writeFileSync(join(appDir, "AppDelegate.swift"), appDelegateTemplate(config));
   writeFileSync(join(appDir, "ViewController.swift"), viewControllerTemplate(config));
   writeFileSync(join(appDir, "NativiteBridge.swift"), nativiteBridgeTemplate(config));

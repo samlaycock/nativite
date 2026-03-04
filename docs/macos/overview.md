@@ -6,18 +6,81 @@ macOS shares the same codebase as iOS via Apple's unified Swift/SwiftUI framewor
 
 The macOS project is generated from the same templates as iOS:
 
-| File                        | iOS Behaviour                              | macOS Behaviour                                                                   |
-| --------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
-| `NativiteApp.swift`         | `WindowGroup { NativiteRootView() }`       | Same + `.defaultSize(width: 1024, height: 768)` + `@NSApplicationDelegateAdaptor` |
-| `AppDelegate.swift`         | Splash overlay, NavigationStack            | No splash, simpler layout                                                         |
-| `ViewController.swift`      | `UIViewController` + `WKWebView`           | `NSViewController` + `WKWebView`                                                  |
-| `NativiteBridge.swift`      | Identical                                  | Identical                                                                         |
-| `NativiteChrome.swift`      | UIKit reconciliation (tabs, toolbar, etc.) | Subset of UIKit chrome areas                                                      |
-| `NativiteChromeState.swift` | All areas                                  | All areas + macOS-specific (sidebar, menu bar, app windows)                       |
-| `NativiteVars.swift`        | Full variable set                          | Reduced set (no keyboard, no status bar)                                          |
-| `NativiteKeyboard.swift`    | Input accessory + dismiss mode             | Not generated (no software keyboard)                                              |
+| File                        | iOS Behaviour                                    | macOS Behaviour                                                                                                                    |
+| --------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `NativiteApp.swift`         | `WindowGroup { NativiteRootView(chromeState:) }` | Same + app-level `chromeState`, `.commands { NativiteMenuBarCommands(...) }`, `.defaultSize(...)`, `@NSApplicationDelegateAdaptor` |
+| `AppDelegate.swift`         | Splash overlay, NavigationStack                  | No splash; root representable + SwiftUI macOS chrome modifiers                                                                     |
+| `ViewController.swift`      | `UIViewController` + `WKWebView`                 | `NSViewController` + `WKWebView`                                                                                                   |
+| `NativiteBridge.swift`      | Identical                                        | Identical                                                                                                                          |
+| `NativiteChrome.swift`      | UIKit + SwiftUI reconciliation                   | State-driven SwiftUI reconciliation + minimal NSWindow titlebar mapping                                                            |
+| `NativiteChromeState.swift` | All areas                                        | All areas + macOS-specific (sidebar, menu bar, app windows)                                                                        |
+| `NativiteVars.swift`        | Full variable set                                | Reduced set (no keyboard, no status bar)                                                                                           |
+| `NativiteKeyboard.swift`    | Input accessory + dismiss mode                   | Not generated (no software keyboard)                                                                                               |
+
+## SwiftUI vs AppKit
+
+Current split in macOS chrome:
+
+- **SwiftUI-driven**: title bar buttons/search, toolbar items, navigation tabs, sidebar, menu commands, sheets, drawers, popovers, app-window surface, alerts.
+- **AppKit-driven**: window title/subtitle/separator/full-size-content/title-visibility flags only.
 
 ## macOS-Specific Features
+
+### Toolbar
+
+The macOS toolbar extends the base `toolbar()` API with placement groups, user customisation, display modes, and toolbar styles. These properties are macOS-only and ignored on iOS/Android.
+
+#### Placement Groups
+
+Items can target specific zones in the macOS window toolbar via `groups`:
+
+| Placement         | Description                       |
+| ----------------- | --------------------------------- |
+| `automatic`       | System decides (default)          |
+| `principal`       | Centre of the toolbar             |
+| `secondaryAction` | Overflow / secondary actions area |
+| `navigation`      | Leading navigation area           |
+| `primaryAction`   | Trailing primary action area      |
+
+When both `items` and `groups` are provided, macOS uses `groups`; iOS/Android prefer `items` and fall back to flattening `groups`.
+
+#### Customisation
+
+| Property       | Type      | Description                                               |
+| -------------- | --------- | --------------------------------------------------------- |
+| `customizable` | `Boolean` | Enable right-click → Customise Toolbar                    |
+| `id`           | `String`  | Stable toolbar identifier for persisting user preferences |
+
+Per-item `customization` on `ButtonItem`:
+
+| Value        | Description                                      |
+| ------------ | ------------------------------------------------ |
+| `"default"`  | Included by default, user can remove             |
+| `"hidden"`   | Not shown by default, user can add via customise |
+| `"required"` | Always visible, cannot be removed                |
+
+#### Display Mode
+
+| Value            | Description         |
+| ---------------- | ------------------- |
+| `"iconAndLabel"` | Show both (default) |
+| `"iconOnly"`     | Icons only          |
+| `"labelOnly"`    | Labels only         |
+
+#### Toolbar Style
+
+Set via `toolbarStyle` in `ToolbarConfig`. Applied at the window level via `.windowToolbarStyle()`:
+
+| Value        | Description                                         |
+| ------------ | --------------------------------------------------- |
+| `"unified"`  | Compact toolbar integrated with the title (default) |
+| `"expanded"` | Larger toolbar with separate area below the title   |
+
+Note: `toolbarStyle` is read from `defaultChrome` at build time and applied as a Scene modifier. It cannot be changed dynamically at runtime.
+
+#### Coexistence with titleBar
+
+Both `titleBar` and `toolbar` independently add items to the macOS window toolbar. The title bar uses `.navigation` and `.primaryAction` placements for its leading/trailing items, while toolbar groups can use any placement. Items from both sources are merged by SwiftUI.
 
 ### Sidebar Panel
 
@@ -59,11 +122,11 @@ Named child webviews presented as separate macOS windows:
 
 ### Drawers
 
-macOS drawers behave similarly to iOS but use macOS-native presentation.
+macOS drawers are rendered by SwiftUI overlays using `NativiteChildWebView`, with leading/trailing edge placement.
 
 ### Popovers
 
-macOS popovers are presented as native `NSPopover`-style floating panels, anchored to a specific element.
+macOS popovers are rendered by SwiftUI `.popover` with state-driven presentation.
 
 ## App Delegate
 
@@ -96,7 +159,7 @@ class NativiteAppDelegate: NSObject, NSApplicationDelegate {
 macOS chrome geometry notes:
 
 - `--nv-nav-height` is derived from live `NSWindow` titlebar/content layout geometry.
-- `--nv-tab-height` is derived from the rendered navigation segmented-control container height.
+- `--nv-tab-height` is derived from SwiftUI navigation visibility (fixed logical tab height when shown).
 - `--nv-toolbar-*` remains `0` because macOS toolbar content is part of top window chrome, not a bottom toolbar inset.
 
 ## View Controller

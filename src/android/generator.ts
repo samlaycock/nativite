@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import type { NativiteConfig } from "../index.ts";
@@ -40,9 +40,15 @@ export async function generateProject(
   const nativiteDir = join(cwd, ".nativite");
   const hashFile = join(nativiteDir, ".hash-android");
   const projectRoot = join(nativiteDir, "android");
+  const devJsonPath = join(projectRoot, "app", "src", "main", "assets", "dev.json");
   const androidConfig = resolveConfigForPlatform(config, "android");
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
   const hash = hashConfigForGeneration(config, resolvedPlugins);
+
+  // Ensure production/generate mode never packages stale dev server settings.
+  if (mode !== "dev" && existsSync(devJsonPath)) {
+    rmSync(devJsonPath, { force: true });
+  }
 
   // Dirty check — skip if nothing has changed
   if (!force && existsSync(hashFile)) {

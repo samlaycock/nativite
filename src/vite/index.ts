@@ -264,8 +264,7 @@ function nativiteCorePlugin(): Plugin {
         command === "build" && envPlatform && envPlatform !== "web" && userConfig.base === undefined
           ? "./"
           : undefined;
-      const nativeErrorOverlay =
-        parseBooleanEnv(process.env["NATIVITE_DEV_ERROR_OVERLAY"]) ?? false;
+      const nativeErrorOverlay = parseBooleanEnv(process.env["NATIVITE_DEV_ERROR_OVERLAY"]) ?? true;
       const hmrConfig = userConfig.server?.hmr;
       const serverConfig =
         command === "serve"
@@ -540,6 +539,26 @@ function nativiteCorePlugin(): Plugin {
   } satisfies Plugin;
 }
 
+// ─── Dev error overlay ────────────────────────────────────────────────────────
+
+function nativiteDevErrorOverlayPlugin(): Plugin {
+  return {
+    name: "nativite:dev-error-overlay",
+    apply: "serve",
+    transformIndexHtml() {
+      return [
+        {
+          tag: "style",
+          attrs: { "data-nativite-dev-error-overlay": "" },
+          children:
+            "vite-error-overlay{top:var(--nv-inset-top,0px);bottom:var(--nv-inset-bottom,0px)}",
+          injectTo: "head" as const,
+        },
+      ];
+    },
+  };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -654,5 +673,8 @@ export function nativite(): Plugin[] {
 
     // Sub-plugin 2: core Nativite plugin
     nativiteCorePlugin(),
+
+    // Sub-plugin 3: dev-only error overlay positioning
+    nativiteDevErrorOverlayPlugin(),
   ];
 }

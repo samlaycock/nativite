@@ -50,8 +50,16 @@ The Vite plugin bridges HMR for native variant files:
 
 ## Build Mode
 
-When running `nativite build` for iOS:
+When running `nativite build`:
 
-- Generates the project in build mode.
-- Writes `manifest.json` with version info and asset list.
+- The CLI runs production builds for each configured platform by default.
+- During the iOS build pass, the iOS platform plugin generates the project in build mode.
+- Writes `manifest.json` with version info and asset list to the iOS-specific output directory.
+- Release builds do not bundle or read `dev.json`; dev URL resolution is debug-only.
 - Does not automatically build or archive the Xcode project (left to the developer's CI/CD pipeline).
+
+To build only iOS:
+
+```bash
+nativite build --platform ios
+```

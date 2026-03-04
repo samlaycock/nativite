@@ -1,6 +1,6 @@
 # iOS App Entry Point & Root View
 
-> Maps to: `src/ios/templates/app-delegate.ts`
+> Maps to: `src/ios/templates/main-entry.ts`, `src/ios/templates/app-delegate.ts`
 > Generated file: `NativiteApp.swift` (via `AppDelegate` template)
 
 The app entry point uses SwiftUI's `@main` attribute and wraps the UIKit `ViewController` in a SwiftUI hierarchy.
@@ -15,12 +15,16 @@ struct NativiteApp: App {
     #if os(macOS)
     @NSApplicationDelegateAdaptor(NativiteAppDelegate.self) var appDelegate
     #endif
+    @State private var chromeState = NativiteChromeState()
 
     var body: some Scene {
         WindowGroup {
-            NativiteRootView()
+            NativiteRootView(chromeState: chromeState)
         }
         #if os(macOS)
+        .commands {
+            NativiteMenuBarCommands(chromeState: chromeState)
+        }
         .defaultSize(width: 1024, height: 768)
         #endif
     }
@@ -28,8 +32,10 @@ struct NativiteApp: App {
 ```
 
 - Uses `WindowGroup` for multi-window support.
+- Owns a shared `NativiteChromeState` at the app level so scene commands and root views use the same live chrome model.
 - macOS gets a default window size of 1024x768.
 - macOS uses `@NSApplicationDelegateAdaptor` for the app delegate.
+- macOS attaches SwiftUI menu commands via `NativiteMenuBarCommands`.
 
 ### NativiteRootView
 
@@ -50,11 +56,18 @@ NavigationStack
 
 #### macOS
 
-Simpler structure without `NavigationStack`:
+macOS embeds `NSViewControllerRepresentable` directly (no `NavigationStack`) and layers all chrome surfaces through SwiftUI modifiers:
 
 ```
 NativiteViewControllerRepresentable
   └── ViewController (NSViewController)
++ .nativiteMacTitleBar()   // SwiftUI window toolbar title/leading/trailing/search
++ .nativiteMacToolbar()    // SwiftUI toolbar items
++ .nativiteMacNavigation() // SwiftUI segmented tabs
++ .nativiteMacSidebar()    // SwiftUI NavigationSplitView
++ .nativiteMacDrawers()    // SwiftUI overlay drawers
++ .nativiteMacPopovers()   // SwiftUI popovers
++ .nativiteMacAppWindows() // SwiftUI modal app-window surface
 + .nativiteSheets()
 + .nativiteAlerts()
 ```

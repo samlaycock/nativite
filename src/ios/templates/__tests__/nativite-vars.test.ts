@@ -9,6 +9,8 @@ describe("nativiteVarsTemplate", () => {
     expect(swift).toContain("vite-error-overlay");
     expect(swift).toContain("--nv-inset-top");
     expect(swift).toContain("--nv-inset-bottom");
+    expect(swift).toContain("#if DEBUG");
+    expect(swift).toContain('let devOverlayInsets = ""');
   });
 
   it("collapses multi-line CSS strings before embedding in the JS string literal", () => {

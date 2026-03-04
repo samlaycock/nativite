@@ -59,6 +59,7 @@ describe("nativiteChromeTemplate", () => {
   it("supports title bar search bar", () => {
     expect(output).toContain("fun NativiteTitleBarSearch(");
     expect(output).toContain('"titleBar.searchChanged"');
+    expect(output).toContain('"titleBar.searchSubmitted"');
     expect(output).toContain('"titleBar.searchCancelled"');
   });
 
@@ -89,6 +90,14 @@ describe("nativiteChromeTemplate", () => {
     expect(output).toContain('item["subtitle"] as? String');
   });
 
+  it("supports navigation search role and search bar config", () => {
+    expect(output).toContain('item["role"] as? String');
+    expect(output).toContain('config["searchBar"] as? Map<*, *>');
+    expect(output).toContain('"navigation.searchChanged"');
+    expect(output).toContain('"navigation.searchSubmitted"');
+    expect(output).toContain('"navigation.searchCancelled"');
+  });
+
   // ─── Toolbar ───────────────────────────────────────────────────────────
 
   it("renders Toolbar as BottomAppBar", () => {
@@ -98,6 +107,11 @@ describe("nativiteChromeTemplate", () => {
 
   it("supports hidden toolbar", () => {
     expect(output).toContain('toolbar["hidden"] != true');
+  });
+
+  it("flattens toolbar groups into items for bottom bar fallback", () => {
+    expect(output).toContain('config["groups"]');
+    expect(output).toContain('group["items"]');
   });
 
   // ─── Sheets ────────────────────────────────────────────────────────────
@@ -134,6 +148,7 @@ describe("nativiteChromeTemplate", () => {
     expect(output).toContain('"sheet.presented"');
     expect(output).toContain('"sheet.dismissed"');
     expect(output).toContain('"sheet.detentChanged"');
+    expect(output).toContain('chromeArea = "sheet"');
   });
 
   it("animates sheet close when presented becomes false", () => {
@@ -186,6 +201,7 @@ describe("nativiteChromeTemplate", () => {
     expect(output).toContain("WindowCompat.getInsetsController");
     expect(output).toContain("isAppearanceLightStatusBars");
     expect(output).toContain("WindowInsetsCompat.Type.statusBars()");
+    expect(output).toContain("isSystemInDarkTheme()");
   });
 
   // ─── HomeIndicator ─────────────────────────────────────────────────────
@@ -245,6 +261,8 @@ describe("nativiteChromeTemplate", () => {
   it("supports tab bottom accessory", () => {
     expect(output).toContain("fun NativiteTabBottomAccessory(");
     expect(output).toContain('"tabBottomAccessory.presented"');
+    expect(output).toContain('"tabBottomAccessory.dismissed"');
+    expect(output).toContain('chromeArea = "tabBottomAccessory"');
   });
 
   // ─── Events ────────────────────────────────────────────────────────────

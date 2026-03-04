@@ -34,7 +34,7 @@ UIViewController
 
 The view controller resolves what URL to load based on the current mode:
 
-### Development Mode
+### Development Mode (DEBUG builds only)
 
 Resolves the dev URL from multiple sources (in priority order):
 
@@ -45,6 +45,7 @@ Resolves the dev URL from multiple sources (in priority order):
 ### Production Mode
 
 Loads the embedded `dist/index.html` bundle, or if an OTA update is available, the active OTA bundle.
+Release builds do not attempt dev URL resolution.
 
 ## Platform Validation
 

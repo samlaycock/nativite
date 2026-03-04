@@ -47,6 +47,13 @@ describe("viewControllerTemplate", () => {
     expect(persistedLookupIndex).toBeLessThan(bundledConfigIndex);
   });
 
+  it("gates dev URL resolution behind DEBUG builds", () => {
+    const output = viewControllerTemplate(baseConfig);
+    expect(output).toContain("#if DEBUG");
+    expect(output).toContain("if let devURL = resolveDevURL()");
+    expect(output).toContain("private func resolveDevURL() -> URL?");
+  });
+
   it("enables WKWebView inspection in DEBUG builds for Safari Develop tools", () => {
     const output = viewControllerTemplate(baseConfig);
     expect(output).toContain("if #available(iOS 16.4, *)");

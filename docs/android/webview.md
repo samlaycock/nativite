@@ -44,7 +44,11 @@ Uses `WebViewAssetLoader` to serve bundled assets from `context.assets`:
 
 ### Debugging
 
-WebView debugging is enabled in debuggable builds via `WebView.setWebContentsDebuggingEnabled(true)`.
+WebView debugging is explicitly gated by `BuildConfig.DEBUG`:
+
+```kotlin
+WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+```
 
 ## NativiteWebView Composable
 
@@ -84,8 +88,8 @@ URL loading is triggered via `DisposableEffect` on the `url` dependency:
 
 Returns the URL to load for the main webview:
 
-1. **Development**: Reads `assets/dev.json` for `{ "devURL": "..." }`. Automatically maps `localhost` / `127.0.0.1` to `10.0.2.2` (Android emulator's host loopback address).
-2. **Production**: Returns `PRODUCTION_BASE_URL`.
+1. **Development (debug builds only)**: Reads `assets/dev.json` for `{ "devURL": "..." }`. Automatically maps `localhost` / `127.0.0.1` to `10.0.2.2` (Android emulator's host loopback address).
+2. **Production (release builds)**: Skips `dev.json` and always returns `PRODUCTION_BASE_URL`.
 
 ### `resolveChildUrl(context, rawUrl)`
 

@@ -115,7 +115,7 @@ describe("pbxprojTemplate (plugins)", () => {
     expect(macosPbxproj).toContain("PRODUCT_BUNDLE_IDENTIFIER = com.example.testapp.macos;");
   });
 
-  it("copies .nativite/dev.json into the app bundle during the copy phase", () => {
+  it("copies .nativite/dev.json only for non-Release builds", () => {
     const resolvedPlugins: ResolvedNativitePlugins = {
       plugins: [],
       platforms: {
@@ -128,5 +128,9 @@ describe("pbxprojTemplate (plugins)", () => {
     const pbxproj = pbxprojTemplate(baseConfig, resolvedPlugins, "/tmp/demo/.nativite/ios", "ios");
     expect(pbxproj).toContain('DEV_JSON_SRC=\\"$SRCROOT/../dev.json\\"');
     expect(pbxproj).toContain('DEV_JSON_DEST=\\"$CODESIGNING_FOLDER_PATH/dev.json\\"');
+    expect(pbxproj).toContain(
+      'if [ \\"$CONFIGURATION\\" != \\"Release\\" ] && [ -f \\"$DEV_JSON_SRC\\" ]; then',
+    );
+    expect(pbxproj).toContain('rm -f \\"$DEV_JSON_DEST\\"');
   });
 });

@@ -112,6 +112,33 @@ final class NativiteChromeState {
   var toolbarHidden: Bool = false
   var toolbarItems: [BarItemState] = []
 
+  // macOS toolbar extensions ──────────────────────────────────────────────────
+
+  enum ToolbarPlacement: String {
+    case automatic
+    case principal
+    case secondaryAction
+    case navigation
+    case primaryAction
+  }
+
+  enum ToolbarDisplayMode: String {
+    case iconAndLabel
+    case iconOnly
+    case labelOnly
+  }
+
+  struct ToolbarGroupState {
+    var placement: ToolbarPlacement = .automatic
+    var items: [BarItemState] = []
+  }
+
+  var toolbarGroups: [ToolbarGroupState] = []
+  var toolbarCustomizable: Bool = false
+  var toolbarId: String?
+  var toolbarDisplayMode: ToolbarDisplayMode = .iconAndLabel
+  var toolbarStyle: String = "unified"
+
   // ── Bar Item State ──────────────────────────────────────────────────────────
   // Unified model for title bar buttons, toolbar items, and menu items.
 
@@ -126,6 +153,7 @@ final class NativiteChromeState {
     var badge: String?
     var menu: MenuState?
     var itemType: ItemType = .button
+    var customization: CustomizationBehavior = .defaultBehavior
 
     enum ItemStyle: String {
       case plain, primary, destructive
@@ -135,6 +163,12 @@ final class NativiteChromeState {
       case button
       case flexibleSpace = "flexible-space"
       case fixedSpace = "fixed-space"
+    }
+
+    enum CustomizationBehavior: String {
+      case defaultBehavior = "default"
+      case hidden
+      case required
     }
 
     #if os(iOS)
@@ -191,7 +225,9 @@ final class NativiteChromeState {
 
   var sidebarItems: [SidebarItemState] = []
   var sidebarActiveItem: String?
+  var sidebarTitle: String?
   var sidebarWidth: CGFloat?
+  var sidebarVisible: Bool = true
   var sidebarCollapsed: Bool = false
 
   struct SidebarItemState: Identifiable {
@@ -254,6 +290,8 @@ final class NativiteChromeState {
     var height: CGFloat = 600
     var title: String?
     var backgroundColor: String?
+    var modal: Bool = false
+    var resizable: Bool = true
   }
 
   // ── Event Callback ─────────────────────────────────────────────────────────
@@ -386,9 +424,40 @@ final class NativiteChromeState {
 
   func updateToolbar(_ state: [String: Any]) {
     toolbarHidden = (state["hidden"] as? Bool) ?? false
+
+    // Parse flat items (backward compatible, used by iOS bottom bar)
     if let items = state["items"] as? [[String: Any]] {
       toolbarItems = items.compactMap { parseBarItem($0) }
+    } else if let groups = state["groups"] as? [[String: Any]] {
+      // Flatten groups into toolbarItems for iOS/Android bottom bar fallback
+      toolbarItems = groups.flatMap { group -> [BarItemState] in
+        (group["items"] as? [[String: Any]])?.compactMap { parseBarItem($0) } ?? []
+      }
+    } else {
+      toolbarItems = []
     }
+
+    // Parse placement groups (used by macOS toolbar modifier)
+    if let groups = state["groups"] as? [[String: Any]] {
+      toolbarGroups = groups.compactMap { group in
+        let placement = ToolbarPlacement(
+          rawValue: (group["placement"] as? String) ?? "automatic"
+        ) ?? .automatic
+        let items = (group["items"] as? [[String: Any]])?.compactMap { parseBarItem($0) } ?? []
+        return ToolbarGroupState(placement: placement, items: items)
+      }
+    } else {
+      toolbarGroups = []
+    }
+
+    toolbarCustomizable = (state["customizable"] as? Bool) ?? false
+    toolbarId = state["id"] as? String
+    if let dm = state["displayMode"] as? String {
+      toolbarDisplayMode = ToolbarDisplayMode(rawValue: dm) ?? .iconAndLabel
+    } else {
+      toolbarDisplayMode = .iconAndLabel
+    }
+    toolbarStyle = (state["toolbarStyle"] as? String) ?? "unified"
   }
 
   func resetTitleBar() {
@@ -406,6 +475,11 @@ final class NativiteChromeState {
   func resetToolbar() {
     toolbarHidden = false
     toolbarItems = []
+    toolbarGroups = []
+    toolbarCustomizable = false
+    toolbarId = nil
+    toolbarDisplayMode = .iconAndLabel
+    toolbarStyle = "unified"
   }
 
   // ── Navigation Update Helpers ──────────────────────────────────────────
@@ -431,7 +505,13 @@ final class NativiteChromeState {
   // ── Sidebar Update Helpers ─────────────────────────────────────────────
 
   func updateSidebarPanel(_ state: [String: Any]) {
+    sidebarVisible = (state["visible"] as? Bool) ?? true
     sidebarCollapsed = (state["collapsed"] as? Bool) ?? false
+    if let title = state["title"] as? String {
+      sidebarTitle = title
+    } else if state["title"] is NSNull {
+      sidebarTitle = nil
+    }
     if let width = state["width"] as? NSNumber {
       sidebarWidth = CGFloat(truncating: width)
     }
@@ -446,7 +526,9 @@ final class NativiteChromeState {
   func resetSidebarPanel() {
     sidebarItems = []
     sidebarActiveItem = nil
+    sidebarTitle = nil
     sidebarWidth = nil
+    sidebarVisible = true
     sidebarCollapsed = false
   }
 
@@ -455,8 +537,9 @@ final class NativiteChromeState {
   func updateMenuBar(_ state: [String: Any]) {
     if let menus = state["menus"] as? [[String: Any]] {
       menuBarMenus = menus.compactMap { menuState in
-        guard let id = menuState["id"] as? String,
-              let title = menuState["title"] as? String else { return nil }
+        guard let id = menuState["id"] as? String else { return nil }
+        let title = (menuState["title"] as? String) ?? (menuState["label"] as? String) ?? ""
+        if title.isEmpty { return nil }
         var menu = MenuBarMenuState(id: id, title: title)
         if let items = menuState["items"] as? [[String: Any]] {
           menu.items = items.compactMap { parseMenuItem($0) }
@@ -480,9 +563,17 @@ final class NativiteChromeState {
       drawer.url = state["url"] as? String
       if let width = state["width"] as? NSNumber {
         drawer.width = CGFloat(truncating: width)
+      } else if let width = state["width"] as? String {
+        switch width {
+        case "small": drawer.width = 200
+        case "large": drawer.width = 400
+        default: break
+        }
       }
       if let edge = state["edge"] as? String {
         drawer.edge = DrawerEdge(rawValue: edge) ?? .trailing
+      } else if let side = state["side"] as? String {
+        drawer.edge = DrawerEdge(rawValue: side) ?? .trailing
       }
       drawer.backgroundColor = state["backgroundColor"] as? String
       drawers[name] = drawer
@@ -499,8 +590,14 @@ final class NativiteChromeState {
       popover.url = state["url"] as? String
       if let width = state["width"] as? NSNumber {
         popover.width = CGFloat(truncating: width)
+      } else if let size = state["size"] as? [String: Any],
+                let width = size["width"] as? NSNumber {
+        popover.width = CGFloat(truncating: width)
       }
       if let height = state["height"] as? NSNumber {
+        popover.height = CGFloat(truncating: height)
+      } else if let size = state["size"] as? [String: Any],
+                let height = size["height"] as? NSNumber {
         popover.height = CGFloat(truncating: height)
       }
       popover.backgroundColor = state["backgroundColor"] as? String
@@ -518,12 +615,20 @@ final class NativiteChromeState {
       window.url = state["url"] as? String
       if let width = state["width"] as? NSNumber {
         window.width = CGFloat(truncating: width)
+      } else if let size = state["size"] as? [String: Any],
+                let width = size["width"] as? NSNumber {
+        window.width = CGFloat(truncating: width)
       }
       if let height = state["height"] as? NSNumber {
+        window.height = CGFloat(truncating: height)
+      } else if let size = state["size"] as? [String: Any],
+                let height = size["height"] as? NSNumber {
         window.height = CGFloat(truncating: height)
       }
       window.title = state["title"] as? String
       window.backgroundColor = state["backgroundColor"] as? String
+      window.modal = state["modal"] as? Bool ?? false
+      window.resizable = state["resizable"] as? Bool ?? true
       appWindows[name] = window
     } else {
       appWindows[name]?.presented = false
@@ -601,6 +706,10 @@ final class NativiteChromeState {
 
     if let menuState = state["menu"] as? [String: Any] {
       item.menu = parseMenu(menuState)
+    }
+
+    if let customization = state["customization"] as? String {
+      item.customization = BarItemState.CustomizationBehavior(rawValue: customization) ?? .defaultBehavior
     }
 
     return item
@@ -688,6 +797,11 @@ struct NativiteChildWebView: UIViewRepresentable {
     webView.scrollView.alwaysBounceVertical = false
     webView.scrollView.alwaysBounceHorizontal = false
     webView.navigationDelegate = context.coordinator
+    #if DEBUG
+    if #available(iOS 16.4, *) {
+      webView.isInspectable = true
+    }
+    #endif
 
     if let bgHex = backgroundColor {
       webView.backgroundColor = UIColor(hex: bgHex)
@@ -758,6 +872,11 @@ struct NativiteChildWebView: NSViewRepresentable {
 
     let webView = WKWebView(frame: .zero, configuration: config)
     webView.navigationDelegate = context.coordinator
+    #if DEBUG
+    if #available(macOS 13.3, *) {
+      webView.isInspectable = true
+    }
+    #endif
 
     // Register in chromeState so messaging (postToChild, broadcast) can reach this webview.
     chromeState?.childWebViews[instanceName] = webView
@@ -1115,6 +1234,687 @@ extension View {
 }
 #endif
 
+#if os(macOS)
+
+private extension NativiteChromeState.BarItemState {
+  var resolvedTint: Color? {
+    if let tint { return Color(nsColor: NSColor(hex: tint)) }
+    if style == .destructive { return .red }
+    return nil
+  }
+}
+
+private func nativiteResolveChildURL(_ rawURL: String?, relativeTo baseURL: URL?) -> URL? {
+  guard let rawURL else { return nil }
+  if let url = URL(string: rawURL), url.scheme != nil {
+    return url
+  }
+  guard let baseURL else { return nil }
+  return URL(string: rawURL, relativeTo: baseURL)
+}
+
+struct NativiteMacBarButton: View {
+  let item: NativiteChromeState.BarItemState
+  let eventName: String
+  var menuEventName: String = "titleBar.menuItemPressed"
+  var onEvent: ((String, [String: Any]) -> Void)?
+  var displayMode: NativiteChromeState.ToolbarDisplayMode = .iconAndLabel
+
+  var body: some View {
+    Group {
+      if let menu = item.menu {
+        Menu { menuContent(menu) } label: { styledLabel }
+          .disabled(item.disabled)
+      } else {
+        Button { onEvent?(eventName, ["id": item.id]) } label: { styledLabel }
+          .disabled(item.disabled)
+      }
+    }
+    .tint(item.resolvedTint)
+  }
+
+  @ViewBuilder private var styledLabel: some View {
+    label
+      .fontWeight(item.style == .primary ? .semibold : .regular)
+  }
+
+  @ViewBuilder private var label: some View {
+    switch displayMode {
+    case .iconOnly:
+      if let icon = item.icon {
+        badgedIcon(icon)
+      } else {
+        Text(item.label ?? "")
+      }
+    case .labelOnly:
+      Text(item.label ?? item.id)
+    case .iconAndLabel:
+      if let icon = item.icon {
+        if let label = item.label {
+          Label {
+            Text(label)
+          } icon: {
+            badgedIcon(icon)
+          }
+        } else {
+          badgedIcon(icon)
+        }
+      } else {
+        Text(item.label ?? "")
+      }
+    }
+  }
+
+  @ViewBuilder private func badgedIcon(_ icon: String) -> some View {
+    if let badge = item.badge {
+      Image(systemName: icon)
+        .overlay(alignment: .topTrailing) {
+          Text(badge)
+            .font(.caption2)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(.red)
+            .foregroundStyle(.white)
+            .clipShape(Capsule())
+            .offset(x: 8, y: -6)
+        }
+    } else {
+      Image(systemName: icon)
+    }
+  }
+
+  @ViewBuilder private func menuContent(_ menu: NativiteChromeState.MenuState) -> some View {
+    ForEach(menu.items) { menuItem in
+      if let children = menuItem.children, !children.isEmpty {
+        Menu(menuItem.label) {
+          ForEach(children) { child in
+            menuLeaf(child)
+          }
+        }
+      } else {
+        menuLeaf(menuItem)
+      }
+    }
+  }
+
+  @ViewBuilder private func menuLeaf(_ menuItem: NativiteChromeState.MenuItemState) -> some View {
+    Button(role: menuItem.style == .destructive ? .destructive : nil) {
+      onEvent?(menuEventName, ["id": menuItem.id])
+    } label: {
+      if let icon = menuItem.icon {
+        Label(menuItem.label, systemImage: icon)
+      } else {
+        Text(menuItem.label)
+      }
+    }
+    .disabled(menuItem.disabled)
+  }
+}
+
+struct NativiteMacTitleBarModifier: ViewModifier {
+  var chromeState: NativiteChromeState
+
+  func body(content: Content) -> some View {
+    let withToolbar = content.toolbar {
+      if !chromeState.titleBarHidden {
+        ToolbarItemGroup(placement: .navigation) {
+          ForEach(chromeState.titleBarLeadingItems) { item in
+            NativiteMacBarButton(
+              item: item,
+              eventName: "titleBar.leadingItemPressed",
+              onEvent: chromeState.onChromeEvent
+            )
+          }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+          ForEach(chromeState.titleBarTrailingItems) { item in
+            NativiteMacBarButton(
+              item: item,
+              eventName: "titleBar.trailingItemPressed",
+              onEvent: chromeState.onChromeEvent
+            )
+          }
+        }
+      }
+    }
+    let withTint = applyTint(to: withToolbar)
+    applySearch(to: withTint)
+  }
+
+  @ViewBuilder
+  private func applyTint<V: View>(to view: V) -> some View {
+    if let tint = chromeState.titleBarTint {
+      view.tint(Color(nsColor: NSColor(hex: tint)))
+    } else {
+      view
+    }
+  }
+
+  @ViewBuilder
+  private func applySearch<V: View>(to view: V) -> some View {
+    if chromeState.searchBar != nil && !chromeState.titleBarHidden {
+      view.searchable(
+        text: Binding(
+          get: { chromeState.searchBar?.value ?? "" },
+          set: { newValue in
+            chromeState.searchBar?.value = newValue
+            chromeState.onChromeEvent?("titleBar.searchChanged", ["value": newValue])
+          }
+        ),
+        isPresented: Binding(
+          get: { chromeState.searchBar?.cancelButtonVisible ?? false },
+          set: { isPresented in
+            chromeState.searchBar?.cancelButtonVisible = isPresented
+            if !isPresented {
+              chromeState.onChromeEvent?("titleBar.searchCancelled", [:])
+            }
+          }
+        ),
+        placement: .toolbar,
+        prompt: chromeState.searchBar?.placeholder ?? "Search"
+      )
+      .onSubmit(of: .search) {
+        chromeState.onChromeEvent?("titleBar.searchSubmitted",
+          ["value": chromeState.searchBar?.value ?? ""])
+      }
+    } else {
+      view
+    }
+  }
+}
+
+struct NativiteMacToolbarModifier: ViewModifier {
+  var chromeState: NativiteChromeState
+
+  func body(content: Content) -> some View {
+    if chromeState.toolbarHidden {
+      content
+    } else if !chromeState.toolbarGroups.isEmpty {
+      applyGroupedToolbar(to: content)
+    } else if !chromeState.toolbarItems.isEmpty {
+      applyFlatToolbar(to: content)
+    } else {
+      content
+    }
+  }
+
+  // Flat items mode (backward compatible) — no customisation
+  @ViewBuilder
+  private func applyFlatToolbar<V: View>(to view: V) -> some View {
+    view.toolbar {
+      ToolbarItemGroup(placement: .automatic) {
+        ForEach(chromeState.toolbarItems) { item in
+          toolbarButton(item)
+        }
+      }
+    }
+  }
+
+  // Groups mode — supports placement + optional customisation
+  @ViewBuilder
+  private func applyGroupedToolbar<V: View>(to view: V) -> some View {
+    if chromeState.toolbarCustomizable, let toolbarId = chromeState.toolbarId {
+      view.toolbar(id: toolbarId) {
+        customizableContent()
+      }
+    } else {
+      view.toolbar {
+        nonCustomizableContent()
+      }
+    }
+  }
+
+  @ToolbarContentBuilder
+  private func nonCustomizableContent() -> some ToolbarContent {
+    ForEach(Array(chromeState.toolbarGroups.enumerated()), id: \\.offset) { _, group in
+      ToolbarItemGroup(placement: swiftUIPlacement(group.placement)) {
+        ForEach(group.items) { item in
+          toolbarButton(item)
+        }
+      }
+    }
+  }
+
+  @ToolbarContentBuilder
+  private func customizableContent() -> some CustomizableToolbarContent {
+    ForEach(Array(chromeState.toolbarGroups.enumerated()), id: \\.offset) { _, group in
+      ForEach(group.items) { item in
+        ToolbarItem(id: item.id, placement: swiftUIPlacement(group.placement)) {
+          toolbarButton(item)
+        }
+        .customizationBehavior(swiftUICustomization(item.customization))
+        .defaultVisibility(
+          item.customization == .hidden ? .hidden : .visible,
+          for: swiftUIPlacement(group.placement)
+        )
+      }
+    }
+  }
+
+  private func swiftUIPlacement(
+    _ p: NativiteChromeState.ToolbarPlacement
+  ) -> ToolbarItemPlacement {
+    switch p {
+    case .automatic:       return .automatic
+    case .principal:       return .principal
+    case .secondaryAction: return .secondaryAction
+    case .navigation:      return .navigation
+    case .primaryAction:   return .primaryAction
+    }
+  }
+
+  private func swiftUICustomization(
+    _ behavior: NativiteChromeState.BarItemState.CustomizationBehavior
+  ) -> ToolbarCustomizationBehavior {
+    switch behavior {
+    case .defaultBehavior, .hidden: return .default
+    case .required:                 return .disabled
+    }
+  }
+
+  @ViewBuilder
+  private func toolbarButton(_ item: NativiteChromeState.BarItemState) -> some View {
+    switch item.itemType {
+    case .flexibleSpace:
+      Spacer()
+    case .fixedSpace:
+      Spacer().frame(width: 8)
+    case .button:
+      NativiteMacBarButton(
+        item: item,
+        eventName: "toolbar.itemPressed",
+        menuEventName: "toolbar.menuItemPressed",
+        onEvent: chromeState.onChromeEvent,
+        displayMode: chromeState.toolbarDisplayMode
+      )
+    }
+  }
+}
+
+struct NativiteMacNavigationModifier: ViewModifier {
+  @Bindable var chromeState: NativiteChromeState
+
+  private var visibleItems: [NativiteChromeState.NavigationItemState] {
+    chromeState.navigationItems.filter { !$0.hidden && $0.role != "search" }
+  }
+
+  private var showsTabs: Bool {
+    if chromeState.navigationHidden { return false }
+    if chromeState.navigationStyle == "sidebar" { return false }
+    return !visibleItems.isEmpty
+  }
+
+  private var activeItemBinding: Binding<String> {
+    Binding(
+      get: {
+        if let current = chromeState.navigationActiveItem, !current.isEmpty {
+          return current
+        }
+        return visibleItems.first?.id ?? ""
+      },
+      set: { newValue in
+        guard !newValue.isEmpty else { return }
+        chromeState.navigationActiveItem = newValue
+        chromeState.onChromeEvent?("navigation.itemPressed", ["id": newValue])
+      }
+    )
+  }
+
+  func body(content: Content) -> some View {
+    content.safeAreaInset(edge: .top, spacing: 0) {
+      if showsTabs {
+        Picker("", selection: activeItemBinding) {
+          ForEach(visibleItems) { item in
+            if let icon = item.icon {
+              Label(item.label, systemImage: icon).tag(item.id)
+            } else {
+              Text(item.label).tag(item.id)
+            }
+          }
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.bar)
+      }
+    }
+  }
+}
+
+struct NativiteMacSidebarModifier: ViewModifier {
+  @Bindable var chromeState: NativiteChromeState
+
+  private var showsSidebar: Bool {
+    if chromeState.navigationStyle != "sidebar" { return false }
+    if chromeState.navigationHidden { return false }
+    return !chromeState.sidebarItems.isEmpty
+  }
+
+  private var sidebarSelection: Binding<String?> {
+    Binding(
+      get: { chromeState.sidebarActiveItem },
+      set: { newValue in
+        chromeState.sidebarActiveItem = newValue
+        if let id = newValue {
+          chromeState.onChromeEvent?("sidebarPanel.itemPressed", ["id": id])
+        }
+      }
+    )
+  }
+
+  private var sidebarVisibility: Binding<NavigationSplitViewVisibility> {
+    Binding(
+      get: {
+        if !chromeState.sidebarVisible || chromeState.sidebarCollapsed {
+          return .detailOnly
+        }
+        return .all
+      },
+      set: { newValue in
+        switch newValue {
+        case .detailOnly:
+          chromeState.sidebarCollapsed = true
+          chromeState.sidebarVisible = false
+        default:
+          chromeState.sidebarCollapsed = false
+          chromeState.sidebarVisible = true
+        }
+      }
+    )
+  }
+
+  func body(content: Content) -> some View {
+    Group {
+      if showsSidebar {
+        NavigationSplitView(columnVisibility: sidebarVisibility) {
+          List(selection: sidebarSelection) {
+            OutlineGroup(chromeState.sidebarItems, children: \\.children) { item in
+              if let icon = item.icon {
+                Label(item.label, systemImage: icon)
+                  .tag(Optional(item.id))
+              } else {
+                Text(item.label)
+                  .tag(Optional(item.id))
+              }
+            }
+          }
+          .navigationSplitViewColumnWidth(
+            min: 180,
+            ideal: chromeState.sidebarWidth ?? 220,
+            max: 420
+          )
+          .navigationTitle(chromeState.sidebarTitle ?? "")
+          .listStyle(.sidebar)
+        } detail: {
+          content
+        }
+      } else {
+        content
+      }
+    }
+  }
+}
+
+struct NativiteMacDrawersModifier: ViewModifier {
+  @Bindable var chromeState: NativiteChromeState
+
+  private var presentedDrawers: [NativiteChromeState.DrawerState] {
+    chromeState.drawers.values
+      .filter { $0.presented }
+      .sorted { $0.id < $1.id }
+  }
+
+  private func drawer(for edge: NativiteChromeState.DrawerEdge) -> NativiteChromeState.DrawerState? {
+    presentedDrawers.first(where: { $0.edge == edge })
+  }
+
+  func body(content: Content) -> some View {
+    content
+      .overlay(alignment: .leading) {
+        if let drawer = drawer(for: .leading) {
+          drawerView(drawer)
+        }
+      }
+      .overlay(alignment: .trailing) {
+        if let drawer = drawer(for: .trailing) {
+          drawerView(drawer)
+        }
+      }
+  }
+
+  @ViewBuilder
+  private func drawerView(_ drawer: NativiteChromeState.DrawerState) -> some View {
+    let resolvedURL = nativiteResolveChildURL(drawer.url, relativeTo: chromeState.primaryWebView?.url)
+    NativiteChildWebView(
+      instanceName: drawer.id,
+      url: resolvedURL,
+      baseURL: chromeState.primaryWebView?.url,
+      bridge: chromeState.bridge,
+      chromeState: chromeState,
+      backgroundColor: drawer.backgroundColor
+    )
+    .frame(width: drawer.width)
+    .background {
+      if let color = drawer.backgroundColor {
+        Color(nsColor: NSColor(hex: color))
+      }
+    }
+    .overlay(alignment: drawer.edge == .leading ? .trailing : .leading) {
+      Divider()
+    }
+    .onAppear {
+      chromeState.onChromeEvent?("drawer.presented", ["name": drawer.id])
+    }
+    .onDisappear {
+      chromeState.onChromeEvent?("drawer.dismissed", ["name": drawer.id])
+    }
+  }
+}
+
+struct NativiteMacPopoversModifier: ViewModifier {
+  @Bindable var chromeState: NativiteChromeState
+  @State private var presentedPopoverName: String?
+
+  private var activePopover: NativiteChromeState.PopoverState? {
+    chromeState.popovers.values
+      .filter { $0.presented }
+      .sorted { $0.id < $1.id }
+      .first
+  }
+
+  private var isPresented: Binding<Bool> {
+    Binding(
+      get: { activePopover != nil },
+      set: { newValue in
+        guard !newValue else { return }
+        if let name = presentedPopoverName ?? activePopover?.id {
+          chromeState.popovers[name]?.presented = false
+          chromeState.onChromeEvent?("popover.dismissed", ["name": name])
+        }
+        presentedPopoverName = nil
+      }
+    )
+  }
+
+  func body(content: Content) -> some View {
+    content
+      .popover(isPresented: isPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+        if let popover = activePopover {
+          let resolvedURL = nativiteResolveChildURL(popover.url, relativeTo: chromeState.primaryWebView?.url)
+          NativiteChildWebView(
+            instanceName: popover.id,
+            url: resolvedURL,
+            baseURL: chromeState.primaryWebView?.url,
+            bridge: chromeState.bridge,
+            chromeState: chromeState,
+            backgroundColor: popover.backgroundColor
+          )
+          .frame(width: popover.width, height: popover.height)
+          .onAppear {
+            presentedPopoverName = popover.id
+            chromeState.onChromeEvent?("popover.presented", ["name": popover.id])
+          }
+        }
+      }
+      .onChange(of: activePopover?.id) { _, newValue in
+        if let id = newValue {
+          presentedPopoverName = id
+        }
+      }
+  }
+}
+
+struct NativiteMacAppWindowsModifier: ViewModifier {
+  @Bindable var chromeState: NativiteChromeState
+  @State private var presentedAppWindowName: String?
+
+  private var activeAppWindow: NativiteChromeState.AppWindowState? {
+    chromeState.appWindows.values
+      .filter { $0.presented }
+      .sorted { $0.id < $1.id }
+      .first
+  }
+
+  private var activeAppWindowBinding: Binding<NativiteChromeState.AppWindowState?> {
+    Binding(
+      get: { activeAppWindow },
+      set: { newValue in
+        if newValue == nil {
+          for key in chromeState.appWindows.keys {
+            chromeState.appWindows[key]?.presented = false
+          }
+        }
+      }
+    )
+  }
+
+  func body(content: Content) -> some View {
+    content
+      .sheet(item: activeAppWindowBinding, onDismiss: {
+        if let name = presentedAppWindowName {
+          chromeState.appWindows[name]?.presented = false
+          chromeState.onChromeEvent?("appWindow.dismissed", ["name": name])
+          presentedAppWindowName = nil
+        }
+      }) { appWindow in
+        let resolvedURL = nativiteResolveChildURL(appWindow.url, relativeTo: chromeState.primaryWebView?.url)
+        NativiteChildWebView(
+          instanceName: appWindow.id,
+          url: resolvedURL,
+          baseURL: chromeState.primaryWebView?.url,
+          bridge: chromeState.bridge,
+          chromeState: chromeState,
+          backgroundColor: appWindow.backgroundColor
+        )
+        .frame(width: appWindow.width, height: appWindow.height)
+        .onAppear {
+          presentedAppWindowName = appWindow.id
+          chromeState.onChromeEvent?("appWindow.presented", ["name": appWindow.id])
+        }
+      }
+      .onChange(of: activeAppWindow?.id) { _, newValue in
+        if let id = newValue {
+          presentedAppWindowName = id
+        }
+      }
+  }
+}
+
+struct NativiteMenuBarCommands: Commands {
+  var chromeState: NativiteChromeState
+
+  var body: some Commands {
+    CommandMenu("Nativite") {
+      ForEach(chromeState.menuBarMenus) { menu in
+        Menu(menu.title) {
+          menuItems(menu.items)
+        }
+      }
+    }
+  }
+
+  @CommandsBuilder
+  private func menuItems(_ items: [NativiteChromeState.MenuItemState]) -> some Commands {
+    ForEach(items) { item in
+      if let children = item.children, !children.isEmpty {
+        Menu(item.label) {
+          menuItems(children)
+        }
+      } else {
+        menuButton(item)
+      }
+    }
+  }
+
+  @CommandsBuilder
+  private func menuButton(_ item: NativiteChromeState.MenuItemState) -> some Commands {
+    if let key = keyEquivalent(from: item.keyEquivalent) {
+      Button(role: item.style == .destructive ? .destructive : nil) {
+        chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id])
+      } label: {
+        menuButtonLabel(for: item)
+      }
+      .keyboardShortcut(key, modifiers: .command)
+      .disabled(item.disabled)
+    } else {
+      Button(role: item.style == .destructive ? .destructive : nil) {
+        chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id])
+      } label: {
+        menuButtonLabel(for: item)
+      }
+      .disabled(item.disabled)
+    }
+  }
+
+  @ViewBuilder
+  private func menuButtonLabel(for item: NativiteChromeState.MenuItemState) -> some View {
+    if item.checked {
+      Label(item.label, systemImage: "checkmark")
+    } else if let icon = item.icon {
+      Label(item.label, systemImage: icon)
+    } else {
+      Text(item.label)
+    }
+  }
+
+  private func keyEquivalent(from raw: String?) -> KeyEquivalent? {
+    guard let raw, raw.count == 1, let scalar = raw.unicodeScalars.first else { return nil }
+    return KeyEquivalent(Character(scalar))
+  }
+}
+
+extension View {
+  func nativiteMacTitleBar(chromeState: NativiteChromeState) -> some View {
+    modifier(NativiteMacTitleBarModifier(chromeState: chromeState))
+  }
+
+  func nativiteMacToolbar(chromeState: NativiteChromeState) -> some View {
+    modifier(NativiteMacToolbarModifier(chromeState: chromeState))
+  }
+
+  func nativiteMacNavigation(chromeState: NativiteChromeState) -> some View {
+    modifier(NativiteMacNavigationModifier(chromeState: chromeState))
+  }
+
+  func nativiteMacSidebar(chromeState: NativiteChromeState) -> some View {
+    modifier(NativiteMacSidebarModifier(chromeState: chromeState))
+  }
+
+  func nativiteMacDrawers(chromeState: NativiteChromeState) -> some View {
+    modifier(NativiteMacDrawersModifier(chromeState: chromeState))
+  }
+
+  func nativiteMacPopovers(chromeState: NativiteChromeState) -> some View {
+    modifier(NativiteMacPopoversModifier(chromeState: chromeState))
+  }
+
+  func nativiteMacAppWindows(chromeState: NativiteChromeState) -> some View {
+    modifier(NativiteMacAppWindowsModifier(chromeState: chromeState))
+  }
+}
+#endif
+
 // ─── SwiftUI Alert Presentation ──────────────────────────────────────────────
 // View modifier that presents JS alert/confirm/prompt dialogs via SwiftUI.
 
@@ -1198,6 +1998,19 @@ struct NativiteAlertModifier: ViewModifier {
 
 #if os(iOS)
 private extension UIColor {
+  convenience init(hex: String) {
+    var cleaned = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+    if cleaned.hasPrefix("#") { cleaned.removeFirst() }
+    let value = UInt64((cleaned.count == 6 ? cleaned + "FF" : cleaned), radix: 16) ?? 0xFFFFFFFF
+    let r = CGFloat((value >> 24) & 0xFF) / 255
+    let g = CGFloat((value >> 16) & 0xFF) / 255
+    let b = CGFloat((value >> 8) & 0xFF) / 255
+    let a = CGFloat(value & 0xFF) / 255
+    self.init(red: r, green: g, blue: b, alpha: a)
+  }
+}
+#elseif os(macOS)
+private extension NSColor {
   convenience init(hex: String) {
     var cleaned = hex.trimmingCharacters(in: .whitespacesAndNewlines)
     if cleaned.hasPrefix("#") { cleaned.removeFirst() }

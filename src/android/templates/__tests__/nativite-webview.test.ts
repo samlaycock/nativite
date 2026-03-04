@@ -69,6 +69,7 @@ describe("nativiteWebViewTemplate", () => {
   it("resolves dev URL from dev.json via getDevUrl", () => {
     const output = nativiteWebViewTemplate(androidConfig);
     expect(output).toContain("fun getDevUrl(context: Context): String?");
+    expect(output).toContain("if (!BuildConfig.DEBUG) return null");
     expect(output).toContain("dev.json");
     expect(output).toContain("devURL");
   });
@@ -106,6 +107,19 @@ describe("nativiteWebViewTemplate", () => {
     expect(output).toContain("PopStateEvent('popstate')");
   });
 
+  it("emits sheet.loadFailed for sheet main-frame load errors", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("override fun onReceivedError(");
+    expect(output).toContain("override fun onReceivedHttpError(");
+    expect(output).toContain('"sheet.loadFailed"');
+    expect(output).toContain('"name" to instanceName');
+  });
+
+  it("emits tabBottomAccessory.loadFailed for tab accessory load errors", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain('"tabBottomAccessory.loadFailed"');
+  });
+
   it("uses resolveChildUrl for non-null url in DisposableEffect", () => {
     const output = nativiteWebViewTemplate(androidConfig);
     expect(output).toContain("val (loadUrl, spaRoute) = resolveChildUrl(context, url)");
@@ -115,6 +129,6 @@ describe("nativiteWebViewTemplate", () => {
   it("enables WebView debugging in debug builds", () => {
     const output = nativiteWebViewTemplate(androidConfig);
     expect(output).toContain("setWebContentsDebuggingEnabled");
-    expect(output).toContain("FLAG_DEBUGGABLE");
+    expect(output).toContain("BuildConfig.DEBUG");
   });
 });

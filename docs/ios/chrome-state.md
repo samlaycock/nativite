@@ -74,7 +74,9 @@ If the developer calls `chrome.splash.preventAutoHide()` at module top level, th
 | ------------------- | -------------------- | ---------------------------- |
 | `sidebarItems`      | `[SidebarItemState]` | Sidebar navigation items     |
 | `sidebarActiveItem` | `String?`            | Selected sidebar item ID     |
+| `sidebarTitle`      | `String?`            | Sidebar title                |
 | `sidebarWidth`      | `CGFloat?`           | Custom sidebar width         |
+| `sidebarVisible`    | `Bool`               | Whether sidebar is visible   |
 | `sidebarCollapsed`  | `Bool`               | Whether sidebar is collapsed |
 
 ### Menu Bar (macOS)
@@ -103,7 +105,11 @@ struct SheetState: Identifiable {
 
 ### Drawers, Popovers, App Windows
 
-Similar structures with platform-specific properties (e.g., `side`, `width` for drawers; `size`, `anchorElementId` for popovers; `title`, `resizable`, `modal` for app windows).
+These are all state-backed and rendered via SwiftUI modifiers on macOS:
+
+- Drawers: `presented`, `url`, `width`, `edge`, `backgroundColor`
+- Popovers: `presented`, `url`, `width`, `height`, `backgroundColor`
+- App windows: `presented`, `url`, `width`, `height`, `title`, `backgroundColor`, `modal`, `resizable`
 
 ## Bar Item State
 
@@ -161,6 +167,18 @@ The chrome state model is consumed by several SwiftUI view modifiers applied in 
 | `.nativiteTitleBar()` | Renders title bar with items in SwiftUI navigation |
 | `.nativiteToolbar()`  | Renders toolbar items                              |
 
+macOS-specific modifiers:
+
+| Modifier                   | Purpose                                  |
+| -------------------------- | ---------------------------------------- |
+| `.nativiteMacTitleBar()`   | macOS title bar buttons/search/tint      |
+| `.nativiteMacToolbar()`    | macOS toolbar item group                 |
+| `.nativiteMacNavigation()` | Segmented tab-style navigation           |
+| `.nativiteMacSidebar()`    | Sidebar layout via `NavigationSplitView` |
+| `.nativiteMacDrawers()`    | Leading/trailing drawer overlays         |
+| `.nativiteMacPopovers()`   | Popover presentation                     |
+| `.nativiteMacAppWindows()` | App-window surface presentation          |
+
 ## Child Webview Component
 
 ```swift
@@ -171,6 +189,7 @@ struct NativiteChildWebView: NSViewRepresentable  // macOS
 - Shares `WKWebsiteDataStore.default()` with the primary webview (shared cookies/storage).
 - Registers instance name as `window.__nativekit_instance_name__` for identification.
 - Sets `data-nv-platform` attribute on `documentElement`.
+- Enables `WKWebView.isInspectable` in `DEBUG` builds (`iOS 16.4+` / `macOS 13.3+`) so child webviews are visible in Safari Develop tools.
 - Tracked in `chromeState.childWebViews` for inter-webview messaging.
 
 ## Reusable Components
