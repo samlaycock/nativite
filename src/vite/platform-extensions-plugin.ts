@@ -18,6 +18,41 @@ const BUILT_IN_PLATFORM_SUFFIXES: Record<string, string[]> = {
 // Source extensions to probe when the import has no extension.
 const SOURCE_EXTENSIONS = [".tsx", ".ts", ".jsx", ".js", ".css", ".svg", ".json"];
 
+export interface PlatformIndexHtmlResolution {
+  readonly fileName: string;
+  readonly absolutePath: string;
+}
+
+function normalizedPlatformSuffixes(suffixes?: string[]): string[] | undefined {
+  if (!suffixes || suffixes.length === 0) return undefined;
+  return [...new Set(suffixes.map((entry) => entry.trim()).filter((entry) => entry.length > 0))];
+}
+
+export function platformSuffixesFor(platform: string, suffixes?: string[]): string[] {
+  const normalizedSuffixes = normalizedPlatformSuffixes(suffixes);
+  if (normalizedSuffixes) return normalizedSuffixes;
+  return BUILT_IN_PLATFORM_SUFFIXES[platform] ?? [`.${platform}`, ".native"];
+}
+
+export function resolvePlatformIndexHtml(
+  root: string,
+  platform: string,
+  suffixes?: string[],
+): PlatformIndexHtmlResolution | undefined {
+  const suffixesForPlatform = platformSuffixesFor(platform, suffixes);
+  for (const suffix of suffixesForPlatform) {
+    const fileName = `index${suffix}.html`;
+    const absolutePath = join(root, fileName);
+    if (existsSync(absolutePath)) {
+      return {
+        fileName,
+        absolutePath,
+      };
+    }
+  }
+  return undefined;
+}
+
 // ─── platformExtensionsPlugin ────────────────────────────────────────────────
 
 /**
@@ -40,12 +75,7 @@ const SOURCE_EXTENSIONS = [".tsx", ".ts", ".jsx", ".js", ".css", ".svg", ".json"
  * @param suffixes - Optional suffix order override for custom platforms.
  */
 export function platformExtensionsPlugin(platform: string, suffixes?: string[]): Plugin {
-  const normalizedSuffixes =
-    suffixes && suffixes.length > 0
-      ? [...new Set(suffixes.map((entry) => entry.trim()).filter((entry) => entry.length > 0))]
-      : undefined;
-  const suffixesForPlatform = normalizedSuffixes ??
-    BUILT_IN_PLATFORM_SUFFIXES[platform] ?? [`.${platform}`, ".native"];
+  const suffixesForPlatform = platformSuffixesFor(platform, suffixes);
 
   return {
     name: "nativite:platform-extensions",

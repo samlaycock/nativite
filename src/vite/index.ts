@@ -22,7 +22,10 @@ import {
   resolveConfigForPlatform,
   resolveConfiguredPlatformRuntimes,
 } from "../platforms/registry.ts";
-import { platformExtensionsPlugin } from "./platform-extensions-plugin.ts";
+import {
+  platformExtensionsPlugin,
+  resolvePlatformIndexHtml,
+} from "./platform-extensions-plugin.ts";
 import { shouldTransformNativeRequest } from "./request-routing.ts";
 
 export type { NativiteConfig, Platform };
@@ -89,6 +92,72 @@ function toBundlePlatform(
 function platformOutDir(baseOutDir: string, platform: BundlePlatform): string {
   const normalizedBase = baseOutDir.replace(/[\\/]+$/, "");
   return `${normalizedBase}-${platform}`;
+}
+
+function environmentPlatformMap(
+  metadata: Record<string, PlatformRuntimeMetadata>,
+): Map<string, string> {
+  const map = new Map<string, string>([
+    ["ios", "ios"],
+    ["ipad", "ios"],
+    ["android", "android"],
+    ["macos", "macos"],
+  ]);
+  for (const [platform, entry] of Object.entries(metadata)) {
+    map.set(platform, platform);
+    for (const environment of entry.environments) {
+      map.set(environment, platform);
+    }
+  }
+  return map;
+}
+
+function resolvePlatformForEnvironment(
+  environment: string,
+  metadata: Record<string, PlatformRuntimeMetadata>,
+): string {
+  return environmentPlatformMap(metadata).get(environment) ?? environment;
+}
+
+function resolveNativeBuildHtmlEntryInput(
+  userConfig: UserConfig,
+  command: "serve" | "build",
+  targetPlatform: string | undefined,
+  metadata: Record<string, PlatformRuntimeMetadata>,
+): string | undefined {
+  if (command !== "build") return undefined;
+  if (!targetPlatform || targetPlatform === "web") return undefined;
+  if (userConfig.build?.rollupOptions?.input !== undefined) return undefined;
+
+  const projectRoot = resolveProjectRoot(userConfig);
+  const platform = resolvePlatformForEnvironment(targetPlatform, metadata);
+  const suffixes = metadata[platform]?.extensions;
+  const resolved = resolvePlatformIndexHtml(projectRoot, platform, suffixes);
+  return resolved?.absolutePath;
+}
+
+function normalizeHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value.join(",");
+  return value ?? "";
+}
+
+function stripQueryAndHash(url: string): string {
+  return url.split(/[?#]/, 1)[0] ?? url;
+}
+
+function isHtmlDocumentRequest(
+  url: string,
+  headers: Record<string, string | string[] | undefined>,
+): boolean {
+  const pathname = stripQueryAndHash(url);
+  if (pathname === "/" || pathname.endsWith(".html")) return true;
+  return /\btext\/html\b|\bapplication\/xhtml\+xml\b/.test(normalizeHeaderValue(headers["accept"]));
+}
+
+function rewriteRequestToIndexHtml(url: string, fileName: string): string {
+  const suffixIndex = url.search(/[?#]/);
+  const suffix = suffixIndex === -1 ? "" : url.slice(suffixIndex);
+  return `/${fileName}${suffix}`;
 }
 
 // ─── Config loading ───────────────────────────────────────────────────────────
@@ -331,6 +400,12 @@ function nativiteCorePlugin(): Plugin {
         command === "build" && buildPlatform
           ? platformOutDir(userConfig.build?.outDir ?? "dist", buildPlatform)
           : undefined;
+      const nativeBuildHtmlEntryInput = resolveNativeBuildHtmlEntryInput(
+        userConfig,
+        command,
+        envPlatform,
+        platformMetadata,
+      );
       const nativeBuildBase =
         command === "build" && envPlatform && envPlatform !== "web" && userConfig.base === undefined
           ? "./"
@@ -359,18 +434,7 @@ function nativiteCorePlugin(): Plugin {
         ]),
       );
 
-      const environmentToPlatform = new Map<string, string>([
-        ["ios", "ios"],
-        ["ipad", "ios"],
-        ["android", "android"],
-        ["macos", "macos"],
-      ]);
-      for (const [platformName, entry] of Object.entries(platformMetadata)) {
-        environmentToPlatform.set(platformName, platformName);
-        for (const environmentName of entry.environments) {
-          environmentToPlatform.set(environmentName, platformName);
-        }
-      }
+      const environmentToPlatform = environmentPlatformMap(platformMetadata);
 
       const environments: Record<string, EnvironmentOptions> = {};
       for (const p of nativePlatforms) {
@@ -378,6 +442,22 @@ function nativiteCorePlugin(): Plugin {
         const traits = resolvePlatformTraits(runtimePlatform, platformMetadata);
         environments[p] = nativeEnvironmentOptions(p, mode, traits);
       }
+
+      const buildConfig =
+        buildOutDir || nativeBuildHtmlEntryInput
+          ? {
+              ...(buildOutDir ? { outDir: buildOutDir } : {}),
+              ...(nativeBuildHtmlEntryInput
+                ? {
+                    rollupOptions: {
+                      input: {
+                        index: nativeBuildHtmlEntryInput,
+                      },
+                    },
+                  }
+                : {}),
+            }
+          : undefined;
 
       return {
         // Global defines default to web — nativeEnvironmentOptions overrides
@@ -393,7 +473,7 @@ function nativiteCorePlugin(): Plugin {
         },
         ...(serverConfig ? { server: serverConfig } : {}),
         ...(nativeBuildBase ? { base: nativeBuildBase } : {}),
-        ...(buildOutDir ? { build: { outDir: buildOutDir } } : {}),
+        ...(buildConfig ? { build: buildConfig } : {}),
         optimizeDeps: {
           ...userOptimizeDeps,
           exclude: optimizeDepsExclude,
@@ -444,6 +524,8 @@ function nativiteCorePlugin(): Plugin {
         ): void;
       };
     }) {
+      const environmentToPlatform = environmentPlatformMap(platformMetadata);
+
       // ── Middleware: route each WKWebView to its named platform environment ─────
       // The WKWebView appends "Nativite/<platform>/1.0" to its User-Agent via
       // WKWebViewConfiguration.applicationNameForUserAgent (set in the Swift
@@ -453,17 +535,29 @@ function nativiteCorePlugin(): Plugin {
         const ua = req.headers["user-agent"];
         const uaStr = Array.isArray(ua) ? ua.join(" ") : (ua ?? "");
         // Extract platform name from "Nativite/<platform>/1.0" UA token.
-        const match = uaStr.match(/Nativite\/([a-z]+)\//);
+        const match = uaStr.match(/Nativite\/([a-z0-9-]+)\//);
         if (!match) return next();
 
         const platformEnv = server.environments[match[1]!];
         if (!platformEnv) return next(); // Unknown or unregistered platform.
 
         const url = req.url ?? "/";
+        const shouldTransform = shouldTransformNativeRequest(url, req.headers);
+        if (!shouldTransform) {
+          const platform = environmentToPlatform.get(match[1]!) ?? match[1]!;
+          const htmlEntry = resolvePlatformIndexHtml(
+            viteConfig.root,
+            platform,
+            platformMetadata[platform]?.extensions,
+          );
+          if (htmlEntry && isHtmlDocumentRequest(url, req.headers)) {
+            req.url = rewriteRequestToIndexHtml(url, htmlEntry.fileName);
+          }
+          return next();
+        }
         // Native WebViews send the same UA on all requests. Only module-like
         // requests should be routed through transformRequest; direct asset URLs
         // must pass through to Vite's static file handlers.
-        if (!shouldTransformNativeRequest(url, req.headers)) return next();
 
         try {
           const result = await platformEnv.transformRequest(url);
@@ -701,23 +795,6 @@ export function nativite(): Plugin[] {
         return p;
       }
 
-      function environmentPlatformMap(): Map<string, string> {
-        const map = new Map<string, string>([
-          ["ios", "ios"],
-          ["ipad", "ios"],
-          ["android", "android"],
-          ["macos", "macos"],
-        ]);
-        const metadata = runtimeMetadataFromEnv();
-        for (const [platform, entry] of Object.entries(metadata)) {
-          for (const environment of entry.environments) {
-            map.set(environment, platform);
-          }
-          map.set(platform, platform);
-        }
-        return map;
-      }
-
       return {
         name: "nativite:platform-extensions",
         enforce: "pre",
@@ -746,9 +823,11 @@ export function nativite(): Plugin[] {
             //           must stay on "web" so browsers don't receive native code.
             const target = process.env["NATIVITE_PLATFORM"];
             platform =
-              env.config?.command === "build" && target && target !== "web" ? target : "web";
+              env.config?.command === "build" && target && target !== "web"
+                ? resolvePlatformForEnvironment(target, metadata)
+                : "web";
           } else {
-            const p = environmentPlatformMap().get(env.name);
+            const p = environmentPlatformMap(metadata).get(env.name);
             if (!p) return null;
             platform = p;
           }

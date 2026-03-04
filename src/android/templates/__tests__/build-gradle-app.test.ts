@@ -32,4 +32,9 @@ describe("buildGradleAppTemplate", () => {
     const output = buildGradleAppTemplate(androidConfig, 26, 35);
     expect(output).toContain("compose = true");
   });
+
+  it("enables BuildConfig generation", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    expect(output).toContain("buildConfig = true");
+  });
 });

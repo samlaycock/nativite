@@ -152,6 +152,61 @@ describe("nativite core build config", () => {
   });
 });
 
+describe("nativite core native html entry", () => {
+  it("uses the highest-priority platform html entry for native builds", async () => {
+    process.env["NATIVITE_PLATFORM"] = "ios";
+
+    const projectRoot = mkdtempSync(join(tmpdir(), "nativite-vite-html-entry-"));
+    try {
+      writeFileSync(join(projectRoot, "index.html"), "<html><body>web</body></html>");
+      writeFileSync(join(projectRoot, "index.native.html"), "<html><body>native</body></html>");
+      writeFileSync(join(projectRoot, "index.ios.html"), "<html><body>ios</body></html>");
+
+      const plugin = getCorePlugin();
+      const config = await runConfigHook(
+        plugin,
+        { root: projectRoot },
+        { command: "build", mode: "production" },
+      );
+      const input = config.build?.rollupOptions?.input;
+
+      expect(input).toEqual({
+        index: join(projectRoot, "index.ios.html"),
+      });
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not override an explicit user rollup input", async () => {
+    process.env["NATIVITE_PLATFORM"] = "ios";
+
+    const projectRoot = mkdtempSync(join(tmpdir(), "nativite-vite-html-entry-user-input-"));
+    try {
+      writeFileSync(join(projectRoot, "index.html"), "<html><body>web</body></html>");
+      writeFileSync(join(projectRoot, "index.native.html"), "<html><body>native</body></html>");
+
+      const plugin = getCorePlugin();
+      const config = await runConfigHook(
+        plugin,
+        {
+          root: projectRoot,
+          build: {
+            rollupOptions: {
+              input: join(projectRoot, "custom-entry.html"),
+            },
+          },
+        },
+        { command: "build", mode: "production" },
+      );
+
+      expect(config.build?.rollupOptions).toBeUndefined();
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("nativite core platform globals", () => {
   it("defines mobile and desktop globals for built-in native environments", async () => {
     const plugin = getCorePlugin();

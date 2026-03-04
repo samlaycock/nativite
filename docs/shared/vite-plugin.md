@@ -60,6 +60,25 @@ For `import './components'` (directory import):
 → components/index.tsx (fallback)
 ```
 
+### Native HTML Entry Resolution
+
+For native targets, the plugin now also resolves a platform-specific HTML entry
+file from project root before falling back to `index.html`.
+
+For iOS native builds/dev webviews, it tries:
+
+```
+→ index.ios.html
+→ index.mobile.html
+→ index.native.html
+→ index.html (fallback)
+```
+
+Behavior:
+
+- **Build (`NATIVITE_PLATFORM` set, non-web):** if a platform entry is found, the plugin wires it as the Rollup `index` input while keeping the emitted filename as `index.html`.
+- **Dev (native User-Agent requests):** HTML document requests are rewritten to the same resolved platform entry when present.
+
 ### Source Extensions
 
 The plugin probes these extensions: `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`.
