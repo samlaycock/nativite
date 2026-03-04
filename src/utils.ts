@@ -1,17 +1,7 @@
 // eslint-disable-next-line
-export type Platform =
-  | "web"
-  | "ios"
-  | "android"
-  | "windows"
-  | "macos"
-  | "linux"
-  | string;
+export type Platform = "web" | "ios" | "android" | "windows" | "macos" | "linux" | string;
 
-export function platform<T, D>(
-  options: Record<Platform, T>,
-  fallback?: D
-): T | D {
+export function platform<T, D>(options: Record<Platform, T>, fallback?: D): T | D {
   for (const key in options) {
     if (__PLATFORM__ === key) {
       return ((options[key] as T) ?? fallback) as T;
