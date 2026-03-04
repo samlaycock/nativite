@@ -75,6 +75,11 @@ The generator resolves platform-specific settings:
 | `versionCode` | from config      | Integer version code          |
 | `versionName` | from config      | Display version string        |
 
+Validation notes:
+
+- `minSdk` is required and must be an integer.
+- `targetSdk` is optional, but must be an integer when provided.
+
 ## Gradle Configuration
 
 ### Version Catalog (`libs.versions.toml`)

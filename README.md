@@ -129,6 +129,11 @@ bunx nativite build --platform ios
 - `macos({ minimumVersion, overrides? })`
 - `android({ minSdk, targetSdk?, overrides? })`
 
+Notes:
+
+- `ios.errorOverlay` controls the default Vite HMR overlay behaviour in dev. `NATIVITE_DEV_ERROR_OVERLAY` still takes precedence when set.
+- `android.targetSdk` must be an integer when provided.
+
 ### Optional root fields
 
 - `signing`

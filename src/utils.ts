@@ -18,6 +18,14 @@ export function web<T, D>(value: T, fallback?: D): T | D | undefined {
   return platform({ web: value }, fallback);
 }
 
+export function mobile<T, D>(value: T, fallback?: D): T | D | undefined {
+  return platform({ ios: value, android: value }, fallback);
+}
+
+export function desktop<T, D>(value: T, fallback?: D): T | D | undefined {
+  return platform({ windows: value, macos: value, linux: value }, fallback);
+}
+
 export function ios<T, D>(value: T, fallback?: D): T | D | undefined {
   return platform({ ios: value }, fallback);
 }

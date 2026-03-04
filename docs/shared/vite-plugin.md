@@ -133,7 +133,13 @@ This ensures hot reloading works for platform-specific files without a full page
 
 ## Dev Error Overlay
 
-Vite's built-in error overlay (`vite-error-overlay`) is **enabled by default** in dev mode. On iOS, native chrome elements (navigation bar, toolbar, tab bar) render on top of the webview, which can obscure the overlay content. The `nativite:dev-error-overlay` sub-plugin injects CSS that repositions the overlay to sit between chrome elements using the `--nv-inset-top` and `--nv-inset-bottom` CSS variables:
+Vite's built-in error overlay (`vite-error-overlay`) is enabled in dev by default. Nativite resolves the default value in this order:
+
+1. `NATIVITE_DEV_ERROR_OVERLAY` environment variable (if set)
+2. `ios({ errorOverlay })` in `nativite.config.ts` (if configured)
+3. fallback default: `true`
+
+On iOS, native chrome elements (navigation bar, toolbar, tab bar) render on top of the webview, which can obscure the overlay content. The `nativite:dev-error-overlay` sub-plugin injects CSS that repositions the overlay to sit between chrome elements using the `--nv-inset-top` and `--nv-inset-bottom` CSS variables:
 
 ```css
 vite-error-overlay {
@@ -144,7 +150,7 @@ vite-error-overlay {
 
 This plugin only runs in dev mode (`apply: 'serve'`) — no CSS is injected in production builds.
 
-To disable the error overlay:
+To force-disable the error overlay regardless of config:
 
 ```bash
 NATIVITE_DEV_ERROR_OVERLAY=false vite dev

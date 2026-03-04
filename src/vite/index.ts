@@ -9,7 +9,7 @@ import type {
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, statSync, watchFile, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
   NativiteConfigSchema,
@@ -147,6 +147,29 @@ function parseBooleanEnv(raw: string | undefined): boolean | undefined {
   return undefined;
 }
 
+function resolveProjectRoot(userConfig: UserConfig): string {
+  if (typeof userConfig.root === "string" && userConfig.root.length > 0) {
+    return resolve(userConfig.root);
+  }
+  return process.cwd();
+}
+
+async function resolveNativeErrorOverlay(
+  userConfig: UserConfig,
+  command: "serve" | "build",
+): Promise<boolean> {
+  const envOverride = parseBooleanEnv(process.env["NATIVITE_DEV_ERROR_OVERLAY"]);
+  if (envOverride !== undefined) return envOverride;
+  if (command !== "serve") return true;
+
+  const projectRoot = resolveProjectRoot(userConfig);
+  if (!existsSync(join(projectRoot, "nativite.config.ts"))) return true;
+
+  const loadedConfig = await loadNativiteConfigFromDir(projectRoot);
+  const iosConfig = resolveConfigForPlatform(loadedConfig, "ios");
+  return iosConfig.dev?.errorOverlay ?? true;
+}
+
 function nativeEnvironmentOptions(platform: Platform, mode: string): EnvironmentOptions {
   return {
     consumer: "client",
@@ -234,7 +257,7 @@ function nativiteCorePlugin(): Plugin {
     //   (NATIVITE_PLATFORM is set by the CLI).
     // Plain `vite build` with no env var: no native environments, so native
     //   code never enters the web bundle.
-    config(userConfig, { mode, command }): Partial<UserConfig> {
+    async config(userConfig, { mode, command }): Promise<Partial<UserConfig>> {
       const envPlatform = process.env["NATIVITE_PLATFORM"] as Platform | undefined;
       platformMetadata = runtimeMetadataFromEnv();
       buildPlatform = toBundlePlatform(envPlatform, platformMetadata);
@@ -264,7 +287,7 @@ function nativiteCorePlugin(): Plugin {
         command === "build" && envPlatform && envPlatform !== "web" && userConfig.base === undefined
           ? "./"
           : undefined;
-      const nativeErrorOverlay = parseBooleanEnv(process.env["NATIVITE_DEV_ERROR_OVERLAY"]) ?? true;
+      const nativeErrorOverlay = await resolveNativeErrorOverlay(userConfig, command);
       const hmrConfig = userConfig.server?.hmr;
       const serverConfig =
         command === "serve"

@@ -541,6 +541,13 @@ export const NativiteConfigSchema = z
             message: 'Built-in platform "android" requires an integer minSdk.',
           });
         }
+        if (entry["targetSdk"] !== undefined && !Number.isInteger(entry["targetSdk"])) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["platforms"],
+            message: 'Built-in platform "android" targetSdk must be an integer when provided.',
+          });
+        }
       }
     }
 

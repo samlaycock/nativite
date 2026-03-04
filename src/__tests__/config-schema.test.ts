@@ -1,6 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
-import { NativiteConfigSchema, definePlatformPlugin, ios, macos, platform } from "../index.ts";
+import {
+  NativiteConfigSchema,
+  android,
+  definePlatformPlugin,
+  ios,
+  macos,
+  platform,
+} from "../index.ts";
 import {
   baseUserConfig,
   dualPlatformUserConfig,
@@ -378,6 +385,20 @@ describe("NativiteConfigSchema", () => {
           target: "device";
           simulator: string;
         },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects android.targetSdk when it is not an integer", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platforms: [
+          android({
+            minSdk: 26,
+            targetSdk: 33.5 as number,
+          }),
+        ],
       }),
     ).toThrow();
   });

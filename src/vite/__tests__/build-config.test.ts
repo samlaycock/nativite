@@ -1,6 +1,9 @@
 import type { UserConfig } from "vite";
 
 import { afterEach, describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { nativite } from "../index.ts";
 
@@ -12,11 +15,11 @@ function getCorePlugin() {
   return plugin;
 }
 
-function runConfigHook(
+async function runConfigHook(
   plugin: ReturnType<typeof getCorePlugin>,
   config: UserConfig,
   env: { command: "build" | "serve"; mode: string },
-): Partial<UserConfig> {
+): Promise<Partial<UserConfig>> {
   const hook = plugin.config;
   if (!hook) {
     throw new Error("nativite core plugin config hook is missing");
@@ -27,10 +30,7 @@ function runConfigHook(
     cfg: UserConfig,
     cfgEnv: { command: "build" | "serve"; mode: string },
   ) => Partial<UserConfig> | null | void | Promise<Partial<UserConfig> | null | void>;
-  const result = invoke(config, env);
-  if (result instanceof Promise) {
-    throw new Error("config hook returned a promise unexpectedly");
-  }
+  const result = await invoke(config, env);
   return result ?? {};
 }
 
@@ -52,29 +52,29 @@ afterEach(() => {
 });
 
 describe("nativite core build config", () => {
-  it("uses a relative base for native builds so file:// bundles can resolve assets", () => {
+  it("uses a relative base for native builds so file:// bundles can resolve assets", async () => {
     process.env["NATIVITE_PLATFORM"] = "ios";
 
     const plugin = getCorePlugin();
-    const config = runConfigHook(plugin, {}, { command: "build", mode: "production" });
+    const config = await runConfigHook(plugin, {}, { command: "build", mode: "production" });
 
     expect(config.base).toBe("./");
   });
 
-  it("does not force a base value during dev server runs", () => {
+  it("does not force a base value during dev server runs", async () => {
     process.env["NATIVITE_PLATFORM"] = "ios";
 
     const plugin = getCorePlugin();
-    const config = runConfigHook(plugin, {}, { command: "serve", mode: "development" });
+    const config = await runConfigHook(plugin, {}, { command: "serve", mode: "development" });
 
     expect(config.base).toBeUndefined();
   });
 
-  it("enables the Vite HMR error overlay by default during dev server runs", () => {
+  it("enables the Vite HMR error overlay by default during dev server runs", async () => {
     process.env["NATIVITE_PLATFORM"] = "ios";
 
     const plugin = getCorePlugin();
-    const config = runConfigHook(plugin, {}, { command: "serve", mode: "development" });
+    const config = await runConfigHook(plugin, {}, { command: "serve", mode: "development" });
     const hmr = config.server?.hmr as { overlay?: boolean } | undefined;
 
     expect(config.server).toBeObject();
@@ -82,17 +82,52 @@ describe("nativite core build config", () => {
     expect(hmr?.overlay).toBe(true);
   });
 
-  it("disables the Vite HMR error overlay when NATIVITE_DEV_ERROR_OVERLAY is false", () => {
+  it("disables the Vite HMR error overlay when NATIVITE_DEV_ERROR_OVERLAY is false", async () => {
     process.env["NATIVITE_PLATFORM"] = "ios";
     process.env["NATIVITE_DEV_ERROR_OVERLAY"] = "false";
 
     const plugin = getCorePlugin();
-    const config = runConfigHook(plugin, {}, { command: "serve", mode: "development" });
+    const config = await runConfigHook(plugin, {}, { command: "serve", mode: "development" });
     const hmr = config.server?.hmr as { overlay?: boolean } | undefined;
 
     expect(config.server).toBeObject();
     expect(hmr).toBeObject();
     expect(hmr?.overlay).toBe(false);
+  });
+
+  it("derives Vite HMR overlay default from ios.errorOverlay config", async () => {
+    process.env["NATIVITE_PLATFORM"] = "ios";
+
+    const projectRoot = mkdtempSync(join(tmpdir(), "nativite-vite-config-"));
+    try {
+      writeFileSync(
+        join(projectRoot, "nativite.config.ts"),
+        `export default {
+  app: {
+    name: "OverlayApp",
+    bundleId: "com.example.overlayapp",
+    version: "1.0.0",
+    buildNumber: 1,
+  },
+  platforms: [{ platform: "ios", minimumVersion: "17.0", errorOverlay: false }],
+};
+`,
+      );
+
+      const plugin = getCorePlugin();
+      const config = await runConfigHook(
+        plugin,
+        { root: projectRoot },
+        { command: "serve", mode: "development" },
+      );
+      const hmr = config.server?.hmr as { overlay?: boolean } | undefined;
+
+      expect(config.server).toBeObject();
+      expect(hmr).toBeObject();
+      expect(hmr?.overlay).toBe(false);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 });
 
