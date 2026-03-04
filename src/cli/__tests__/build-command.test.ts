@@ -54,6 +54,9 @@ function createRuntime(id: string): ResolvedNativitePlatformRuntime {
     extensions: [`.${id}`, ".native"],
     environments: [id],
     bundlePlatform: id,
+    native: true,
+    mobile: id === "ios" || id === "android",
+    desktop: id === "windows" || id === "macos" || id === "linux",
   };
 }
 

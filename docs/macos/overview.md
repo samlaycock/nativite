@@ -59,6 +59,8 @@ Per-item `customization` on `ButtonItem`:
 | `"hidden"`   | Not shown by default, user can add via customise |
 | `"required"` | Always visible, cannot be removed                |
 
+Implementation note: the generated SwiftUI toolbar uses one customizable toolbar entry per placement (`automatic`, `principal`, etc.), with the placement entry rendering that placement's items as a group. `"hidden"` items are omitted from that group, and if all items in a placement are `"required"` the placement entry is marked non-removable.
+
 #### Display Mode
 
 | Value            | Description         |

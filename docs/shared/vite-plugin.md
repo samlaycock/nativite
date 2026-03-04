@@ -79,9 +79,17 @@ Each environment gets platform-specific `define` values:
     "import.meta.env.VITE_NATIVITE": "true",
     "__PLATFORM__": JSON.stringify("ios"),
     "__IS_NATIVE__": "true",
+    "__IS_MOBILE__": "true",
+    "__IS_DESKTOP__": "false",
     "__DEV__": "true"
 }
 ```
+
+`__IS_NATIVE__`, `__IS_MOBILE__`, and `__IS_DESKTOP__` are derived from the
+platform plugin trait flags (`native`, `mobile`, `desktop`) that are serialized
+via platform metadata. Defaults are `native: true`, `mobile: false`,
+`desktop: false` when omitted by a platform plugin. A platform plugin may set
+both `mobile` and `desktop` to `true`.
 
 And excludes nativite packages from dependency optimisation:
 

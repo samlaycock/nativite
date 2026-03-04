@@ -87,6 +87,24 @@ describe("NativiteConfigSchema", () => {
     ).not.toThrow();
   });
 
+  it("accepts platform plugin traits including mobile+desktop true", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platforms: [platform("headless", { sdk: "1" })],
+        platformPlugins: [
+          definePlatformPlugin({
+            name: "headless-plugin",
+            platform: "headless",
+            native: false,
+            mobile: true,
+            desktop: true,
+          }),
+        ],
+      }),
+    ).not.toThrow();
+  });
+
   it("rejects a custom platform when no matching platform plugin is provided", () => {
     expect(() =>
       NativiteConfigSchema.parse({

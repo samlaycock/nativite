@@ -25,6 +25,9 @@ describe("platform registry", () => {
     expect(runtimes[0]?.plugin.name).toBe("nativite-ios");
     expect(runtimes[0]?.environments).toEqual(["ios", "ipad"]);
     expect(runtimes[0]?.extensions).toEqual([".ios", ".mobile", ".native"]);
+    expect(runtimes[0]?.native).toBe(true);
+    expect(runtimes[0]?.mobile).toBe(true);
+    expect(runtimes[0]?.desktop).toBe(false);
   });
 
   it("resolves custom platform metadata from platform plugin", () => {
@@ -42,6 +45,9 @@ describe("platform registry", () => {
           platform: "flutter",
           environments: ["flutter", "flutter-tablet"],
           extensions: ["flutter", ".mobile", ".native"],
+          native: true,
+          mobile: true,
+          desktop: false,
         }),
       ],
     });
@@ -51,6 +57,35 @@ describe("platform registry", () => {
     expect(runtimes[0]?.id).toBe("flutter");
     expect(runtimes[0]?.environments).toEqual(["flutter", "flutter-tablet"]);
     expect(runtimes[0]?.extensions).toEqual([".flutter", ".mobile", ".native"]);
+    expect(runtimes[0]?.native).toBe(true);
+    expect(runtimes[0]?.mobile).toBe(true);
+    expect(runtimes[0]?.desktop).toBe(false);
+  });
+
+  it("defaults platform traits to native=true mobile=false desktop=false when omitted", () => {
+    const config = NativiteConfigSchema.parse({
+      app: {
+        name: "TestApp",
+        bundleId: "com.example.testapp",
+        version: "1.0.0",
+        buildNumber: 1,
+      },
+      platforms: [platform("headless", { runtime: "wasm" })],
+      platformPlugins: [
+        definePlatformPlugin({
+          name: "headless-platform",
+          platform: "headless",
+          environments: ["headless"],
+          extensions: [".headless", ".native"],
+        }),
+      ],
+    });
+
+    const runtimes = resolveConfiguredPlatformRuntimes(config);
+    expect(runtimes).toHaveLength(1);
+    expect(runtimes[0]?.native).toBe(true);
+    expect(runtimes[0]?.mobile).toBe(false);
+    expect(runtimes[0]?.desktop).toBe(false);
   });
 
   it("resolves built-in macOS metadata from the first-party plugin", () => {
@@ -70,6 +105,9 @@ describe("platform registry", () => {
     expect(runtimes[0]?.plugin.name).toBe("nativite-macos");
     expect(runtimes[0]?.environments).toEqual(["macos"]);
     expect(runtimes[0]?.extensions).toEqual([".macos", ".desktop", ".native"]);
+    expect(runtimes[0]?.native).toBe(true);
+    expect(runtimes[0]?.mobile).toBe(false);
+    expect(runtimes[0]?.desktop).toBe(true);
   });
 
   it("serializes runtime metadata for CLI -> Vite handoff", () => {
@@ -87,18 +125,31 @@ describe("platform registry", () => {
           platform: "roku",
           environments: ["roku"],
           extensions: [".roku", ".native"],
+          native: true,
+          mobile: false,
+          desktop: false,
         }),
       ],
     });
     const runtimes = resolveConfiguredPlatformRuntimes(config);
     const metadata = JSON.parse(serializePlatformRuntimeMetadata(runtimes)) as Record<
       string,
-      { extensions: string[]; environments: string[]; bundlePlatform: string }
+      {
+        extensions: string[];
+        environments: string[];
+        bundlePlatform: string;
+        native: boolean;
+        mobile: boolean;
+        desktop: boolean;
+      }
     >;
     expect(metadata["roku"]).toEqual({
       extensions: [".roku", ".native"],
       environments: ["roku"],
       bundlePlatform: "roku",
+      native: true,
+      mobile: false,
+      desktop: false,
     });
   });
 

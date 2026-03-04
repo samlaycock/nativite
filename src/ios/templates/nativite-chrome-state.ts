@@ -1466,9 +1466,21 @@ struct NativiteMacToolbarModifier: ViewModifier {
 
   @ToolbarContentBuilder
   private func nonCustomizableContent() -> some ToolbarContent {
-    ForEach(Array(chromeState.toolbarGroups.enumerated()), id: \\.offset) { _, group in
-      ToolbarItemGroup(placement: swiftUIPlacement(group.placement)) {
-        ForEach(group.items) { item in
+    toolbarGroupContent(for: .automatic)
+    toolbarGroupContent(for: .principal)
+    toolbarGroupContent(for: .secondaryAction)
+    toolbarGroupContent(for: .navigation)
+    toolbarGroupContent(for: .primaryAction)
+  }
+
+  @ToolbarContentBuilder
+  private func toolbarGroupContent(
+    for placement: NativiteChromeState.ToolbarPlacement
+  ) -> some ToolbarContent {
+    let items = groupedToolbarItems(for: placement)
+    if !items.isEmpty {
+      ToolbarItemGroup(placement: swiftUIPlacement(placement)) {
+        ForEach(items) { item in
           toolbarButton(item)
         }
       }
@@ -1477,18 +1489,39 @@ struct NativiteMacToolbarModifier: ViewModifier {
 
   @ToolbarContentBuilder
   private func customizableContent() -> some CustomizableToolbarContent {
-    ForEach(Array(chromeState.toolbarGroups.enumerated()), id: \\.offset) { _, group in
-      ForEach(group.items) { item in
-        ToolbarItem(id: item.id, placement: swiftUIPlacement(group.placement)) {
-          toolbarButton(item)
+    customizableToolbarContent(for: .automatic)
+    customizableToolbarContent(for: .principal)
+    customizableToolbarContent(for: .secondaryAction)
+    customizableToolbarContent(for: .navigation)
+    customizableToolbarContent(for: .primaryAction)
+  }
+
+  @ToolbarContentBuilder
+  private func customizableToolbarContent(
+    for placement: NativiteChromeState.ToolbarPlacement
+  ) -> some CustomizableToolbarContent {
+    let items = groupedToolbarItems(for: placement).filter { $0.customization != .hidden }
+    if !items.isEmpty {
+      ToolbarItem(
+        id: "nativite.toolbar.\\(placement.rawValue)",
+        placement: swiftUIPlacement(placement)
+      ) {
+        HStack(spacing: 8) {
+          ForEach(items) { item in
+            toolbarButton(item)
+          }
         }
-        .customizationBehavior(swiftUICustomization(item.customization))
-        .defaultVisibility(
-          item.customization == .hidden ? .hidden : .visible,
-          for: swiftUIPlacement(group.placement)
-        )
       }
+      .customizationBehavior(swiftUICustomization(for: items))
     }
+  }
+
+  private func groupedToolbarItems(
+    for placement: NativiteChromeState.ToolbarPlacement
+  ) -> [NativiteChromeState.BarItemState] {
+    chromeState.toolbarGroups
+      .filter { $0.placement == placement }
+      .flatMap(\\.items)
   }
 
   private func swiftUIPlacement(
@@ -1504,12 +1537,12 @@ struct NativiteMacToolbarModifier: ViewModifier {
   }
 
   private func swiftUICustomization(
-    _ behavior: NativiteChromeState.BarItemState.CustomizationBehavior
+    for items: [NativiteChromeState.BarItemState]
   ) -> ToolbarCustomizationBehavior {
-    switch behavior {
-    case .defaultBehavior, .hidden: return .default
-    case .required:                 return .disabled
+    if !items.isEmpty && items.allSatisfy({ $0.customization == .required }) {
+      return .disabled
     }
+    return .default
   }
 
   @ViewBuilder
@@ -1834,37 +1867,41 @@ struct NativiteMenuBarCommands: Commands {
     }
   }
 
-  @CommandsBuilder
-  private func menuItems(_ items: [NativiteChromeState.MenuItemState]) -> some Commands {
-    ForEach(items) { item in
-      if let children = item.children, !children.isEmpty {
-        Menu(item.label) {
-          menuItems(children)
+  private func menuItems(_ items: [NativiteChromeState.MenuItemState]) -> AnyView {
+    AnyView(
+      ForEach(items) { item in
+        if let children = item.children, !children.isEmpty {
+          Menu(item.label) {
+            menuItems(children)
+          }
+        } else {
+          menuButton(item)
         }
-      } else {
-        menuButton(item)
       }
-    }
+    )
   }
 
-  @CommandsBuilder
-  private func menuButton(_ item: NativiteChromeState.MenuItemState) -> some Commands {
+  private func menuButton(_ item: NativiteChromeState.MenuItemState) -> AnyView {
     if let key = keyEquivalent(from: item.keyEquivalent) {
-      Button(role: item.style == .destructive ? .destructive : nil) {
-        chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id])
-      } label: {
-        menuButtonLabel(for: item)
-      }
-      .keyboardShortcut(key, modifiers: .command)
-      .disabled(item.disabled)
-    } else {
-      Button(role: item.style == .destructive ? .destructive : nil) {
-        chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id])
-      } label: {
-        menuButtonLabel(for: item)
-      }
-      .disabled(item.disabled)
+      return AnyView(
+        Button(role: item.style == .destructive ? .destructive : nil) {
+          chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id])
+        } label: {
+          menuButtonLabel(for: item)
+        }
+        .keyboardShortcut(key, modifiers: .command)
+        .disabled(item.disabled)
+      )
     }
+
+    return AnyView(
+      Button(role: item.style == .destructive ? .destructive : nil) {
+        chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id])
+      } label: {
+        menuButtonLabel(for: item)
+      }
+      .disabled(item.disabled)
+    )
   }
 
   @ViewBuilder

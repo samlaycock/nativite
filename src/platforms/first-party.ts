@@ -128,6 +128,9 @@ async function generateAppleProject(
 const iosPlatformPlugin = definePlatformPlugin({
   name: "nativite-ios",
   platform: "ios",
+  native: true,
+  mobile: true,
+  desktop: false,
   environments: ["ios", "ipad"],
   extensions: [".ios", ".mobile", ".native"],
   async generate(ctx) {
@@ -173,6 +176,9 @@ const iosPlatformPlugin = definePlatformPlugin({
 const macosPlatformPlugin = definePlatformPlugin({
   name: "nativite-macos",
   platform: "macos",
+  native: true,
+  mobile: false,
+  desktop: true,
   environments: ["macos"],
   extensions: [".macos", ".desktop", ".native"],
   async generate(ctx) {
@@ -208,6 +214,9 @@ const macosPlatformPlugin = definePlatformPlugin({
 const androidPlatformPlugin = definePlatformPlugin({
   name: "nativite-android",
   platform: "android",
+  native: true,
+  mobile: true,
+  desktop: false,
   environments: ["android"],
   extensions: [".android", ".mobile", ".native"],
   async generate(ctx) {

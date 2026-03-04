@@ -251,6 +251,9 @@ import { definePlatformPlugin, platform } from "nativite";
 const electronPlatform = definePlatformPlugin({
   name: "electron-platform",
   platform: "electron",
+  native: true,
+  mobile: false,
+  desktop: true,
   extensions: [".electron", ".desktop", ".native"],
   environments: ["electron"],
   async generate(ctx) {},
@@ -285,7 +288,14 @@ Then use:
 
 - `__PLATFORM__`
 - `__IS_NATIVE__`
+- `__IS_MOBILE__`
+- `__IS_DESKTOP__`
 - `__DEV__`
+
+`__IS_NATIVE__`/`__IS_MOBILE__`/`__IS_DESKTOP__` come from your platform plugin traits
+(`native`, `mobile`, `desktop`). Defaults are `native: true`, `mobile: false`,
+`desktop: false` when omitted. A platform can set both `mobile` and `desktop`
+to `true`.
 
 ## Public Exports
 

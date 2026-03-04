@@ -34,7 +34,22 @@ async function runConfigHook(
   return result ?? {};
 }
 
+function getEnvironmentDefine(
+  config: Partial<UserConfig>,
+  environment: string,
+): Record<string, string> {
+  const environments = config.environments as
+    | Record<string, { define?: Record<string, string> }>
+    | undefined;
+  const define = environments?.[environment]?.define;
+  if (!define) {
+    throw new Error(`missing define object for environment "${environment}"`);
+  }
+  return define;
+}
+
 const ORIGINAL_NATIVITE_PLATFORM = process.env["NATIVITE_PLATFORM"];
+const ORIGINAL_NATIVITE_PLATFORM_METADATA = process.env["NATIVITE_PLATFORM_METADATA"];
 const ORIGINAL_NATIVITE_DEV_ERROR_OVERLAY = process.env["NATIVITE_DEV_ERROR_OVERLAY"];
 
 afterEach(() => {
@@ -42,6 +57,12 @@ afterEach(() => {
     delete process.env["NATIVITE_PLATFORM"];
   } else {
     process.env["NATIVITE_PLATFORM"] = ORIGINAL_NATIVITE_PLATFORM;
+  }
+
+  if (ORIGINAL_NATIVITE_PLATFORM_METADATA === undefined) {
+    delete process.env["NATIVITE_PLATFORM_METADATA"];
+  } else {
+    process.env["NATIVITE_PLATFORM_METADATA"] = ORIGINAL_NATIVITE_PLATFORM_METADATA;
   }
 
   if (ORIGINAL_NATIVITE_DEV_ERROR_OVERLAY === undefined) {
@@ -128,6 +149,119 @@ describe("nativite core build config", () => {
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe("nativite core platform globals", () => {
+  it("defines mobile and desktop globals for built-in native environments", async () => {
+    const plugin = getCorePlugin();
+    const config = await runConfigHook(plugin, {}, { command: "serve", mode: "development" });
+
+    const iosDefine = getEnvironmentDefine(config, "ios");
+    expect(iosDefine["__IS_NATIVE__"]).toBe("true");
+    expect(iosDefine["__IS_MOBILE__"]).toBe("true");
+    expect(iosDefine["__IS_DESKTOP__"]).toBe("false");
+
+    const androidDefine = getEnvironmentDefine(config, "android");
+    expect(androidDefine["__IS_NATIVE__"]).toBe("true");
+    expect(androidDefine["__IS_MOBILE__"]).toBe("true");
+    expect(androidDefine["__IS_DESKTOP__"]).toBe("false");
+
+    const macosDefine = getEnvironmentDefine(config, "macos");
+    expect(macosDefine["__IS_NATIVE__"]).toBe("true");
+    expect(macosDefine["__IS_MOBILE__"]).toBe("false");
+    expect(macosDefine["__IS_DESKTOP__"]).toBe("true");
+  });
+
+  it("uses serialized platform plugin traits when building custom desktop targets", async () => {
+    const plugin = getCorePlugin();
+
+    process.env["NATIVITE_PLATFORM_METADATA"] = JSON.stringify({
+      windows: {
+        extensions: [".windows", ".desktop", ".native"],
+        environments: ["windows"],
+        bundlePlatform: "windows",
+        native: true,
+        mobile: false,
+        desktop: true,
+      },
+      linux: {
+        extensions: [".linux", ".desktop", ".native"],
+        environments: ["linux"],
+        bundlePlatform: "linux",
+        native: true,
+        mobile: false,
+        desktop: true,
+      },
+    });
+
+    process.env["NATIVITE_PLATFORM"] = "windows";
+    const windowsConfig = await runConfigHook(plugin, {}, { command: "build", mode: "production" });
+    const windowsDefine = getEnvironmentDefine(windowsConfig, "windows");
+    expect(windowsDefine["__IS_NATIVE__"]).toBe("true");
+    expect(windowsDefine["__IS_MOBILE__"]).toBe("false");
+    expect(windowsDefine["__IS_DESKTOP__"]).toBe("true");
+
+    process.env["NATIVITE_PLATFORM"] = "linux";
+    const linuxConfig = await runConfigHook(plugin, {}, { command: "build", mode: "production" });
+    const linuxDefine = getEnvironmentDefine(linuxConfig, "linux");
+    expect(linuxDefine["__IS_NATIVE__"]).toBe("true");
+    expect(linuxDefine["__IS_MOBILE__"]).toBe("false");
+    expect(linuxDefine["__IS_DESKTOP__"]).toBe("true");
+  });
+
+  it("maps custom environment traits from serialized platform metadata", async () => {
+    const plugin = getCorePlugin();
+    process.env["NATIVITE_PLATFORM_METADATA"] = JSON.stringify({
+      satellite: {
+        extensions: [".satellite", ".native"],
+        environments: ["satellite-phone", "satellite-desktop"],
+        bundlePlatform: "satellite",
+        native: true,
+        mobile: true,
+        desktop: false,
+      },
+      headless: {
+        extensions: [".headless", ".native"],
+        environments: ["headless"],
+        bundlePlatform: "headless",
+        native: false,
+        mobile: false,
+        desktop: false,
+      },
+      minimal: {
+        extensions: [".minimal", ".native"],
+        environments: ["minimal"],
+        bundlePlatform: "minimal",
+      },
+    });
+
+    const config = await runConfigHook(plugin, {}, { command: "serve", mode: "development" });
+    const satelliteDefine = getEnvironmentDefine(config, "satellite-phone");
+    expect(satelliteDefine["__IS_NATIVE__"]).toBe("true");
+    expect(satelliteDefine["__IS_MOBILE__"]).toBe("true");
+    expect(satelliteDefine["__IS_DESKTOP__"]).toBe("false");
+
+    const headlessDefine = getEnvironmentDefine(config, "headless");
+    expect(headlessDefine["__IS_NATIVE__"]).toBe("false");
+    expect(headlessDefine["__IS_MOBILE__"]).toBe("false");
+    expect(headlessDefine["__IS_DESKTOP__"]).toBe("false");
+
+    const minimalDefine = getEnvironmentDefine(config, "minimal");
+    expect(minimalDefine["__IS_NATIVE__"]).toBe("true");
+    expect(minimalDefine["__IS_MOBILE__"]).toBe("false");
+    expect(minimalDefine["__IS_DESKTOP__"]).toBe("false");
+  });
+
+  it("defaults global native/mobile/desktop flags to false for web", async () => {
+    const plugin = getCorePlugin();
+    const config = await runConfigHook(plugin, {}, { command: "build", mode: "production" });
+
+    expect(config.define).toMatchObject({
+      __IS_NATIVE__: "false",
+      __IS_MOBILE__: "false",
+      __IS_DESKTOP__: "false",
+    });
   });
 });
 

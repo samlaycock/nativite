@@ -16,5 +16,11 @@ declare const __PLATFORM__: "ios" | "ipad" | "macos" | "web" | (string & {});
 /** `true` when the app is running inside a Nativite native shell, `false` in a browser. */
 declare const __IS_NATIVE__: boolean;
 
+/** `true` when `__PLATFORM__` is `ios` or `android`. */
+declare const __IS_MOBILE__: boolean;
+
+/** `true` when `__PLATFORM__` is `windows`, `macos`, or `linux`. */
+declare const __IS_DESKTOP__: boolean;
+
 /** `true` in development mode (`vite dev`), `false` in production (`vite build`). */
 declare const __DEV__: boolean;

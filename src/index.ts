@@ -180,6 +180,21 @@ export type NativitePlatformPlugin = {
   name: string;
   platform: string;
   /**
+   * Whether this platform runs in a native shell/runtime.
+   * Defaults to true when omitted.
+   */
+  native?: boolean;
+  /**
+   * Whether this platform is considered a mobile target family.
+   * Used for `__IS_MOBILE__` compile-time define values.
+   */
+  mobile?: boolean;
+  /**
+   * Whether this platform is considered a desktop target family.
+   * Used for `__IS_DESKTOP__` compile-time define values.
+   */
+  desktop?: boolean;
+  /**
    * File-extension suffix order for this platform.
    * Example: [".android", ".mobile", ".native"]
    */
@@ -277,6 +292,9 @@ function isPlatformPluginConfig(value: unknown): value is NativitePlatformPlugin
   const candidate = value as {
     name?: unknown;
     platform?: unknown;
+    native?: unknown;
+    mobile?: unknown;
+    desktop?: unknown;
     extensions?: unknown;
     environments?: unknown;
     generate?: unknown;
@@ -285,6 +303,9 @@ function isPlatformPluginConfig(value: unknown): value is NativitePlatformPlugin
   };
   if (typeof candidate.name !== "string" || candidate.name.length === 0) return false;
   if (typeof candidate.platform !== "string" || candidate.platform.length === 0) return false;
+  if (candidate.native !== undefined && typeof candidate.native !== "boolean") return false;
+  if (candidate.mobile !== undefined && typeof candidate.mobile !== "boolean") return false;
+  if (candidate.desktop !== undefined && typeof candidate.desktop !== "boolean") return false;
   if (
     candidate.extensions !== undefined &&
     (!Array.isArray(candidate.extensions) ||

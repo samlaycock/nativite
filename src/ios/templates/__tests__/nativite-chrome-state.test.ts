@@ -33,6 +33,26 @@ describe("nativiteChromeStateTemplate", () => {
     expect(output).toContain('"menuBar.itemPressed"');
   });
 
+  it("avoids top-level ForEach in toolbar content builders", () => {
+    const output = nativiteChromeStateTemplate();
+    expect(output).not.toContain(
+      "ForEach(Array(chromeState.toolbarGroups.enumerated()), id: \\.offset)",
+    );
+    expect(output).toContain("toolbarGroupContent(for: .automatic)");
+  });
+
+  it("builds menu content with AnyView helpers", () => {
+    const output = nativiteChromeStateTemplate();
+    expect(output).toContain(
+      "private func menuItems(_ items: [NativiteChromeState.MenuItemState]) -> AnyView",
+    );
+    expect(output).toContain(
+      "private func menuButton(_ item: NativiteChromeState.MenuItemState) -> AnyView",
+    );
+    expect(output).not.toContain("@CommandsBuilder\n  private func menuItems");
+    expect(output).not.toContain("@CommandsBuilder\n  private func menuButton");
+  });
+
   it("uses hyphenated flexible-space and fixed-space toolbar item types", () => {
     const output = nativiteChromeStateTemplate();
     expect(output).toContain('"flexible-space"');
@@ -56,7 +76,7 @@ describe("nativiteChromeStateTemplate", () => {
     expect(output).toContain("var toolbarId: String?");
     expect(output).toContain("enum CustomizationBehavior: String");
     expect(output).toContain(".customizationBehavior");
-    expect(output).toContain(".defaultVisibility");
+    expect(output).toContain('id: "nativite.toolbar.\\(placement.rawValue)"');
     expect(output).toContain("CustomizableToolbarContent");
   });
 

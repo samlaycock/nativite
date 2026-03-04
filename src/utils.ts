@@ -11,16 +11,16 @@ export function platform<T, D>(options: Record<Platform, T>, fallback?: D): T | 
   return fallback as D;
 }
 
-export function web<T, D>(value: T, fallback?: D): T | D {
-  return platform({ web: value }, fallback);
-}
-
 export function mobile<T, D>(value: T, fallback?: D): T | D {
-  return platform({ ios: value, android: value }, fallback);
+  return __IS_MOBILE__ ? value : (fallback as D);
 }
 
 export function desktop<T, D>(value: T, fallback?: D): T | D {
-  return platform({ windows: value, macos: value, linux: value }, fallback);
+  return __IS_DESKTOP__ ? value : (fallback as D);
+}
+
+export function web<T, D>(value: T, fallback?: D): T | D {
+  return platform({ web: value }, fallback);
 }
 
 export function ios<T, D>(value: T, fallback?: D): T | D {
@@ -41,4 +41,40 @@ export function macos<T, D>(value: T, fallback?: D): T | D {
 
 export function linux<T, D>(value: T, fallback?: D): T | D {
   return platform({ linux: value }, fallback);
+}
+
+export function isPlatform(...platforms: Platform[]): boolean {
+  return platforms.includes(__PLATFORM__);
+}
+
+export function isMobile(): boolean {
+  return __IS_MOBILE__;
+}
+
+export function isDesktop(): boolean {
+  return __IS_DESKTOP__;
+}
+
+export function isWeb(): boolean {
+  return __PLATFORM__ === "web";
+}
+
+export function isIOS(): boolean {
+  return __PLATFORM__ === "ios";
+}
+
+export function isAndroid(): boolean {
+  return __PLATFORM__ === "android";
+}
+
+export function isWindows(): boolean {
+  return __PLATFORM__ === "windows";
+}
+
+export function isMacOS(): boolean {
+  return __PLATFORM__ === "macos";
+}
+
+export function isLinux(): boolean {
+  return __PLATFORM__ === "linux";
 }

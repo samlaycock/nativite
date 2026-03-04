@@ -9,12 +9,18 @@ export type ResolvedNativitePlatformRuntime = {
   extensions: string[];
   environments: string[];
   bundlePlatform: string;
+  native: boolean;
+  mobile: boolean;
+  desktop: boolean;
 };
 
 type PlatformMetadata = {
   extensions: string[];
   environments: string[];
   bundlePlatform: string;
+  native: boolean;
+  mobile: boolean;
+  desktop: boolean;
 };
 
 function unique(items: string[]): string[] {
@@ -34,6 +40,18 @@ function toDotPrefixedSuffixes(platformId: string, suffixes: string[] | undefine
 function normalizeEnvironments(platformId: string, environments: string[] | undefined): string[] {
   if (!environments || environments.length === 0) return [platformId];
   return unique(environments.map((entry) => entry.trim()).filter((entry) => entry.length > 0));
+}
+
+function normalizePlatformTraits(plugin: NativitePlatformPlugin): {
+  native: boolean;
+  mobile: boolean;
+  desktop: boolean;
+} {
+  const native = plugin.native ?? true;
+  const mobile = plugin.mobile ?? false;
+  const desktop = plugin.desktop ?? false;
+
+  return { native, mobile, desktop };
 }
 
 export function getConfiguredPlatforms(config: NativiteConfig): NativitePlatformConfig[] {
@@ -61,6 +79,8 @@ export function resolveConfiguredPlatformRuntimes(
       );
     }
 
+    const traits = normalizePlatformTraits(plugin);
+
     return {
       id: platformEntry.platform,
       config: platformEntry,
@@ -68,6 +88,9 @@ export function resolveConfiguredPlatformRuntimes(
       extensions: toDotPrefixedSuffixes(platformEntry.platform, plugin.extensions),
       environments: normalizeEnvironments(platformEntry.platform, plugin.environments),
       bundlePlatform: platformEntry.platform,
+      native: traits.native,
+      mobile: traits.mobile,
+      desktop: traits.desktop,
     };
   });
 }
@@ -159,6 +182,9 @@ export function serializePlatformRuntimeMetadata(
           extensions: runtime.extensions,
           environments: runtime.environments,
           bundlePlatform: runtime.bundlePlatform,
+          native: runtime.native,
+          mobile: runtime.mobile,
+          desktop: runtime.desktop,
         },
       ]),
     ),
@@ -177,6 +203,9 @@ export function deserializePlatformRuntimeMetadata(
         extensions?: unknown;
         environments?: unknown;
         bundlePlatform?: unknown;
+        native?: unknown;
+        mobile?: unknown;
+        desktop?: unknown;
       };
       if (
         !Array.isArray(candidate.extensions) ||
@@ -193,6 +222,20 @@ export function deserializePlatformRuntimeMetadata(
       if (typeof candidate.bundlePlatform !== "string" || candidate.bundlePlatform.length === 0) {
         return [];
       }
+      if (candidate.native !== undefined && typeof candidate.native !== "boolean") {
+        return [];
+      }
+      if (candidate.mobile !== undefined && typeof candidate.mobile !== "boolean") {
+        return [];
+      }
+      if (candidate.desktop !== undefined && typeof candidate.desktop !== "boolean") {
+        return [];
+      }
+
+      const native = candidate.native ?? true;
+      const mobile = candidate.mobile ?? false;
+      const desktop = candidate.desktop ?? false;
+
       return [
         [
           platform,
@@ -200,6 +243,9 @@ export function deserializePlatformRuntimeMetadata(
             extensions: toDotPrefixedSuffixes(platform, candidate.extensions),
             environments: normalizeEnvironments(platform, candidate.environments),
             bundlePlatform: candidate.bundlePlatform,
+            native,
+            mobile,
+            desktop,
           },
         ] as const,
       ];

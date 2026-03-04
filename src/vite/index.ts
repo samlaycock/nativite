@@ -57,6 +57,9 @@ type PlatformRuntimeMetadata = {
   extensions: string[];
   environments: string[];
   bundlePlatform: string;
+  native: boolean;
+  mobile: boolean;
+  desktop: boolean;
 };
 
 type BuildManifest = {
@@ -135,6 +138,45 @@ function devDefineValue(mode: string): string {
   return JSON.stringify(mode !== "production");
 }
 
+function inferPlatformTraits(platform: string): {
+  native: boolean;
+  mobile: boolean;
+  desktop: boolean;
+} {
+  if (platform === "ios" || platform === "ipad") {
+    return { native: true, mobile: true, desktop: false };
+  }
+  if (platform === "android") {
+    return { native: true, mobile: true, desktop: false };
+  }
+  if (platform === "macos") {
+    return { native: true, mobile: false, desktop: true };
+  }
+
+  return {
+    native: true,
+    mobile: false,
+    desktop: false,
+  };
+}
+
+function resolvePlatformTraits(
+  platform: string,
+  metadata: Record<string, PlatformRuntimeMetadata>,
+): {
+  native: boolean;
+  mobile: boolean;
+  desktop: boolean;
+} {
+  const configured = metadata[platform];
+  if (!configured) return inferPlatformTraits(platform);
+  return {
+    native: configured.native,
+    mobile: configured.mobile,
+    desktop: configured.desktop,
+  };
+}
+
 function parseBooleanEnv(raw: string | undefined): boolean | undefined {
   if (raw === undefined) return undefined;
   const normalized = raw.trim().toLowerCase();
@@ -170,7 +212,11 @@ async function resolveNativeErrorOverlay(
   return iosConfig.dev?.errorOverlay ?? true;
 }
 
-function nativeEnvironmentOptions(platform: Platform, mode: string): EnvironmentOptions {
+function nativeEnvironmentOptions(
+  platform: Platform,
+  mode: string,
+  traits: { native: boolean; mobile: boolean; desktop: boolean },
+): EnvironmentOptions {
   return {
     consumer: "client",
     define: {
@@ -178,7 +224,9 @@ function nativeEnvironmentOptions(platform: Platform, mode: string): Environment
       "import.meta.env.VITE_NATIVITE": "true",
       // Global constants — available without importing anything
       __PLATFORM__: JSON.stringify(platform),
-      __IS_NATIVE__: "true",
+      __IS_NATIVE__: JSON.stringify(traits.native),
+      __IS_MOBILE__: JSON.stringify(traits.mobile),
+      __IS_DESKTOP__: JSON.stringify(traits.desktop),
       __DEV__: devDefineValue(mode),
     },
     dev: {
@@ -311,17 +359,36 @@ function nativiteCorePlugin(): Plugin {
         ]),
       );
 
+      const environmentToPlatform = new Map<string, string>([
+        ["ios", "ios"],
+        ["ipad", "ios"],
+        ["android", "android"],
+        ["macos", "macos"],
+      ]);
+      for (const [platformName, entry] of Object.entries(platformMetadata)) {
+        environmentToPlatform.set(platformName, platformName);
+        for (const environmentName of entry.environments) {
+          environmentToPlatform.set(environmentName, platformName);
+        }
+      }
+
       const environments: Record<string, EnvironmentOptions> = {};
       for (const p of nativePlatforms) {
-        environments[p] = nativeEnvironmentOptions(p, mode);
+        const runtimePlatform = environmentToPlatform.get(p) ?? p;
+        const traits = resolvePlatformTraits(runtimePlatform, platformMetadata);
+        environments[p] = nativeEnvironmentOptions(p, mode, traits);
       }
 
       return {
         // Global defines default to web — nativeEnvironmentOptions overrides
-        // __PLATFORM__ and __IS_NATIVE__ for each native platform environment.
+        // __PLATFORM__, __IS_NATIVE__, __IS_MOBILE__, and __IS_DESKTOP__ for
+        // each native platform
+        // environment.
         define: {
           __PLATFORM__: JSON.stringify("web"),
           __IS_NATIVE__: "false",
+          __IS_MOBILE__: "false",
+          __IS_DESKTOP__: "false",
           __DEV__: devDefineValue(mode),
         },
         ...(serverConfig ? { server: serverConfig } : {}),
@@ -342,7 +409,9 @@ function nativiteCorePlugin(): Plugin {
       config = await loadNativiteConfigFromDir(viteConfig.root);
       configuredPlatformRuntimes = resolveConfiguredPlatformRuntimes(config);
       configuredNativeEnvironmentNames = new Set(
-        configuredPlatformRuntimes.flatMap((runtime) => runtime.environments),
+        configuredPlatformRuntimes
+          .filter((runtime) => runtime.native)
+          .flatMap((runtime) => runtime.environments),
       );
       nativeVariantSuffixes = new Set(
         configuredPlatformRuntimes.flatMap((runtime) => runtime.extensions).concat(".native"),
@@ -432,7 +501,9 @@ function nativiteCorePlugin(): Plugin {
             const freshConfig = await loadNativiteConfigFromDir(viteConfig.root);
             configuredPlatformRuntimes = resolveConfiguredPlatformRuntimes(freshConfig);
             configuredNativeEnvironmentNames = new Set(
-              configuredPlatformRuntimes.flatMap((runtime) => runtime.environments),
+              configuredPlatformRuntimes
+                .filter((runtime) => runtime.native)
+                .flatMap((runtime) => runtime.environments),
             );
             nativeVariantSuffixes = new Set(
               configuredPlatformRuntimes.flatMap((runtime) => runtime.extensions).concat(".native"),

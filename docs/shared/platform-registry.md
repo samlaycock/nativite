@@ -42,6 +42,9 @@ type ResolvedNativitePlatformRuntime = {
   extensions: string[]; // [".ios", ".mobile", ".native"]
   environments: string[]; // ["ios", "ipad"]
   bundlePlatform: string; // Platform name for bundle manifest
+  native: boolean; // __IS_NATIVE__
+  mobile: boolean; // __IS_MOBILE__
+  desktop: boolean; // __IS_DESKTOP__
 };
 ```
 
@@ -49,11 +52,17 @@ type ResolvedNativitePlatformRuntime = {
 
 > Maps to: `src/platforms/first-party.ts`
 
-| Plugin             | Platform  | Environments  | Extensions                       |
-| ------------------ | --------- | ------------- | -------------------------------- |
-| `nativite-ios`     | `ios`     | `ios`, `ipad` | `.ios`, `.mobile`, `.native`     |
-| `nativite-macos`   | `macos`   | `macos`       | `.macos`, `.desktop`, `.native`  |
-| `nativite-android` | `android` | `android`     | `.android`, `.mobile`, `.native` |
+| Plugin             | Platform  | Environments  | Extensions                       | Traits                          |
+| ------------------ | --------- | ------------- | -------------------------------- | ------------------------------- |
+| `nativite-ios`     | `ios`     | `ios`, `ipad` | `.ios`, `.mobile`, `.native`     | `native: true`, `mobile: true`  |
+| `nativite-macos`   | `macos`   | `macos`       | `.macos`, `.desktop`, `.native`  | `native: true`, `desktop: true` |
+| `nativite-android` | `android` | `android`     | `.android`, `.mobile`, `.native` | `native: true`, `mobile: true`  |
+
+For custom platform plugins, omitted traits default to:
+
+- `native: true`
+- `mobile: false`
+- `desktop: false`
 
 ### Plugin Hooks
 
