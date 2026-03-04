@@ -26,6 +26,14 @@ describe("nativiteVarsTemplate", () => {
     expect(swift).toContain(".components(separatedBy: .newlines)");
   });
 
+  it("declares color-scheme on :root so prefers-color-scheme media queries work", () => {
+    const swift = nativiteVarsTemplate();
+
+    // Without color-scheme: light dark, the WKWebView rendering engine does not
+    // adapt UA default colors or reliably match @media (prefers-color-scheme: dark).
+    expect(swift).toContain("color-scheme:light dark;");
+  });
+
   it("keeps inset-top math consistent between safe-area and chrome updates", () => {
     const swift = nativiteVarsTemplate();
 

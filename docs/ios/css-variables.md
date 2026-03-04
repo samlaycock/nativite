@@ -127,6 +127,16 @@ All values are in `px` and reflect the user's Dynamic Type preference:
 - Initial macOS appearance variables are seeded immediately on startup (not only after a theme-change notification)
 - `--nv-nav-height`/`--nv-tab-height` are derived from live window/navigation geometry; `--nv-toolbar-*` stays `0` on macOS because the unified NSToolbar is top chrome, not a bottom bar
 
+## Dark Mode & `prefers-color-scheme`
+
+The injected CSS includes `color-scheme: light dark` on `:root`, which:
+
+- Enables `@media (prefers-color-scheme: dark)` CSS media queries to match the system setting
+- Adapts UA default colours (page background, text, form controls, scrollbars) automatically
+- Works on both main and child webviews (sheets, drawers, popovers, app windows)
+
+Both standard CSS media queries and the `--nv-is-dark` / `--nv-is-light` custom properties are available for dark mode styling.
+
 ## Usage in CSS
 
 ```css
@@ -142,7 +152,15 @@ All values are in `px` and reflect the user's Dynamic Type preference:
   transition-duration: var(--nv-keyboard-duration);
 }
 
-/* Dark mode */
+/* Dark mode — standard media query */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1a1a1a;
+    color: #f0f0f0;
+  }
+}
+
+/* Dark mode — CSS variable approach */
 :root[style*="--nv-is-dark: 1"] {
   --bg: #1a1a1a;
 }

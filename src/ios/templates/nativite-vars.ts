@@ -68,6 +68,7 @@ export function nativiteVarsTemplate(): string {
   private func buildInitScript() -> String {
     // These are static defaults; dynamic values are patched after load.
     let defaults = """
+      color-scheme:light dark;
       --nv-safe-top:0px;--nv-safe-bottom:0px;--nv-safe-left:0px;--nv-safe-right:0px;
       --nv-nav-height:0px;--nv-nav-visible:0;
       --nv-tab-height:0px;--nv-tab-visible:0;

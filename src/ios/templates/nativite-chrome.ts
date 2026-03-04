@@ -417,6 +417,33 @@ ${applyInitialStateMethod}
     // list changes (IDs, roles, search-bar presence). Mutable properties
     // like labels, badges and subtitles are updated in-place.
 
+    // When the items array is empty, tear down the UITabBarController
+    // entirely rather than setting tbc.tabs = [].  Going from zero tabs
+    // back to populated tabs can leave the WKWebView behind UIKit's
+    // opaque content view — the viewControllerProvider for the
+    // auto-selected tab may never fire, so reparentWebView's deferred
+    // retry never succeeds and the webview stays invisible until the
+    // user manually selects a tab.  Destroying the tbc now means a
+    // fresh one is created when items come back, following the
+    // well-tested first-appearance path.
+    if let items = state["items"] as? [[String: Any]], items.isEmpty {
+      if tabBarController != nil {
+        parkWebView()
+        if let tbc = tabBarController {
+          tbc.willMove(toParent: nil)
+          tbc.view.removeFromSuperview()
+          tbc.removeFromParent()
+          tabBarController = nil
+        }
+        tabFingerprint = []
+        pendingSearchBarConfig = nil
+        isNavigationSearchActive = false
+        hasPendingReparent = false
+        navigationSearchItemId = nil
+      }
+      return
+    }
+
     var didRebuildTabs = false
 
     if let items = state["items"] as? [[String: Any]] {
@@ -590,8 +617,11 @@ ${applyInitialStateMethod}
         webView.frame = tbc.view.bounds
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       }
-      // Schedule exactly one deferred retry.
-      if !hasPendingReparent {
+      // Schedule exactly one deferred retry — but only when there IS a
+      // selected tab whose VC hasn't been created yet.  If selectedTab
+      // is nil (zero tabs), retrying is pointless and would create an
+      // infinite dispatch loop.
+      if tbc.selectedTab != nil, !hasPendingReparent {
         hasPendingReparent = true
         DispatchQueue.main.async { [weak self] in
           guard let self else { return }

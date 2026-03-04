@@ -123,4 +123,17 @@ describe("nativiteChromeStateTemplate", () => {
     expect(output).toContain('state["customization"]');
     expect(output).toContain("item.customization = BarItemState.CustomizationBehavior");
   });
+
+  it("sets underPageBackgroundColor on child webviews for dark-mode-aware overscroll", () => {
+    const output = nativiteChromeStateTemplate();
+    // iOS child webview should use .systemBackground
+    expect(output).toContain("webView.underPageBackgroundColor = .systemBackground");
+    // macOS child webview should use .windowBackgroundColor
+    expect(output).toContain("webView.underPageBackgroundColor = .windowBackgroundColor");
+  });
+
+  it("injects color-scheme declaration into child webview user scripts for prefers-color-scheme support", () => {
+    const output = nativiteChromeStateTemplate();
+    expect(output).toContain("color-scheme:light dark");
+  });
 });

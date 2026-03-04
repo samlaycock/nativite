@@ -445,6 +445,31 @@ describe("nativiteChromeTemplate", () => {
       expect(output).toContain("navigationSearchController?.searchBar");
       expect(output).toContain("tabBarController != nil");
     });
+
+    it("tears down UITabBarController when items array is empty", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func applyNavigationModern");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Moves the WKWebView back", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      // When items is empty, the tbc should be torn down entirely rather
+      // than setting tbc.tabs = [] (which causes UIKit quirks on
+      // empty → populated transitions that leave the webview invisible).
+      expect(body).toContain("items.isEmpty");
+      expect(body).toContain("tabBarController = nil");
+    });
+
+    it("reparentWebView only retries when selectedTab exists but VC is nil", () => {
+      const output = nativiteChromeTemplate(baseConfig);
+      const start = output.indexOf("func reparentWebView(to tbc: UITabBarController)");
+      expect(start).toBeGreaterThan(-1);
+      const end = output.indexOf("\n  /// Returns true", start + 1);
+      const body = end !== -1 ? output.slice(start, end) : output.slice(start);
+      // The deferred retry should only fire when there IS a selected tab
+      // whose VC hasn't been created yet. When selectedTab is nil (zero
+      // tabs), retrying is pointless and creates an infinite loop.
+      expect(body).toContain("tbc.selectedTab != nil");
+    });
   });
 
   describe("tab bottom accessory", () => {

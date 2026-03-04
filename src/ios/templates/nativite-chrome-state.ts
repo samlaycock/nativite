@@ -778,7 +778,7 @@ struct NativiteChildWebView: UIViewRepresentable {
     let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
     config.applicationNameForUserAgent = "Nativite/\\(nvPlatform)/1.0"
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','\\(nvPlatform)');",
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','\\(nvPlatform)');(function(){var s=document.createElement('style');s.textContent=':root{color-scheme:light dark}';document.documentElement.appendChild(s)})();",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))
@@ -790,6 +790,7 @@ struct NativiteChildWebView: UIViewRepresentable {
     webView.isOpaque = false
     webView.backgroundColor = .clear
     webView.scrollView.backgroundColor = .clear
+    webView.underPageBackgroundColor = .systemBackground
     webView.lockRootScroll = false
     webView.scrollView.contentInsetAdjustmentBehavior = .never
     webView.scrollView.isScrollEnabled = true
@@ -862,7 +863,7 @@ struct NativiteChildWebView: NSViewRepresentable {
     config.websiteDataStore = WKWebsiteDataStore.default()
     config.applicationNameForUserAgent = "Nativite/macos/1.0"
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','macos');",
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','macos');(function(){var s=document.createElement('style');s.textContent=':root{color-scheme:light dark}';document.documentElement.appendChild(s)})();",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))
@@ -871,6 +872,7 @@ struct NativiteChildWebView: NSViewRepresentable {
     }
 
     let webView = WKWebView(frame: .zero, configuration: config)
+    webView.underPageBackgroundColor = .windowBackgroundColor
     webView.navigationDelegate = context.coordinator
     #if DEBUG
     if #available(macOS 13.3, *) {

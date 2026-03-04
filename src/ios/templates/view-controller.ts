@@ -197,6 +197,7 @@ class ViewController: UIViewController {
     webView.isOpaque = false
     webView.backgroundColor = .clear
     webView.scrollView.backgroundColor = .clear
+    webView.underPageBackgroundColor = .systemBackground
     bridge.primaryWebView = webView
     webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     // Disable automatic content inset adjustment — NativiteVars owns keyboard layout.
@@ -465,6 +466,7 @@ class ViewController: NSViewController {
       webView.isInspectable = true
     }
     #endif
+    webView.underPageBackgroundColor = .windowBackgroundColor
     bridge.primaryWebView = webView
     webView.autoresizingMask = [.width, .height]
     webView.navigationDelegate = self

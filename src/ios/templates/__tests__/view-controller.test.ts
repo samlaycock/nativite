@@ -69,6 +69,11 @@ describe("viewControllerTemplate", () => {
     expect(output).toContain("webView.scrollView.backgroundColor = .clear");
   });
 
+  it("sets underPageBackgroundColor on the iOS webview for dark-mode-aware overscroll", () => {
+    const output = viewControllerTemplate(baseConfig);
+    expect(output).toContain("webView.underPageBackgroundColor = .systemBackground");
+  });
+
   it("opens external links in the system browser instead of silently no-oping", () => {
     const output = viewControllerTemplate(baseConfig);
     expect(output).toContain("webView.uiDelegate = self");
@@ -200,6 +205,11 @@ describe("viewControllerTemplate", () => {
     it("uses WKWebsiteDataStore.default() for child webview process sharing", () => {
       const macos = macosSection(viewControllerTemplate(baseConfig));
       expect(macos).toContain("config.websiteDataStore = WKWebsiteDataStore.default()");
+    });
+
+    it("sets underPageBackgroundColor on the macOS webview for dark-mode-aware overscroll", () => {
+      const macos = macosSection(viewControllerTemplate(baseConfig));
+      expect(macos).toContain("webView.underPageBackgroundColor = .windowBackgroundColor");
     });
   });
 });

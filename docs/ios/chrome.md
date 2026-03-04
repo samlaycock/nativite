@@ -81,6 +81,8 @@ Uses the modern `UITab` and `UISearchTab` API:
 - Supports `UISearchTab` for tabs with `role: "search"`
 - Detects structural changes via a fingerprint array (`"{id}:{role}"` strings)
 - Full rebuild only when structure changes; otherwise updates in place
+- Empty items array tears down the `UITabBarController` entirely (rather than setting `tbc.tabs = []`) to avoid UIKit quirks when transitioning back to populated tabs
+- `reparentWebView` only schedules deferred retries when `selectedTab` is non-nil but its VC hasn't been created yet (prevents infinite dispatch loops with zero tabs)
 
 ### iOS <18 (Legacy `UITabBar`)
 
