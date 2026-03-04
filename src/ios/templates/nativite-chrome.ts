@@ -354,7 +354,7 @@ ${applyInitialStateMethod}
     if tabBarController == nil {
       let tbc = UITabBarController()
       tbc.delegate = self
-      tbc.view.backgroundColor = .clear
+      tbc.view.backgroundColor = .systemBackground
 
       vc.addChild(tbc)
       tbc.view.translatesAutoresizingMaskIntoConstraints = false
@@ -473,7 +473,7 @@ ${applyInitialStateMethod}
             let searchImage = icon ?? UIImage(systemName: "magnifyingglass")
             let searchTab = UISearchTab(viewControllerProvider: { [weak self] _ in
               let placeholder = UIViewController()
-              placeholder.view.backgroundColor = .clear
+              placeholder.view.backgroundColor = .systemBackground
               if hasSearchBar {
                 let sc = UISearchController(searchResultsController: nil)
                 sc.obscuresBackgroundDuringPresentation = false
@@ -482,7 +482,7 @@ ${applyInitialStateMethod}
                 placeholder.navigationItem.searchController = sc
                 let nav = UINavigationController(rootViewController: placeholder)
                 nav.isNavigationBarHidden = true
-                nav.view.backgroundColor = .clear
+                nav.view.backgroundColor = .systemBackground
                 return nav
               }
               return placeholder
@@ -497,7 +497,7 @@ ${applyInitialStateMethod}
           } else {
             let tab = UITab(title: label, image: icon, identifier: id) { _ in
               let placeholder = UIViewController()
-              placeholder.view.backgroundColor = .clear
+              placeholder.view.backgroundColor = .systemBackground
               return placeholder
             }
             if let subtitle { tab.subtitle = subtitle }

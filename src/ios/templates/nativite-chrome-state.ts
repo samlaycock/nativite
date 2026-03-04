@@ -1157,9 +1157,7 @@ struct NativiteTitleBarModifier: ViewModifier {
           }
         }
       }
-      .if(chromeState.titleBarTint != nil) { view in
-        view.tint(Color(uiColor: UIColor(hex: chromeState.titleBarTint!)))
-      }
+      .tint(chromeState.titleBarTint.map { Color(uiColor: UIColor(hex: $0)) })
       .if(chromeState.searchBar != nil) { view in
         view.searchable(
           text: Binding(
