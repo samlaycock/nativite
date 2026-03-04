@@ -67,7 +67,7 @@ describe("nativiteVarsTemplate", () => {
 
     it("defines the __nv_patch helper function", () => {
       const output = nativiteVarsTemplate(androidConfig);
-      expect(output).toContain("window.__nv_patch=function(vars)");
+      expect(output).toContain("window.__nv_patch=function(vars,attrs)");
     });
 
     it("defaults safe area variables to 0px", () => {
@@ -117,12 +117,40 @@ describe("nativiteVarsTemplate", () => {
       expect(output).toContain("--nv-is-light:1");
     });
 
+    it("declares color-scheme on :root so prefers-color-scheme media queries work", () => {
+      const output = nativiteVarsTemplate(androidConfig);
+      expect(output).toContain("color-scheme:light dark;");
+    });
+
+    it("sets data-nv-theme attribute on documentElement", () => {
+      const output = nativiteVarsTemplate(androidConfig);
+      expect(output).toContain("data-nv-theme");
+      expect(output).toContain("setAttribute('data-nv-theme'");
+    });
+
+    it("supports attrs parameter in __nv_patch helper", () => {
+      const output = nativiteVarsTemplate(androidConfig);
+      expect(output).toContain("window.__nv_patch=function(vars,attrs)");
+      expect(output).toContain("r.setAttribute(k,attrs[k])");
+    });
+
     it("uses correct iOS-compatible variable names", () => {
       const output = nativiteVarsTemplate(androidConfig);
       // Should use --nv-safe-top, NOT --nv-safe-area-top
       expect(output).toContain("--nv-safe-top:");
       expect(output).not.toMatch(/--nv-safe-area-/);
     });
+  });
+
+  it("updates data-nv-theme attribute when environment vars change", () => {
+    const output = nativiteVarsTemplate(androidConfig);
+    expect(output).toContain('updateAttr("data-nv-theme"');
+  });
+
+  it("flushes attrs alongside vars", () => {
+    const output = nativiteVarsTemplate(androidConfig);
+    expect(output).toContain("lastAttrs");
+    expect(output).toContain("lastAttrs.clear()");
   });
 
   it("exposes pushCustomVars for external modules", () => {

@@ -135,7 +135,23 @@ The injected CSS includes `color-scheme: light dark` on `:root`, which:
 - Adapts UA default colours (page background, text, form controls, scrollbars) automatically
 - Works on both main and child webviews (sheets, drawers, popovers, app windows)
 
-Both standard CSS media queries and the `--nv-is-dark` / `--nv-is-light` custom properties are available for dark mode styling.
+### `data-nv-theme` attribute
+
+A `data-nv-theme` attribute (`"dark"` or `"light"`) is set on `<html>` and updated in real time when the system appearance changes. This provides a reliable CSS selector for dark mode that works even if `prefers-color-scheme` is unavailable:
+
+```css
+html[data-nv-theme="dark"] body {
+  background: #1a1a1a;
+}
+```
+
+For Tailwind CSS 4, use `data-nv-theme` in your custom dark variant:
+
+```css
+@custom-variant dark (&:where(html[data-nv-theme="dark"], html[data-nv-theme="dark"] *));
+```
+
+All three approaches are available for dark mode styling: the `data-nv-theme` attribute, `@media (prefers-color-scheme: dark)`, and the `--nv-is-dark` / `--nv-is-light` custom properties.
 
 ## Usage in CSS
 

@@ -47,7 +47,7 @@ A side-by-side comparison of how nativite features are implemented across iOS, A
 | Safe Area       | `view.safeAreaInsets`                  | `WindowInsetsCompat.systemBars()` | Limited                               |
 | Chrome Geometry | UIKit frame measurements               | Compose runtime measurements      | `NSWindow` + AppKit view measurements |
 | Keyboard        | `keyboardWillChangeFrame` notification | `WindowInsetsCompat.ime()`        | N/A                                   |
-| Dark Mode       | `UITraitUserInterfaceStyle`            | Not yet exposed                   | `NSApplication` notifications         |
+| Dark Mode       | `UITraitUserInterfaceStyle`            | `Configuration.UI_MODE_NIGHT_*`   | `NSApplication` notifications         |
 | Dynamic Type    | `UIFont.preferredFont` sizes           | Not yet exposed                   | Fixed HIG sizes                       |
 | Accent Colour   | `UIColor.tintColor` components         | Not yet exposed                   | `NSColor.controlAccentColor`          |
 | Display         | `UIScreen` properties                  | Not yet exposed                   | `NSScreen` properties                 |

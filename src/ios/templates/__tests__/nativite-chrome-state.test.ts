@@ -136,4 +136,9 @@ describe("nativiteChromeStateTemplate", () => {
     const output = nativiteChromeStateTemplate();
     expect(output).toContain("color-scheme:light dark");
   });
+
+  it("sets data-nv-theme attribute on child webview documentElement", () => {
+    const output = nativiteChromeStateTemplate();
+    expect(output).toContain("data-nv-theme");
+  });
 });

@@ -140,19 +140,22 @@ export function nativiteVarsTemplate(): string {
       s.id='__nv_vars__';
       s.textContent=':root{\\(css)}\\(devCSS)';
       document.documentElement.appendChild(s);
-      window.__nv_patch=function(vars){
+      window.__nv_patch=function(vars,attrs){
         var r=document.documentElement;
         for(var k in vars){r.style.setProperty(k,vars[k]);}
+        if(attrs){for(var k in attrs){r.setAttribute(k,attrs[k]);}}
       };
       document.documentElement.setAttribute('data-nv-platform','\\(nvPlatform)');
+      document.documentElement.setAttribute('data-nv-theme','light');
     })();
     """
   }
 
   // Serialise a dictionary of var→value and call __nv_patch on the live page.
-  private func patch(_ vars: [String: String]) {
+  // When attrs is provided, __nv_patch also sets data attributes on documentElement.
+  private func patch(_ vars: [String: String], attrs: [String: String]? = nil) {
     guard let wv = webView else { return }
-    guard !vars.isEmpty else { return }
+    guard !vars.isEmpty || attrs != nil else { return }
 
     var entries: [String] = []
     for (key, value) in vars {
@@ -164,7 +167,20 @@ export function nativiteVarsTemplate(): string {
       entries.append("\\"\\(escapedKey)\\":\\"\\(escapedValue)\\"")
     }
 
-    let js = "if(window.__nv_patch){window.__nv_patch({\\(entries.joined(separator: ","))});}"
+    var attrArg = "null"
+    if let attrs {
+      var attrEntries: [String] = []
+      for (key, value) in attrs {
+        let ek = key.replacingOccurrences(of: "\\\\", with: "\\\\\\\\")
+                     .replacingOccurrences(of: "\\"",  with: "\\\\\\"")
+        let ev = value.replacingOccurrences(of: "\\\\", with: "\\\\\\\\")
+                       .replacingOccurrences(of: "\\"",  with: "\\\\\\"")
+        attrEntries.append("\\"\\(ek)\\":\\"\\(ev)\\"")
+      }
+      attrArg = "{\\(attrEntries.joined(separator: ","))}"
+    }
+
+    let js = "if(window.__nv_patch){window.__nv_patch({\\(entries.joined(separator: ","))},\\(attrArg));}"
 
     DispatchQueue.main.async {
       wv.evaluateJavaScript(js, completionHandler: nil)
@@ -330,7 +346,7 @@ ${sharedInstallation}
       "--nv-font-largeTitle": fontSizes.largeTitle,
     ]
 
-    patch(vars)
+    patch(vars, attrs: ["data-nv-theme": isDark ? "dark" : "light"])
   }
 ${sharedChrome}
 
@@ -578,7 +594,7 @@ ${sharedInstallation}
       "--nv-font-largeTitle": fontSizes.largeTitle,
     ]
 
-    patch(vars)
+    patch(vars, attrs: ["data-nv-theme": isDark ? "dark" : "light"])
   }
 ${sharedChrome}
 ${sharedHelpers}

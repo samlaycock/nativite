@@ -34,6 +34,24 @@ describe("nativiteVarsTemplate", () => {
     expect(swift).toContain("color-scheme:light dark;");
   });
 
+  it("sets data-nv-theme attribute on documentElement for CSS dark mode selectors", () => {
+    const swift = nativiteVarsTemplate();
+
+    // The data-nv-theme attribute is set at documentStart (default "light") and
+    // updated dynamically by updateTraits/updateAppearance so CSS selectors like
+    // html[data-nv-theme="dark"] work reliably even if prefers-color-scheme fails.
+    expect(swift).toContain("data-nv-theme");
+    expect(swift).toContain("setAttribute('data-nv-theme'");
+  });
+
+  it("updates data-nv-theme attribute when appearance traits change", () => {
+    const swift = nativiteVarsTemplate();
+
+    // Both iOS updateTraits() and macOS updateAppearance() must push data-nv-theme
+    // alongside the CSS variable patch so the attribute stays in sync.
+    expect(swift).toContain('"data-nv-theme": isDark ? "dark" : "light"');
+  });
+
   it("keeps inset-top math consistent between safe-area and chrome updates", () => {
     const swift = nativiteVarsTemplate();
 

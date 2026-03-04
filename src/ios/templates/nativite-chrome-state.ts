@@ -778,7 +778,7 @@ struct NativiteChildWebView: UIViewRepresentable {
     let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
     config.applicationNameForUserAgent = "Nativite/\\(nvPlatform)/1.0"
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','\\(nvPlatform)');(function(){var s=document.createElement('style');s.textContent=':root{color-scheme:light dark}';document.documentElement.appendChild(s)})();",
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','\\(nvPlatform)');document.documentElement.setAttribute('data-nv-theme',window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');(function(){var s=document.createElement('style');s.textContent=':root{color-scheme:light dark}';document.documentElement.appendChild(s)})();",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))
@@ -863,7 +863,7 @@ struct NativiteChildWebView: NSViewRepresentable {
     config.websiteDataStore = WKWebsiteDataStore.default()
     config.applicationNameForUserAgent = "Nativite/macos/1.0"
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','macos');(function(){var s=document.createElement('style');s.textContent=':root{color-scheme:light dark}';document.documentElement.appendChild(s)})();",
+      source: "window.__nativekit_instance_name__ = \\"\\(instanceName)\\";document.documentElement.setAttribute('data-nv-platform','macos');document.documentElement.setAttribute('data-nv-theme',window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');(function(){var s=document.createElement('style');s.textContent=':root{color-scheme:light dark}';document.documentElement.appendChild(s)})();",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))

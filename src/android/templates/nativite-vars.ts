@@ -15,6 +15,7 @@ import androidx.core.view.WindowInsetsCompat
 class NativiteVars(private val webView: WebView, private val bridge: NativiteBridge? = null) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastVars = mutableMapOf<String, String>()
+    private var lastAttrs = mutableMapOf<String, String>()
 
     fun startObserving() {
         updateEnvironmentVars()
@@ -51,8 +52,14 @@ class NativiteVars(private val webView: WebView, private val bridge: NativiteBri
         flush()
     }
 
+    fun updateAttr(name: String, value: String) {
+        if (lastAttrs[name] != value) {
+            lastAttrs[name] = value
+        }
+    }
+
     private fun flush() {
-        if (lastVars.isEmpty()) return
+        if (lastVars.isEmpty() && lastAttrs.isEmpty()) return
         val js = buildString {
             append("if(window.__nv_patch){window.__nv_patch({")
             var first = true
@@ -61,9 +68,22 @@ class NativiteVars(private val webView: WebView, private val bridge: NativiteBri
                 append("\\"$name\\":\\"$value\\"")
                 first = false
             }
-            append("});}")
+            if (lastAttrs.isNotEmpty()) {
+                append("},{")
+                first = true
+                for ((name, value) in lastAttrs) {
+                    if (!first) append(",")
+                    append("\\"$name\\":\\"$value\\"")
+                    first = false
+                }
+                append("})")
+            } else {
+                append("})")
+            }
+            append(";}")
         }
         lastVars.clear()
+        lastAttrs.clear()
         mainHandler.post {
             webView.evaluateJavascript(js, null)
         }
@@ -87,6 +107,7 @@ class NativiteVars(private val webView: WebView, private val bridge: NativiteBri
         updateVar("--nv-is-dark", if (isDark) "1" else "0")
         updateVar("--nv-is-light", if (isDark) "0" else "1")
         updateVar("--nv-font-scale", config.fontScale.toString())
+        updateAttr("data-nv-theme", if (isDark) "dark" else "light")
     }
 
     companion object {
@@ -105,9 +126,10 @@ class NativiteVars(private val webView: WebView, private val bridge: NativiteBri
         fun buildInitScript(): String = """(function(){
 var s=document.createElement('style');
 s.id='__nv_vars__';
-s.textContent=':root{--nv-safe-top:0px;--nv-safe-bottom:0px;--nv-safe-left:0px;--nv-safe-right:0px;--nv-nav-height:0px;--nv-nav-visible:0;--nv-tab-height:0px;--nv-tab-visible:0;--nv-toolbar-height:0px;--nv-toolbar-visible:0;--nv-status-height:0px;--nv-inset-top:0px;--nv-inset-bottom:0px;--nv-inset-left:0px;--nv-inset-right:0px;--nv-keyboard-height:0px;--nv-keyboard-visible:0;--nv-keyboard-inset:0px;--nv-accessory-height:0px;--nv-sidebar-width:0px;--nv-sidebar-visible:0;--nv-sheet-visible:0;--nv-sheet-detent:0;--nv-is-phone:1;--nv-is-tablet:0;--nv-is-desktop:0;--nv-is-portrait:1;--nv-is-landscape:0;--nv-is-dark:0;--nv-is-light:1;--nv-contrast:0;--nv-reduced-motion:0;--nv-reduced-transparency:0;--nv-font-scale:1;}';
+s.textContent=':root{color-scheme:light dark;--nv-safe-top:0px;--nv-safe-bottom:0px;--nv-safe-left:0px;--nv-safe-right:0px;--nv-nav-height:0px;--nv-nav-visible:0;--nv-tab-height:0px;--nv-tab-visible:0;--nv-toolbar-height:0px;--nv-toolbar-visible:0;--nv-status-height:0px;--nv-inset-top:0px;--nv-inset-bottom:0px;--nv-inset-left:0px;--nv-inset-right:0px;--nv-keyboard-height:0px;--nv-keyboard-visible:0;--nv-keyboard-inset:0px;--nv-accessory-height:0px;--nv-sidebar-width:0px;--nv-sidebar-visible:0;--nv-sheet-visible:0;--nv-sheet-detent:0;--nv-is-phone:1;--nv-is-tablet:0;--nv-is-desktop:0;--nv-is-portrait:1;--nv-is-landscape:0;--nv-is-dark:0;--nv-is-light:1;--nv-contrast:0;--nv-reduced-motion:0;--nv-reduced-transparency:0;--nv-font-scale:1;}';
 document.documentElement.appendChild(s);
-window.__nv_patch=function(vars){var r=document.documentElement;for(var k in vars){r.style.setProperty(k,vars[k]);}};
+window.__nv_patch=function(vars,attrs){var r=document.documentElement;for(var k in vars){r.style.setProperty(k,vars[k]);}if(attrs){for(var k in attrs){r.setAttribute(k,attrs[k]);}}};
+document.documentElement.setAttribute('data-nv-theme','light');
 })()"""
     }
 }
