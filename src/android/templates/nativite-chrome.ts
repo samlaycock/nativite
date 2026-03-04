@@ -27,10 +27,46 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BottomAppBar
@@ -1117,26 +1153,62 @@ private fun parseTintColor(hex: String?): Color? {
 
 // ─── Material Icon lookup ───────────────────────────────────────────────────
 
-private val iconCache = mutableMapOf<String, ImageVector>()
-
 private fun materialIcon(name: String?): ImageVector {
     if (name == null) return Icons.Default.Star
-    iconCache[name]?.let { return it }
-
-    val sources = arrayOf(Icons.Default, Icons.AutoMirrored.Filled)
-    for (source in sources) {
-        try {
-            val getter = source.javaClass.methods.firstOrNull {
-                it.name == "get$name" && it.parameterCount == 0
-            }
-            val icon = getter?.invoke(source) as? ImageVector
-            if (icon != null) {
-                iconCache[name] = icon
-                return icon
-            }
-        } catch (_: Exception) {}
+    return when (name) {
+        // AutoMirrored (RTL-aware)
+        "ArrowBack" -> Icons.AutoMirrored.Filled.ArrowBack
+        "ArrowForward" -> Icons.AutoMirrored.Filled.ArrowForward
+        "ExitToApp" -> Icons.AutoMirrored.Filled.ExitToApp
+        "List" -> Icons.AutoMirrored.Filled.List
+        "Send" -> Icons.AutoMirrored.Filled.Send
+        // Navigation
+        "Home" -> Icons.Default.Home
+        "Menu" -> Icons.Default.Menu
+        "MoreVert" -> Icons.Default.MoreVert
+        "Close" -> Icons.Default.Close
+        "ArrowDropDown" -> Icons.Default.ArrowDropDown
+        // Actions
+        "Search" -> Icons.Default.Search
+        "Add" -> Icons.Default.Add
+        "Edit" -> Icons.Default.Edit
+        "Delete" -> Icons.Default.Delete
+        "Refresh" -> Icons.Default.Refresh
+        "Done" -> Icons.Default.Done
+        "Check" -> Icons.Default.Check
+        "Clear" -> Icons.Default.Clear
+        "Create" -> Icons.Default.Create
+        // Communication
+        "Email" -> Icons.Default.Email
+        "Phone" -> Icons.Default.Phone
+        "Notifications" -> Icons.Default.Notifications
+        // People
+        "Person" -> Icons.Default.Person
+        "AccountCircle" -> Icons.Default.AccountCircle
+        "Share" -> Icons.Default.Share
+        "ThumbUp" -> Icons.Default.ThumbUp
+        // Media
+        "PlayArrow" -> Icons.Default.PlayArrow
+        // Settings / System
+        "Settings" -> Icons.Default.Settings
+        "Info" -> Icons.Default.Info
+        "Warning" -> Icons.Default.Warning
+        "Lock" -> Icons.Default.Lock
+        "Build" -> Icons.Default.Build
+        // UI
+        "Star" -> Icons.Default.Star
+        "Favorite" -> Icons.Default.Favorite
+        "FavoriteBorder" -> Icons.Default.FavoriteBorder
+        "CheckCircle" -> Icons.Default.CheckCircle
+        // Location
+        "LocationOn" -> Icons.Default.LocationOn
+        "Place" -> Icons.Default.Place
+        // Shopping
+        "ShoppingCart" -> Icons.Default.ShoppingCart
+        // Date / Time
+        "DateRange" -> Icons.Default.DateRange
+        else -> Icons.Default.Star
     }
-    return Icons.Default.Star
 }
 
 private fun mapOf(vararg pairs: Pair<String, Any?>): Map<String, Any?> {

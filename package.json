@@ -64,7 +64,7 @@
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt . --check",
     "typecheck": "tsc --noEmit",
-    "build": "tsdown && bun -e \"import { cpSync, mkdirSync } from 'node:fs'; mkdirSync('dist', { recursive: true }); cpSync('src/globals.d.ts', 'dist/globals.d.ts');\"",
+    "build": "tsdown",
     "ci:publish": "bun run build && changeset publish"
   },
   "dependencies": {

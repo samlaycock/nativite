@@ -131,4 +131,23 @@ describe("nativiteWebViewTemplate", () => {
     expect(output).toContain("setWebContentsDebuggingEnabled");
     expect(output).toContain("BuildConfig.DEBUG");
   });
+
+  it("disables algorithmic darkening so CSS-controlled dark mode is not overridden", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("isAlgorithmicDarkeningAllowed = false");
+    expect(output).not.toContain("isAlgorithmicDarkeningAllowed = true");
+  });
+
+  it("prevents parent scroll interception for child webviews (sheets, drawers, etc.)", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("requestDisallowInterceptTouchEvent(true)");
+    expect(output).toContain("chromeArea != null");
+    expect(output).toContain("MotionEvent.ACTION_DOWN");
+  });
+
+  it("sets child webview background to transparent so parent container color shows through while loading", () => {
+    const output = nativiteWebViewTemplate(androidConfig);
+    expect(output).toContain("setBackgroundColor(android.graphics.Color.TRANSPARENT)");
+    expect(output).toContain("chromeArea != null");
+  });
 });

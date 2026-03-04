@@ -498,7 +498,13 @@ class ViewController: NSViewController {
     // ViewController's view to the NSWindow hierarchy.  The first
     // viewDidLayout() call after window attachment is our earliest
     // reliable signal that the window is available.
-    if view.window != nil {
+    if let window = view.window {
+      // Ensure the NSToolbar always exists so .windowToolbarStyle(.unified)
+      // renders a consistent title bar height regardless of SwiftUI toolbar
+      // content.
+      if window.toolbar == nil {
+        window.toolbar = NSToolbar()
+      }
       bridge.chrome.replayPendingState()
     }
 

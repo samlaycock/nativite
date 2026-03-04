@@ -281,12 +281,37 @@ describe("nativiteChromeTemplate", () => {
 
   // ─── Icon Mapping ──────────────────────────────────────────────────────
 
-  it("resolves Material Icons dynamically via reflection", () => {
+  it("resolves Material Icons via static when expression, not reflection", () => {
     expect(output).toContain("fun materialIcon(");
-    expect(output).toContain("source.javaClass.methods.firstOrNull");
-    expect(output).toContain("Icons.Default");
-    expect(output).toContain("Icons.AutoMirrored.Filled");
-    expect(output).toContain("iconCache");
+    expect(output).not.toContain("javaClass.methods");
+    expect(output).toContain("when (name)");
+  });
+
+  it("maps common Material Icon names to direct icon references", () => {
+    expect(output).toContain('"Home" -> Icons.Default.Home');
+    expect(output).toContain('"Settings" -> Icons.Default.Settings');
+    expect(output).toContain('"Search" -> Icons.Default.Search');
+    expect(output).toContain('"Share" -> Icons.Default.Share');
+    expect(output).toContain('"Add" -> Icons.Default.Add');
+    expect(output).toContain('"Delete" -> Icons.Default.Delete');
+    expect(output).toContain('"Edit" -> Icons.Default.Edit');
+    expect(output).toContain('"Close" -> Icons.Default.Close');
+    expect(output).toContain('"Check" -> Icons.Default.Check');
+    expect(output).toContain('"Person" -> Icons.Default.Person');
+    expect(output).toContain('"Notifications" -> Icons.Default.Notifications');
+    expect(output).toContain('"Favorite" -> Icons.Default.Favorite');
+  });
+
+  it("maps AutoMirrored icons for RTL support", () => {
+    expect(output).toContain('"ArrowBack" -> Icons.AutoMirrored.Filled.ArrowBack');
+    expect(output).toContain('"ArrowForward" -> Icons.AutoMirrored.Filled.ArrowForward');
+    expect(output).toContain('"Send" -> Icons.AutoMirrored.Filled.Send');
+    expect(output).toContain('"ExitToApp" -> Icons.AutoMirrored.Filled.ExitToApp');
+    expect(output).toContain('"List" -> Icons.AutoMirrored.Filled.List');
+  });
+
+  it("falls back to Star icon for unknown names", () => {
+    expect(output).toContain("else -> Icons.Default.Star");
   });
 
   // ─── Color Parsing ─────────────────────────────────────────────────────

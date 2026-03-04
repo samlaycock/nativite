@@ -9,6 +9,7 @@ export default defineConfig([
     dts: true,
     outDir: "./dist",
     clean: true,
+    copy: ["./src/globals.d.ts"],
   },
   {
     entry: [

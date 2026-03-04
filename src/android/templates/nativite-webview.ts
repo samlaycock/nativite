@@ -8,6 +8,7 @@ export function nativiteWebViewTemplate(config: NativiteConfig): string {
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import android.view.MotionEvent
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -46,7 +47,7 @@ fun createNativiteWebView(
         settings.userAgentString = settings.userAgentString + " Nativite/android/1.0"
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            settings.isAlgorithmicDarkeningAllowed = true
+            settings.isAlgorithmicDarkeningAllowed = false
         }
     }
 
@@ -160,6 +161,23 @@ fun createNativiteWebView(
     }
 
     webView.webChromeClient = WebChromeClient()
+
+    if (chromeArea != null) {
+        // Make the WebView transparent so the parent container's background
+        // (e.g. ModalBottomSheet containerColor) shows through while content
+        // loads, preventing a black flash.
+        webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+
+        // When embedded inside a scrollable parent (e.g. ModalBottomSheet),
+        // prevent the parent from intercepting touch events so the WebView
+        // content can scroll.
+        webView.setOnTouchListener { v, event ->
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+            }
+            false
+        }
+    }
 
     return webView
 }

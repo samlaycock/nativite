@@ -141,4 +141,15 @@ describe("nativiteChromeStateTemplate", () => {
     const output = nativiteChromeStateTemplate();
     expect(output).toContain("data-nv-theme");
   });
+
+  it("fires correct menu event names from iOS NativiteBarButton", () => {
+    const output = nativiteChromeStateTemplate();
+    // iOS NativiteBarButton should use a menuEventName property (not string replacement)
+    // so that titleBar and toolbar menus fire the correct event types
+    expect(output).toContain('var menuEventName: String = "titleBar.menuItemPressed"');
+    // Toolbar modifier must pass the toolbar-specific menu event name
+    expect(output).toContain('menuEventName: "toolbar.menuItemPressed"');
+    // The broken replacingOccurrences approach must not be used
+    expect(output).not.toContain('replacingOccurrences(of: "ItemPressed"');
+  });
 });

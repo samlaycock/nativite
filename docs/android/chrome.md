@@ -72,7 +72,7 @@ Renders a `BasicTextField` with search icon below the title bar.
 
 ### Icon Resolution
 
-Icons are resolved via reflection against `androidx.compose.material.icons.Icons.Default` and `Icons.AutoMirrored.Filled`. The `materialIcon()` function uses a cache for efficient repeated lookups.
+Icons are resolved via a static `when` expression in `materialIcon()`, mapping PascalCase icon names (e.g. `"Home"`, `"Settings"`, `"ArrowBack"`) to their `Icons.Default.*` or `Icons.AutoMirrored.Filled.*` references. Unknown names fall back to `Icons.Default.Star`.
 
 ### Events
 
@@ -262,7 +262,7 @@ A 44dp tall content area docked above the navigation bar or toolbar, containing 
 
 Renders individual bar items across all chrome areas with:
 
-- Material Icon lookup via reflection
+- Material Icon lookup via static mapping
 - Text labels with style-based colouring
 - Disabled state (reduced opacity)
 - Badge overlay
@@ -275,4 +275,4 @@ Material 3 `DropdownMenu` with single-level `DropdownMenuItem` entries.
 
 ### materialIcon()
 
-Reflection-based lookup against `Icons.Default` and `Icons.AutoMirrored.Filled` with LRU caching for performance.
+Static `when` expression mapping icon name strings to `Icons.Default.*` and `Icons.AutoMirrored.Filled.*` references. Falls back to `Icons.Default.Star` for unrecognised names.

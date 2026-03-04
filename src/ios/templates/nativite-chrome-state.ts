@@ -1054,6 +1054,7 @@ extension NativiteChromeState.LargeTitleMode {
 struct NativiteBarButton: View {
   let item: NativiteChromeState.BarItemState
   let eventName: String
+  var menuEventName: String = "titleBar.menuItemPressed"
   var onEvent: ((String, [String: Any]) -> Void)?
 
   var body: some View {
@@ -1111,7 +1112,6 @@ struct NativiteBarButton: View {
   }
 
   @ViewBuilder private func menuLeaf(_ menuItem: NativiteChromeState.MenuItemState) -> some View {
-    let menuEventName = eventName.replacingOccurrences(of: "ItemPressed", with: "MenuItemPressed")
     Button(role: menuItem.style == .destructive ? .destructive : nil) {
       onEvent?(menuEventName, ["id": menuItem.id])
     } label: {
@@ -1199,6 +1199,7 @@ struct NativiteToolbarModifier: ViewModifier {
               NativiteBarButton(
                 item: item,
                 eventName: "toolbar.itemPressed",
+                menuEventName: "toolbar.menuItemPressed",
                 onEvent: chromeState.onChromeEvent
               )
             }
@@ -1357,6 +1358,23 @@ struct NativiteMacTitleBarModifier: ViewModifier {
   func body(content: Content) -> some View {
     let withToolbar = content.toolbar {
       if !chromeState.titleBarHidden {
+        // Centered title (and optional subtitle) rendered via .principal
+        // so it stays centred regardless of leading/trailing items.
+        // The system-rendered window.title is hidden in AppKit to avoid
+        // duplication.
+        ToolbarItem(placement: .principal) {
+          VStack(spacing: 0) {
+            if !chromeState.titleBarTitle.isEmpty {
+              Text(chromeState.titleBarTitle)
+                .font(.system(size: 13, weight: .semibold))
+            }
+            if let subtitle = chromeState.titleBarSubtitle {
+              Text(subtitle)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
         ToolbarItemGroup(placement: .navigation) {
           ForEach(chromeState.titleBarLeadingItems) { item in
             NativiteMacBarButton(
