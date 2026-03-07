@@ -1585,9 +1585,9 @@ ${applyInitialStateMethod}
         window.titlebarAppearsTransparent = false
       }
     }
-    // Always hide the system-rendered title; it is rendered as a
-    // centred .principal toolbar item in SwiftUI instead.
-    window.titleVisibility = .hidden
+    if let hidden = state["hidden"] as? Bool {
+      window.titleVisibility = hidden ? .hidden : .visible
+    }
   }
 
   // ── Toolbar ────────────────────────────────────────────────────────────────

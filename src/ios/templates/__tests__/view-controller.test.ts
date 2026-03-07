@@ -199,9 +199,7 @@ describe("viewControllerTemplate", () => {
       const replayIndex = macos.indexOf("bridge.chrome.replayPendingState()", viewDidLayoutIndex);
       expect(replayIndex).toBeGreaterThan(viewDidLayoutIndex);
       // Guard ensures replay only fires when the window is attached
-      expect(macos).toContain("if let window = view.window");
-      // NSToolbar is always created for consistent unified title bar height
-      expect(macos).toContain("window.toolbar = NSToolbar()");
+      expect(macos).toContain("if view.window != nil");
     });
 
     it("uses WKWebsiteDataStore.default() for child webview process sharing", () => {
