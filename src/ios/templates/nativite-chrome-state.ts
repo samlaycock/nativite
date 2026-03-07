@@ -1358,24 +1358,14 @@ struct NativiteMacTitleBarModifier: ViewModifier {
   func body(content: Content) -> some View {
     let withToolbar = content.toolbar {
       if !chromeState.titleBarHidden {
-        // Centered title (and optional subtitle) rendered via .principal
-        // so it stays centred regardless of leading/trailing items.
-        // The system-rendered window.title is hidden in AppKit to avoid
-        // duplication.
-        ToolbarItem(placement: .principal) {
-          VStack(spacing: 0) {
-            if !chromeState.titleBarTitle.isEmpty {
-              Text(chromeState.titleBarTitle)
-                .font(.system(size: 13, weight: .semibold))
-            }
-            if let subtitle = chromeState.titleBarSubtitle {
-              Text(subtitle)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            }
-          }
-        }
+        // Hidden text inside the navigation group guarantees the
+        // NSToolbar always materialises (keeping the unified title
+        // bar height consistent) and prevents the ambiguous-size
+        // warning that empty ForEach would otherwise produce. The
+        // actual title is rendered by AppKit via window.title
+        // (always centred, no liquid glass).
         ToolbarItemGroup(placement: .navigation) {
+          Text(" ").hidden()
           ForEach(chromeState.titleBarLeadingItems) { item in
             NativiteMacBarButton(
               item: item,
@@ -1384,13 +1374,15 @@ struct NativiteMacTitleBarModifier: ViewModifier {
             )
           }
         }
-        ToolbarItemGroup(placement: .primaryAction) {
-          ForEach(chromeState.titleBarTrailingItems) { item in
-            NativiteMacBarButton(
-              item: item,
-              eventName: "titleBar.trailingItemPressed",
-              onEvent: chromeState.onChromeEvent
-            )
+        if !chromeState.titleBarTrailingItems.isEmpty {
+          ToolbarItemGroup(placement: .primaryAction) {
+            ForEach(chromeState.titleBarTrailingItems) { item in
+              NativiteMacBarButton(
+                item: item,
+                eventName: "titleBar.trailingItemPressed",
+                onEvent: chromeState.onChromeEvent
+              )
+            }
           }
         }
       }
