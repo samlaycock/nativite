@@ -631,6 +631,34 @@ describe("chrome()", () => {
     });
   });
 
+  it("sheet config supports title and header bar items", () => {
+    const cancel = button({ id: "cancel", label: "Cancel" });
+    const done = button({ id: "done", label: "Done", style: "primary" });
+
+    chrome(
+      sheet("settings", {
+        url: "/settings",
+        presented: true,
+        title: "Edit profile",
+        leadingItems: [cancel],
+        trailingItems: [done],
+      }),
+    );
+    _drainFlush();
+
+    expect(lastState()).toEqual({
+      sheets: {
+        settings: {
+          url: "/settings",
+          presented: true,
+          title: "Edit profile",
+          leadingItems: [cancel],
+          trailingItems: [done],
+        },
+      },
+    });
+  });
+
   it("sends named drawers under 'drawers' key", () => {
     chrome(drawer("sidebar", { url: "/sidebar", presented: true }));
     _drainFlush();
@@ -998,6 +1026,28 @@ describe("chrome.on(handler) — wildcard", () => {
 // ─── Sheet events ───────────────────────────────────────────────────────────
 
 describe("sheet events", () => {
+  it("sheet.leadingItemPressed fires with id", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("sheet.leadingItemPressed", handler);
+    simulateEvent("sheet.leadingItemPressed", { id: "cancel" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "sheet.leadingItemPressed",
+      id: "cancel",
+    });
+    unsub();
+  });
+
+  it("sheet.trailingItemPressed fires with id", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("sheet.trailingItemPressed", handler);
+    simulateEvent("sheet.trailingItemPressed", { id: "done" });
+    expect(handler).toHaveBeenCalledWith({
+      type: "sheet.trailingItemPressed",
+      id: "done",
+    });
+    unsub();
+  });
+
   it("sheet.presented fires with name", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("sheet.presented", handler);

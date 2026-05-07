@@ -293,6 +293,9 @@ export interface SheetConfig extends ChildWebviewBase {
   readonly grabberVisible?: boolean;
   readonly dismissible?: boolean;
   readonly cornerRadius?: number;
+  readonly title?: string;
+  readonly leadingItems?: readonly BarItem[];
+  readonly trailingItems?: readonly BarItem[];
 }
 
 export interface DrawerConfig extends ChildWebviewBase {
@@ -359,6 +362,8 @@ export type ChromeEvent =
   | { readonly type: "toolbar.menuItemPressed"; readonly id: string }
   | { readonly type: "keyboard.itemPressed"; readonly id: string }
   | { readonly type: "menuBar.itemPressed"; readonly id: string }
+  | { readonly type: "sheet.leadingItemPressed"; readonly id: string }
+  | { readonly type: "sheet.trailingItemPressed"; readonly id: string }
   | { readonly type: "sheet.presented"; readonly name: string }
   | { readonly type: "sheet.dismissed"; readonly name: string }
   | { readonly type: "sheet.detentChanged"; readonly name: string; readonly detent: string }

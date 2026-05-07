@@ -69,6 +69,16 @@ Bar items support:
 - Dropdown menus (SwiftUI `Menu`)
 - Styles: `.plain`, `.primary` (bold), `.destructive` (red)
 
+## Sheets
+
+`applySheet()` writes into `NativiteChromeState`; `NativiteSheetModifier` presents the active sheet in SwiftUI.
+
+- **title**: SwiftUI `.navigationTitle` inside a sheet-local `NavigationStack`
+- **leadingItems** / **trailingItems**: SwiftUI `ToolbarItemGroup` buttons and menus in the sheet header
+- **dismissible**: SwiftUI `.interactiveDismissDisabled`
+- **detents** / **grabberVisible** / **cornerRadius**: SwiftUI sheet presentation modifiers
+- **events**: `sheet.leadingItemPressed`, `sheet.trailingItemPressed`, `sheet.presented`, `sheet.dismissed`, `sheet.detentChanged`
+
 ## Navigation (Tab Bar)
 
 Two implementations based on iOS version:
