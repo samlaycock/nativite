@@ -17,6 +17,7 @@ import {
   type NativiteConfig,
   type Platform,
 } from "../index.ts";
+import { syncAndroidDevMetadata } from "../native/android/dev-metadata.ts";
 import {
   deserializePlatformRuntimeMetadata,
   resolveConfigForPlatform,
@@ -585,6 +586,7 @@ function nativiteCorePlugin(): Plugin {
 
         mkdirSync(nativiteDir, { recursive: true });
         writeFileSync(join(nativiteDir, "dev.json"), JSON.stringify({ devURL: devUrl }, null, 2));
+        syncAndroidDevMetadata(viteConfig.root, "dev");
       });
 
       if (viteConfig.configFile) {

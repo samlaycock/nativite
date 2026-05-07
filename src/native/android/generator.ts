@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +13,7 @@ import { androidManifestTemplate } from "./android-manifest.ts";
 import { appIconTemplate, appIconXmlTemplate } from "./app-icon.ts";
 import { buildGradleAppTemplate } from "./build-gradle-app.ts";
 import { buildGradleRootTemplate } from "./build-gradle-root.ts";
+import { syncAndroidDevMetadata } from "./dev-metadata.ts";
 import { gradlePropertiesTemplate } from "./gradle-properties.ts";
 import { gradleWrapperPropertiesTemplate } from "./gradle-wrapper-properties.ts";
 import { hashConfigForGeneration } from "./hash.ts";
@@ -23,7 +24,6 @@ import { splashScreenTemplate } from "./splash-screen.ts";
 import { versionCatalogTemplate } from "./version-catalog.ts";
 
 const runtimeDir = join(dirname(fileURLToPath(import.meta.url)), "runtime");
-
 function readRuntimeFile(pkg: string, filename: string): string {
   const src = readFileSync(join(runtimeDir, filename), "utf-8");
   return `package ${pkg}\n\n${src}`;
@@ -58,15 +58,12 @@ export async function generateProject(
   const nativiteDir = join(cwd, ".nativite");
   const hashFile = join(nativiteDir, ".hash-android");
   const projectRoot = join(nativiteDir, "android");
-  const devJsonPath = join(projectRoot, "app", "src", "main", "assets", "dev.json");
   const androidConfig = resolveConfigForPlatform(config, "android");
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
   const hash = hashConfigForGeneration(config, resolvedPlugins);
 
   // Ensure production/generate mode never packages stale dev server settings.
-  if (mode !== "dev" && existsSync(devJsonPath)) {
-    rmSync(devJsonPath, { force: true });
-  }
+  syncAndroidDevMetadata(cwd, mode);
 
   // Dirty check — skip if nothing has changed
   if (!force && existsSync(hashFile)) {

@@ -56,8 +56,9 @@ The generator creates a complete Android Gradle project from the user's configur
 6. Generates Kotlin source files.
 7. Writes resource XML files (strings, colours, themes).
 8. Optional: Writes splash screen XML and copies icon file.
-9. Writes `.hash-android` for dirty-check optimization.
-10. In non-dev generation modes, removes stale `assets/dev.json` so production builds do not carry dev server configuration.
+9. In dev mode, copies `.nativite/dev.json` to `app/src/main/assets/dev.json` after normalizing loopback hosts to `10.0.2.2`.
+10. Writes `.hash-android` for dirty-check optimization.
+11. In non-dev generation modes, removes stale `assets/dev.json` so production builds do not carry dev server configuration.
 
 ## Dirty-Check Optimization
 
@@ -110,6 +111,8 @@ Validation notes:
 - Assets sourced from `src/main/assets`
 - Release asset merging depends on `copyNativiteWebBundle`, which copies
   `../../dist-android` into `app/build/generated/nativite/assets/dist`
+- Release asset merging also depends on `deleteNativiteDevMetadata`, which
+  removes `src/main/assets/dev.json` before release assets are packaged
 - Release builds fail before asset merging if `dist-android` is missing, with
   instructions to run `bunx nativite build --platform android`
 

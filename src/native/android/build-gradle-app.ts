@@ -13,6 +13,7 @@ export function buildGradleAppTemplate(
 
 val nativiteWebBundleDir = rootProject.layout.projectDirectory.dir("../../dist-android")
 val nativiteGeneratedAssetsDir = layout.buildDirectory.dir("generated/nativite/assets")
+val nativiteDevMetadataFile = layout.projectDirectory.file("src/main/assets/dev.json")
 
 val copyNativiteWebBundle by tasks.registering(Copy::class) {
     val bundlePath = nativiteWebBundleDir.asFile
@@ -25,6 +26,10 @@ val copyNativiteWebBundle by tasks.registering(Copy::class) {
 
     from(nativiteWebBundleDir)
     into(nativiteGeneratedAssetsDir.map { it.dir("dist") })
+}
+
+val deleteNativiteDevMetadata by tasks.registering(Delete::class) {
+    delete(nativiteDevMetadataFile)
 }
 
 android {
@@ -77,6 +82,7 @@ android {
 tasks.configureEach {
     if (name == "mergeReleaseAssets") {
         dependsOn(copyNativiteWebBundle)
+        dependsOn(deleteNativiteDevMetadata)
     }
 }
 
