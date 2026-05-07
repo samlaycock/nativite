@@ -22,5 +22,7 @@
 
     /* If your code doesn't run in the DOM: */
     "lib": ["es2022"]
-  }
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "*.config.*"],
+  "exclude": ["dist", "node_modules", ".nativite"]
 }

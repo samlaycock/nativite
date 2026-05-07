@@ -36,7 +36,7 @@ Uses `WebViewAssetLoader` to serve bundled assets from `context.assets`:
 
 ### Page Lifecycle
 
-**`onPageStarted`**: Injects `window.__nativekit_instance_name__`, sets `data-nv-platform="android"` on `<html>`, and initializes CSS variable defaults.
+**`onPageStarted`**: Injects `window.__nativite_instance_name__`, sets `data-nv-platform="android"` on `<html>`, and initializes CSS variable defaults.
 
 **`onPageFinished`**:
 

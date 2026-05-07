@@ -202,7 +202,7 @@ struct NativiteChildWebView: NSViewRepresentable  // macOS
 ```
 
 - Shares `WKWebsiteDataStore.default()` with the primary webview (shared cookies/storage).
-- Registers instance name as `window.__nativekit_instance_name__` for identification.
+- Registers instance name as `window.__nativite_instance_name__` for identification.
 - Sets `data-nv-platform` attribute on `documentElement`.
 - Enables `WKWebView.isInspectable` in `DEBUG` builds (`iOS 16.4+` / `macOS 13.3+`) so child webviews are visible in Safari Develop tools.
 - Tracked in `chromeState.childWebViews` for inter-webview messaging.

@@ -1,8 +1,26 @@
 {
   "name": "nativite",
   "version": "0.0.0",
+  "description": "Build native iOS, macOS, and Android shells around Vite apps.",
+  "keywords": [
+    "android",
+    "bun",
+    "ios",
+    "kotlin",
+    "macos",
+    "native",
+    "swift",
+    "vite",
+    "webview"
+  ],
+  "homepage": "https://github.com/samlaycock/nativite#readme",
+  "bugs": {
+    "url": "https://github.com/samlaycock/nativite/issues"
+  },
   "license": "MIT",
+  "author": "Samuel Laycock",
   "repository": {
+    "type": "git",
     "url": "https://github.com/samlaycock/nativite"
   },
   "bin": {
@@ -93,5 +111,10 @@
     "vite": {
       "optional": true
     }
-  }
+  },
+  "engines": {
+    "bun": ">=1.0.0",
+    "node": ">=18.0.0"
+  },
+  "packageManager": "bun@1.3.9"
 }

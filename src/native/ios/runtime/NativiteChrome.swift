@@ -1173,7 +1173,7 @@ private class NativiteTabBottomAccessoryController: UIViewController, WKNavigati
     let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
     config.applicationNameForUserAgent = "Nativite/\(nvPlatform)/1.0"
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \"tabBottomAccessory\";document.documentElement.setAttribute('data-nv-platform','\(nvPlatform)');",
+      source: "window.__nativite_instance_name__ = \"tabBottomAccessory\";document.documentElement.setAttribute('data-nv-platform','\(nvPlatform)');",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))

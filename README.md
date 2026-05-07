@@ -368,6 +368,10 @@ bun run test:native:ios
 bun run test:native:android
 ```
 
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution workflow and [SECURITY.md](./SECURITY.md) for vulnerability reporting.
+
+Release notes are tracked in [CHANGELOG.md](./CHANGELOG.md) and generated from changesets.
+
 ## License
 
 MIT

@@ -44,7 +44,7 @@ class ViewController: UIViewController {
     // Identify this webview as "main" so the native message broker can
     // route postToParent/postToChild/broadcast calls to the correct instance.
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \"main\";",
+      source: "window.__nativite_instance_name__ = \"main\";",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))
@@ -457,7 +457,7 @@ class ViewController: NSViewController {
     // Identify this webview as "main" so the native message broker can
     // route postToParent/postToChild/broadcast calls to the correct instance.
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__nativekit_instance_name__ = \"main\";",
+      source: "window.__nativite_instance_name__ = \"main\";",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: false
     ))

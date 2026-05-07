@@ -85,7 +85,7 @@ The Chrome module's event system routes these to `chrome.messaging.onMessage()` 
 Each child webview has a unique instance name:
 
 - Set at creation time (e.g., `"settings-sheet"`, `"nav-drawer"`).
-- Injected as `window.__nativekit_instance_name__` in the webview.
+- Injected as `window.__nativite_instance_name__` in the webview.
 - Used for routing `postToChild()` messages to the correct webview.
 
 The main webview's instance name is always `"main"`.

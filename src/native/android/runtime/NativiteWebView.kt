@@ -93,7 +93,7 @@ fun createNativiteWebView(
             // [data-nv-platform="android"] and var(--nv-*) work before
             // content renders.
             view.evaluateJavascript(
-                "window.__nativekit_instance_name__ = '${instanceName}';" +
+                "window.__nativite_instance_name__ = '${instanceName}';" +
                 SET_PLATFORM_ATTRIBUTE_SCRIPT +
                 NativiteVars.buildInitScript(),
                 null,
