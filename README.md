@@ -38,7 +38,30 @@ Peer dependencies:
 
 ## Quick Start
 
-### 1. Create `nativite.config.ts`
+### 1. Initialize an existing Vite app
+
+Run the init command from your Vite project root:
+
+```bash
+bunx nativite init
+```
+
+This creates `nativite.config.ts` using your `package.json` name and updates a
+simple `vite.config.ts` to include `nativite()`. If your Vite config cannot be
+edited safely, the command prints the exact manual import and plugin changes to
+make.
+
+Then build the configured native targets:
+
+```bash
+bunx nativite build
+```
+
+### Manual setup
+
+If you prefer to configure the project by hand, create the files below.
+
+#### 1. Create `nativite.config.ts`
 
 ```ts
 import { android, defineConfig, ios, macos } from "nativite";
@@ -58,7 +81,7 @@ export default defineConfig({
 });
 ```
 
-### 2. Add the Vite plugin
+#### 2. Add the Vite plugin
 
 ```ts
 // vite.config.ts
@@ -70,7 +93,7 @@ export default defineConfig({
 });
 ```
 
-### 3. Generate native projects and web bundles
+### 2. Generate native projects and web bundles
 
 ```bash
 bunx nativite build
@@ -94,7 +117,7 @@ Optional single-platform build:
 bunx nativite build --platform ios
 ```
 
-### 4. Open the generated native project
+### 3. Open the generated native project
 
 Use the native IDE or simulator workflow you already use for the target platform:
 
@@ -107,7 +130,7 @@ Xcode and Android Studio own native build settings, signing, simulator/device
 selection, and launch. Nativite owns generating the native project code and the
 web bundles those projects embed.
 
-### 5. Optional web dev server
+### 4. Optional web dev server
 
 Run your normal Vite dev server when you want the generated debug native project
 to load web code from Vite instead of the embedded production bundle.

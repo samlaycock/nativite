@@ -10,6 +10,7 @@ import { runBuildCommand } from "./build-command.ts";
 import { createBuildManager } from "./build-manager.ts";
 import { loadConfig } from "./config.ts";
 import { createDevUrlResolver } from "./dev-url.ts";
+import { runInitCommand } from "./init-command.ts";
 import { createNativiteLogger } from "./logger.ts";
 import {
   assignHotkeys,
@@ -39,6 +40,17 @@ program
   .option("--platform <platform>", "Build only one configured platform")
   .action(async (options: { platform?: string }) => {
     const exitCode = await runBuildCommand(options);
+    if (exitCode !== 0) process.exit(exitCode);
+  });
+
+// ─── nativite init ───────────────────────────────────────────────────────────
+
+program
+  .command("init")
+  .description("Prepare an existing Vite project for Nativite")
+  .option("--force", "Overwrite nativite.config.ts if it already exists")
+  .action(async (options: { force?: boolean }) => {
+    const exitCode = await runInitCommand(options);
     if (exitCode !== 0) process.exit(exitCode);
   });
 
