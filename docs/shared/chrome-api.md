@@ -66,6 +66,7 @@ The host must first send:
 ```
 
 The runtime does not send chrome documents until `shell.ready` has been received. The `areas` list is used as a capability filter, so unsupported areas are omitted from the compiled snapshot.
+`shell.ready` must include `platform`, `version`, and a string `areas` array; malformed readiness messages are ignored so the runtime does not negotiate against an invalid host capability set.
 
 Chrome updates are sent as full snapshots:
 
@@ -91,7 +92,7 @@ Chrome updates are sent as full snapshots:
 }
 ```
 
-Snapshots use monotonically increasing revisions and stable node IDs following `NCLP.md`.
+Snapshots use monotonically increasing revisions and stable node IDs following `NCLP.md`. Runtime state such as selection, disabled flags, hidden/presented state, badges, and input values is emitted through NCLP state buckets rather than duplicated into node metadata.
 
 ## Event System
 
@@ -113,7 +114,7 @@ chrome.on((event) => {
 
 Both return an unsubscribe function.
 
-Native hosts send interaction events as NCLP `chrome.event` envelopes. The runtime maps generic events such as `activate`, `select`, `back`, and `input` back to the existing `ChromeEvent` union, so no public JavaScript event names changed.
+Native hosts send interaction events as NCLP `chrome.event` envelopes. Event `target` and selection `value` fields use full NCLP node IDs; the runtime maps generic events such as `activate`, `select`, `back`, and `input` back to the existing `ChromeEvent` union, so no public JavaScript event names changed.
 
 ### Event Types
 

@@ -467,6 +467,7 @@ fun NativiteNavigationBar(config: Map<*, *>, bridge: NativiteBridge) {
         NavigationBar {
             for (item in items) {
                 val id = item["id"] as? String ?: continue
+                val nclpId = item["nclpId"] as? String ?: id
                 val label = item["label"] as? String ?: ""
                 val icon = item["icon"] as? String
                 val badge = item["badge"]?.toString()
@@ -478,7 +479,7 @@ fun NativiteNavigationBar(config: Map<*, *>, bridge: NativiteBridge) {
                     selected = selected,
                     enabled = !disabled,
                     onClick = {
-                        bridge.sendEventToPrimary("navigation.itemPressed", mapOf("id" to id))
+                        bridge.sendEventToPrimary("navigation.itemPressed", mapOf("id" to id, "nclpId" to nclpId))
                     },
                     icon = {
                         val imageVector = materialIcon(icon)
@@ -983,6 +984,7 @@ fun NativitePopover(name: String, config: Map<*, *>, bridge: NativiteBridge) {
 @Composable
 fun BarItemButton(item: Map<*, *>, bridge: NativiteBridge, eventName: String) {
     val id = item["id"] as? String ?: return
+    val nclpId = item["nclpId"] as? String ?: id
     val label = item["label"] as? String ?: ""
     val icon = item["icon"] as? String
     val style = item["style"] as? String
@@ -1014,7 +1016,7 @@ fun BarItemButton(item: Map<*, *>, bridge: NativiteBridge, eventName: String) {
                     if (menu != null) {
                         menuExpanded = true
                     } else {
-                        bridge.sendEventToPrimary(eventName, mapOf("id" to id))
+                        bridge.sendEventToPrimary(eventName, mapOf("id" to id, "nclpId" to nclpId))
                     }
                 },
                 enabled = !disabled,
@@ -1035,7 +1037,7 @@ fun BarItemButton(item: Map<*, *>, bridge: NativiteBridge, eventName: String) {
                     if (menu != null) {
                         menuExpanded = true
                     } else {
-                        bridge.sendEventToPrimary(eventName, mapOf("id" to id))
+                        bridge.sendEventToPrimary(eventName, mapOf("id" to id, "nclpId" to nclpId))
                     }
                 },
                 enabled = !disabled,
@@ -1079,6 +1081,7 @@ fun NativiteDropdownMenu(
         }
         for (menuItem in items) {
             val itemId = menuItem["id"] as? String ?: continue
+            val itemNclpId = menuItem["nclpId"] as? String ?: itemId
             val itemLabel = menuItem["label"] as? String ?: continue
             val itemIcon = menuItem["icon"] as? String
             val itemDisabled = menuItem["disabled"] as? Boolean ?: false
@@ -1097,7 +1100,7 @@ fun NativiteDropdownMenu(
                     )
                 },
                 onClick = {
-                    bridge.sendEventToPrimary(menuEventName, mapOf("id" to itemId))
+                    bridge.sendEventToPrimary(menuEventName, mapOf("id" to itemId, "nclpId" to itemNclpId))
                     onDismiss()
                 },
                 enabled = !itemDisabled,

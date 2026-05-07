@@ -432,6 +432,7 @@ class NativiteBridge {
                             val child = nodes.optJSONObject(nodeId) ?: continue
                             val item = jsonToMap(child.optJSONObject("meta")).toMutableMap()
                             item["id"] = nodeId.substringAfterLast(":")
+                            item["nclpId"] = nodeId
                             item["label"] = child.opt("label")
                             item["icon"] = child.opt("icon")
                             if (disabled?.has(nodeId) == true) item["disabled"] = disabled.opt(nodeId)
@@ -502,6 +503,19 @@ class NativiteBridge {
                         if (items.isNotEmpty()) config["accessory"] = mapOf("items" to items)
                         state["keyboard"] = config
                     }
+                    "menuBar" -> {
+                        val node = nodes.optJSONObject("menuBar") ?: continue
+                        val menuIds = node.optJSONArray("children") ?: org.json.JSONArray()
+                        val menus = mutableListOf<Map<String, Any?>>()
+                        for (j in 0 until menuIds.length()) {
+                            val menuId = menuIds.optString(j)
+                            val menu = legacyMenu(menuId, nodes, disabled)?.toMutableMap() ?: continue
+                            menu["id"] = menuId.substringAfterLast(":")
+                            menu["nclpId"] = menuId
+                            menus.add(menu)
+                        }
+                        state["menuBar"] = mapOf("menus" to menus)
+                    }
                     "tabBottomAccessory" -> {
                         val config = jsonToMap(nodes.optJSONObject("tabBottomAccessory")?.optJSONObject("meta")).toMutableMap()
                         config["presented"] = !(hidden?.optBoolean("tabBottomAccessory") ?: false)
@@ -541,6 +555,7 @@ class NativiteBridge {
             }
             val item = jsonToMap(node.optJSONObject("meta")).toMutableMap()
             item["id"] = nodeId.substringAfterLast(":")
+            item["nclpId"] = nodeId
             if (node.has("label")) item["label"] = node.opt("label")
             if (node.has("icon")) item["icon"] = node.opt("icon")
             val role = node.optString("role")
@@ -569,6 +584,7 @@ class NativiteBridge {
                 val child = nodes.optJSONObject(childId) ?: continue
                 val item = jsonToMap(child.optJSONObject("meta")).toMutableMap()
                 item["id"] = childId.substringAfterLast(":")
+                item["nclpId"] = childId
                 if (child.has("label")) item["label"] = child.opt("label")
                 if (child.has("icon")) item["icon"] = child.opt("icon")
                 if (child.optString("role") == "destructive") item["style"] = "destructive"
@@ -587,6 +603,7 @@ class NativiteBridge {
         fun chromeEventPayload(name: String, data: Any?): JSONObject? {
             val map = data as? Map<*, *>
             val id = map?.get("id")?.toString()
+            val nclpId = map?.get("nclpId")?.toString()
             val instanceName = map?.get("name")?.toString()
             var event: String? = null
             var target: String? = null
@@ -594,13 +611,13 @@ class NativiteBridge {
 
             when (name) {
                 "titleBar.leadingItemPressed" -> if (id != null) {
-                    event = "activate"; target = "titleBar:leading:$id"
+                    event = "activate"; target = nclpId ?: "titleBar:leading:$id"
                 }
                 "titleBar.trailingItemPressed" -> if (id != null) {
-                    event = "activate"; target = "titleBar:trailing:$id"
+                    event = "activate"; target = nclpId ?: "titleBar:trailing:$id"
                 }
                 "titleBar.menuItemPressed" -> if (id != null) {
-                    event = "activate"; target = "titleBar:trailing:menu:$id"
+                    event = "activate"; target = nclpId ?: "titleBar:trailing:menu:$id"
                 }
                 "titleBar.backPressed" -> {
                     event = "back"; target = "titleBar"
@@ -618,7 +635,7 @@ class NativiteBridge {
                     event = "back"; target = "navigation"
                 }
                 "navigation.itemPressed" -> if (id != null) {
-                    event = "select"; target = "navigation"; value = "navigation:$id"
+                    event = "select"; target = "navigation"; value = nclpId ?: "navigation:$id"
                 }
                 "navigation.searchChanged" -> {
                     event = "input"; target = "navigation:search-field"; value = map?.get("value") ?: JSONObject.NULL
@@ -630,16 +647,19 @@ class NativiteBridge {
                     event = "cancel"; target = "navigation:search-field"
                 }
                 "toolbar.itemPressed" -> if (id != null) {
-                    event = "activate"; target = "toolbar:$id"
+                    event = "activate"; target = nclpId ?: "toolbar:$id"
                 }
                 "toolbar.menuItemPressed" -> if (id != null) {
-                    event = "activate"; target = "toolbar:menu:$id"
+                    event = "activate"; target = nclpId ?: "toolbar:menu:$id"
                 }
                 "keyboard.itemPressed" -> if (id != null) {
-                    event = "activate"; target = "keyboard:$id"
+                    event = "activate"; target = nclpId ?: "keyboard:$id"
                 }
                 "sidebarPanel.itemPressed" -> if (id != null) {
-                    event = "activate"; target = "sidebarPanel:$id"
+                    event = "activate"; target = nclpId ?: "sidebarPanel:$id"
+                }
+                "menuBar.itemPressed" -> if (id != null) {
+                    event = "activate"; target = nclpId ?: "menuBar:$id"
                 }
                 "sheet.presented" -> if (instanceName != null) {
                     event = "open"; target = "sheets:$instanceName"

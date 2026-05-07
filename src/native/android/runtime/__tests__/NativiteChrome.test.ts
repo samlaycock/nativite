@@ -175,6 +175,13 @@ describe("NativiteChrome.kt", () => {
     expect(kt).toContain('"toolbar.menuItemPressed"');
   });
 
+  it("passes full NCLP node IDs back to the bridge when available", () => {
+    expect(kt).toContain('val nclpId = item["nclpId"] as? String ?: id');
+    expect(kt).toContain('val itemNclpId = menuItem["nclpId"] as? String ?: itemId');
+    expect(kt).toContain('"nclpId" to nclpId');
+    expect(kt).toContain('"nclpId" to itemNclpId');
+  });
+
   it("supports status bar control", () => {
     expect(kt).toContain("fun NativiteStatusBar(");
     expect(kt).toContain("WindowCompat.getInsetsController");

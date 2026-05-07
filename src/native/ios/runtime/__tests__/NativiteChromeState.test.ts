@@ -129,4 +129,11 @@ describe("NativiteChromeState.swift", () => {
     expect(swift).toContain('menuEventName: "toolbar.menuItemPressed"');
     expect(swift).not.toContain('replacingOccurrences(of: "ItemPressed"');
   });
+
+  it("passes full NCLP node IDs back to the bridge when available", () => {
+    expect(swift).toContain("var nclpId: String?");
+    expect(swift).toContain('item.nclpId = state["nclpId"] as? String');
+    expect(swift).toContain("menuItem.nclpId ?? menuItem.id");
+    expect(swift).toContain("item.nclpId ?? item.id");
+  });
 });
