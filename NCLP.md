@@ -2,7 +2,23 @@
 
 ## Status
 
-Draft
+Stable public protocol for Nativite 1.0.
+
+NCLP v2 is part of Nativite's public host-implementation contract. The Nativite JavaScript chrome API remains the developer-facing API, while this document defines the wire protocol that native shells and community host implementations can rely on when consuming compiled chrome documents.
+
+The protocol version is the integer `nativite` field carried by every NCLP message. Version `2` is the stable protocol version for Nativite 1.0.
+
+### Stability and compatibility
+
+Nativite follows these compatibility rules for NCLP v2:
+
+- The required fields, message `type` strings, core state bucket names, core node `kind` values, and `ChromeState` compilation mapping documented here will not be removed or repurposed in a minor or patch release.
+- Additive fields may be introduced in minor releases. Hosts must ignore unknown optional fields, unknown `meta` keys, and unknown namespaced `ext` entries they do not understand.
+- Tightening validation for malformed documents is allowed in minor releases when the accepted shape already violates this document.
+- Breaking changes require a new protocol version value, for example `nativite: 3`, and hosts should reject unsupported protocol versions rather than attempting partial compatibility.
+- Runtime and host implementations must negotiate capabilities through `shell.ready areas`; support for a stable protocol version does not require every host to render every chrome area.
+
+Patch messages are documented as part of the protocol model, but the current Nativite 1.0 JavaScript runtime sends full `chrome.snapshot` messages. Hosts that implement snapshot ingestion and `chrome.event` emission for their supported areas are NCLP v2 compatible.
 
 ---
 

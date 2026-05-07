@@ -488,6 +488,53 @@ describe("chrome()", () => {
     });
   });
 
+  it("emits the stable NCLP v2 chrome.snapshot envelope", () => {
+    chrome(titleBar({ title: "Inbox" }));
+    _drainFlush();
+
+    const snapshot = lastSnapshot();
+    expect(snapshot).toMatchObject({
+      nativite: 2,
+      type: "chrome.snapshot",
+      docId: "main",
+      revision: 1,
+      root: "root",
+      nodes: {
+        root: {
+          id: "root",
+          kind: "window",
+          children: ["titleBar"],
+        },
+        titleBar: {
+          id: "titleBar",
+          kind: "titleBar",
+          children: ["titleBar:title"],
+        },
+        "titleBar:title": {
+          id: "titleBar:title",
+          kind: "title",
+          label: "Inbox",
+        },
+      },
+      state: {
+        selected: {},
+        disabled: {},
+        hidden: {},
+        badges: {},
+        values: {},
+      },
+    });
+    expect(Object.keys(snapshot)).toEqual([
+      "nativite",
+      "type",
+      "docId",
+      "revision",
+      "root",
+      "nodes",
+      "state",
+    ]);
+  });
+
   it("filters chrome.snapshot areas using shell.ready", () => {
     _resetChromeState();
     postMessage.mockClear();
