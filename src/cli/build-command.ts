@@ -1,3 +1,5 @@
+import { join } from "node:path";
+
 import type { NativiteConfig } from "../index.ts";
 import type { ResolvedNativitePlatformRuntime } from "../platforms/registry.ts";
 
@@ -71,6 +73,21 @@ function resolveTargetRuntimes(
   return undefined;
 }
 
+function defaultBundlePath(runtime: ResolvedNativitePlatformRuntime): string {
+  return `dist-${runtime.bundlePlatform}`;
+}
+
+function nativeProjectPath(
+  config: NativiteConfig,
+  runtime: ResolvedNativitePlatformRuntime,
+): string {
+  if (runtime.id === "ios" || runtime.id === "macos") {
+    return join(".nativite", runtime.id, `${config.app.name}.xcodeproj`);
+  }
+
+  return join(".nativite", runtime.id);
+}
+
 export async function runBuildCommand(
   options: BuildCommandOptions,
   deps: BuildCommandDependencies = DEFAULT_BUILD_COMMAND_DEPS,
@@ -118,6 +135,9 @@ export async function runBuildCommand(
       logger.error(`Build failed for ${runtime.id}: ${toErrorMessage(err)}`);
       return 1;
     }
+
+    logger.info(`Native project: ${nativeProjectPath(config, runtime)}`);
+    logger.info(`Web bundle: ${defaultBundlePath(runtime)}`);
   }
 
   const platformList = targetRuntimes.map((runtime) => runtime.id).join(", ");
