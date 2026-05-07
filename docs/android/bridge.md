@@ -35,6 +35,26 @@ port.postMessage(JSON.stringify({
 }))
 ```
 
+Chrome layout messages use NCLP v2 `chrome.snapshot` envelopes instead of the generic `__chrome__.__chrome_set_state__` call:
+
+```json
+{
+  "nativite": 2,
+  "type": "chrome.snapshot",
+  "docId": "main",
+  "revision": 1,
+  "root": "root",
+  "nodes": {},
+  "state": {
+    "selected": {},
+    "disabled": {},
+    "hidden": {},
+    "badges": {},
+    "values": {}
+  }
+}
+```
+
 ### Native to JavaScript
 
 For RPC replies, the bridge sends a response through the same port:
@@ -48,6 +68,8 @@ For fire-and-forget events, the bridge uses `evaluateJavaScript`:
 ```javascript
 window.nativiteReceive({ id: null, type: "event", event: "eventName", data: { ... } })
 ```
+
+After the primary webview finishes loading and the message channel is attached, Android sends `shell.ready` through `window.nativiteReceive(...)` with the supported chrome area list. The JavaScript runtime waits for this before sending snapshots.
 
 ## WebView Attachment
 
@@ -79,11 +101,13 @@ Cleans up ports and references when a webview is destroyed.
 
 | Handler                                          | Description                                                                                                      |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `__chrome__.__chrome_set_state__`                | Updates `chromeState.value` and pushes chrome geometry CSS vars                                                  |
+| `chrome.snapshot`                                | Converts an NCLP v2 snapshot to the current native chrome state model                                            |
 | `__chrome__.__chrome_splash_hide__`              | Sets `splashKeepOnScreen = false` to dismiss the splash. See [Splash Screen Control](../shared/splash-screen.md) |
 | `__chrome__.__chrome_messaging_post_to_parent__` | Routes message from child to main webview                                                                        |
 | `__chrome__.__chrome_messaging_post_to_child__`  | Routes message from main to named child                                                                          |
 | `__chrome__.__chrome_messaging_broadcast__`      | Sends to all webviews except sender                                                                              |
+
+The old `__chrome__.__chrome_set_state__` handler remains as a compatibility path for older bundles.
 
 ### Plugin Handlers
 

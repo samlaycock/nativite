@@ -29,6 +29,26 @@ webkit.messageHandlers.nativite.postMessage({
 })
 ```
 
+Chrome layout no longer uses the generic `__chrome__.__chrome_set_state__` bridge call. The Chrome runtime sends NCLP v2 `chrome.snapshot` envelopes directly:
+
+```json
+{
+  "nativite": 2,
+  "type": "chrome.snapshot",
+  "docId": "main",
+  "revision": 1,
+  "root": "root",
+  "nodes": {},
+  "state": {
+    "selected": {},
+    "disabled": {},
+    "hidden": {},
+    "badges": {},
+    "values": {}
+  }
+}
+```
+
 ### Native to JavaScript
 
 The bridge uses `WKScriptMessageHandlerWithReply` for request/response, meaning native replies are sent directly through the `replyHandler` callback without needing a separate `evaluateJavaScript` roundtrip.
@@ -40,6 +60,8 @@ func sendEvent(_ name: String, data: [String: Any])
 ```
 
 This calls `evaluateJavaScript` to invoke `window.nativiteReceive({ event, data })` on the target webview.
+
+On primary webview load, `ViewController` sends `shell.ready` via `window.nativiteReceive(...)` with the iOS-supported chrome areas. The JavaScript runtime waits for this message before sending the first `chrome.snapshot`.
 
 ## Handler Registration
 
@@ -63,9 +85,11 @@ Handlers are stored as `"namespace.method"` keys in a dictionary for O(1) lookup
 
 ## Chrome Handlers
 
-### `__chrome__.__chrome_set_state__`
+### `chrome.snapshot`
 
-Receives the full chrome state snapshot from JavaScript and applies it to the native UI. Fire-and-forget (no reply needed). Only the **primary webview** is allowed to set chrome state.
+Receives the full NCLP v2 chrome document from JavaScript. The bridge accepts snapshots only from the **primary webview**, converts the NCLP document to the current native chrome state model, and applies it to the native UI.
+
+The previous `__chrome__.__chrome_set_state__` path is retained only for compatibility with older JavaScript bundles.
 
 ### `__chrome__.__chrome_splash_hide__`
 

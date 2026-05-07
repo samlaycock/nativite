@@ -106,6 +106,34 @@ fun createNativiteWebView(
             view.evaluateJavascript(SET_PLATFORM_ATTRIBUTE_SCRIPT, null)
             // Attach the bridge port after page load
             bridge.attachWebView(view, instanceName)
+            if (instanceName == "main") {
+                val shellReady = org.json.JSONObject().apply {
+                    put("nativite", 2)
+                    put("type", "shell.ready")
+                    put("platform", "android")
+                    put("version", "1.0.0")
+                    put(
+                        "areas",
+                        org.json.JSONArray(listOf(
+                            "titleBar",
+                            "navigation",
+                            "toolbar",
+                            "sidebarPanel",
+                            "statusBar",
+                            "homeIndicator",
+                            "keyboard",
+                            "menuBar",
+                            "tabBottomAccessory",
+                            "sheets",
+                            "drawers",
+                            "appWindows",
+                            "popovers",
+                        )),
+                    )
+                    put("ext", org.json.JSONObject())
+                }
+                view.evaluateJavascript("window.nativiteReceive(${shellReady})", null)
+            }
             // Apply pending SPA route for child webviews in production
             (view.tag as? String)?.let { route ->
                 view.tag = null

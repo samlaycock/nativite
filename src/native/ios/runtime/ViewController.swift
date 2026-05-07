@@ -309,6 +309,28 @@ extension ViewController: WKNavigationDelegate {
     // all --nv-* variables reflect actual safe area, traits, etc.
     vars.updateSafeArea(view.safeAreaInsets, in: self)
     vars.updateTraits(traitCollection)
+    sendToWebView([
+      "nativite": 2,
+      "type": "shell.ready",
+      "platform": "ios",
+      "version": "1.0.0",
+      "areas": [
+        "titleBar",
+        "navigation",
+        "toolbar",
+        "sidebarPanel",
+        "statusBar",
+        "homeIndicator",
+        "keyboard",
+        "menuBar",
+        "tabBottomAccessory",
+        "sheets",
+        "drawers",
+        "appWindows",
+        "popovers",
+      ],
+      "ext": [:],
+    ])
 
     // Check if JS called chrome.splash.preventAutoHide() during page load.
     // The flag is set as a synchronous window global so it is available by
