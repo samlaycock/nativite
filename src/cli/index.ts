@@ -13,34 +13,38 @@ import { runInitCommand } from "./init-command.ts";
 const _require = createRequire(import.meta.url);
 const { version } = _require("../../package.json") as { version: string };
 
-const program = new Command();
+export function createCliProgram(): Command {
+  const program = new Command();
 
-program
-  .name("nativite")
-  .description("Nativite CLI — manage native platform builds")
-  .version(version);
+  program
+    .name("nativite")
+    .description("Nativite CLI — manage native platform builds")
+    .version(version);
 
-// ─── nativite build ──────────────────────────────────────────────────────────
+  // ─── nativite build ────────────────────────────────────────────────────────
 
-program
-  .command("build")
-  .description("Build configured platforms for production")
-  .option("--platform <platform>", "Build only one configured platform")
-  .action(async (options: { platform?: string }) => {
-    const exitCode = await runBuildCommand(options);
-    if (exitCode !== 0) process.exit(exitCode);
-  });
+  program
+    .command("build")
+    .description("Build configured platforms for production")
+    .option("--platform <platform>", "Build only one configured platform")
+    .action(async (options: { platform?: string }) => {
+      const exitCode = await runBuildCommand(options);
+      if (exitCode !== 0) process.exit(exitCode);
+    });
 
-// ─── nativite init ───────────────────────────────────────────────────────────
+  // ─── nativite init ─────────────────────────────────────────────────────────
 
-program
-  .command("init")
-  .description("Prepare an existing Vite project for Nativite")
-  .option("--force", "Overwrite nativite.config.ts if it already exists")
-  .action(async (options: { force?: boolean }) => {
-    const exitCode = await runInitCommand(options);
-    if (exitCode !== 0) process.exit(exitCode);
-  });
+  program
+    .command("init")
+    .description("Prepare an existing Vite project for Nativite")
+    .option("--force", "Overwrite nativite.config.ts if it already exists")
+    .action(async (options: { force?: boolean }) => {
+      const exitCode = await runInitCommand(options);
+      if (exitCode !== 0) process.exit(exitCode);
+    });
+
+  return program;
+}
 
 function isMainModule(): boolean {
   const entry = process.argv[1];
@@ -49,5 +53,6 @@ function isMainModule(): boolean {
 }
 
 if (isMainModule()) {
+  const program = createCliProgram();
   program.parse(process.argv);
 }

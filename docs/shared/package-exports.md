@@ -20,5 +20,6 @@ temporary `node_modules/nativite` directory, then verifies every advertised
 JavaScript subpath with both `import()` and `require()`. This catches bundling
 cycles and entrypoint side effects before publish.
 
-The CLI entrypoint is importable because it is listed in package exports, but it
-only parses `process.argv` when invoked directly as the `nativite` executable.
+The CLI entrypoint is importable because it is listed in package exports. It
+exports `createCliProgram()` for command composition, but only parses
+`process.argv` when invoked directly as the `nativite` executable.
