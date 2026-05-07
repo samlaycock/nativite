@@ -31,6 +31,8 @@ Uses `WebViewAssetLoader` to serve bundled assets from `context.assets`:
 
 - Production assets are served from the `dist/` directory within the APK's assets.
 - The `shouldInterceptRequest()` method routes asset requests through the loader.
+- Generated Android release builds copy the Vite `dist-android/` output into
+  Gradle-generated assets at `dist/` before asset merging.
 
 ### Page Lifecycle
 

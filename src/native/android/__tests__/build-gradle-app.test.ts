@@ -37,4 +37,29 @@ describe("buildGradleAppTemplate", () => {
     const output = buildGradleAppTemplate(androidConfig, 26, 35);
     expect(output).toContain("buildConfig = true");
   });
+
+  it("copies the Android production web bundle into generated assets for release builds", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+
+    expect(output).toContain(
+      'val nativiteWebBundleDir = rootProject.layout.projectDirectory.dir("../../dist-android")',
+    );
+    expect(output).toContain(
+      'val nativiteGeneratedAssetsDir = layout.buildDirectory.dir("generated/nativite/assets")',
+    );
+    expect(output).toContain("val copyNativiteWebBundle by tasks.registering(Copy::class)");
+    expect(output).toContain("from(nativiteWebBundleDir)");
+    expect(output).toContain('into(nativiteGeneratedAssetsDir.map { it.dir("dist") })');
+    expect(output).toContain("assets.srcDir(nativiteGeneratedAssetsDir)");
+  });
+
+  it("fails release asset merging clearly when the Android web bundle is missing", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+
+    expect(output).toContain(
+      'throw GradleException("Missing Android web bundle at ${bundlePath.path}. Run `bunx nativite build --platform android` before building release.")',
+    );
+    expect(output).toContain('if (name == "mergeReleaseAssets")');
+    expect(output).toContain("dependsOn(copyNativiteWebBundle)");
+  });
 });
