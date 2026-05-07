@@ -130,6 +130,17 @@ describe("NativiteChromeState.swift", () => {
     expect(swift).not.toContain('replacingOccurrences(of: "ItemPressed"');
   });
 
+  it("renders sheet header chrome with title and bar items", () => {
+    expect(swift).toContain("sheet.title");
+    expect(swift).toContain("sheet.leadingItems");
+    expect(swift).toContain("sheet.trailingItems");
+    expect(swift).toContain('eventName: "sheet.leadingItemPressed"');
+    expect(swift).toContain('eventName: "sheet.trailingItemPressed"');
+    expect(swift).toContain('menuEventName: "sheet.leadingItemPressed"');
+    expect(swift).toContain('menuEventName: "sheet.trailingItemPressed"');
+    expect(swift).toContain("NavigationStack");
+  });
+
   it("passes full NCLP node IDs back to the bridge when available", () => {
     expect(swift).toContain("var nclpId: String?");
     expect(swift).toContain('item.nclpId = state["nclpId"] as? String');

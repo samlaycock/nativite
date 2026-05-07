@@ -152,6 +152,7 @@ Chrome events are a discriminated union on `type`:
 
 **Child Webviews:**
 
+- `sheet.leadingItemPressed` / `sheet.trailingItemPressed` — `{ id }`
 - `sheet.presented` / `sheet.dismissed` — `{ name }`
 - `sheet.detentChanged` — `{ name, detent }`
 - `sheet.loadFailed` — `{ name, message, code }`

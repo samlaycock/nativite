@@ -106,6 +106,15 @@ describe("NativiteChrome.kt", () => {
     expect(kt).toContain("ModalBottomSheet(");
   });
 
+  it("renders optional sheet header chrome with leading and trailing items", () => {
+    expect(kt).toContain('config["title"] as? String');
+    expect(kt).toContain('config["leadingItems"]');
+    expect(kt).toContain('config["trailingItems"]');
+    expect(kt).toContain('"sheet.leadingItemPressed"');
+    expect(kt).toContain('"sheet.trailingItemPressed"');
+    expect(kt).toContain("TopAppBar(");
+  });
+
   it("supports sheet detent mapping with fractional heights", () => {
     expect(kt).toContain('"small" -> 0.25f');
     expect(kt).toContain('"medium" -> 0.5f');

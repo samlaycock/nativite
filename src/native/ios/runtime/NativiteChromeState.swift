@@ -27,6 +27,9 @@ final class NativiteChromeState {
     var backgroundColor: String?  // Hex string
     var backgroundBlur: Bool = false
     var dismissible: Bool = true
+    var title: String?
+    var leadingItems: [BarItemState] = []
+    var trailingItems: [BarItemState] = []
   }
 
   enum SheetDetent: String, Identifiable {
@@ -333,6 +336,17 @@ final class NativiteChromeState {
       sheet.backgroundColor = state["backgroundColor"] as? String
       sheet.backgroundBlur = state["backgroundBlur"] as? Bool ?? false
       sheet.dismissible = state["dismissible"] as? Bool ?? true
+      sheet.title = state["title"] as? String
+      if let leadingItems = state["leadingItems"] as? [[String: Any]] {
+        sheet.leadingItems = leadingItems.compactMap { parseBarItem($0) }
+      } else {
+        sheet.leadingItems = []
+      }
+      if let trailingItems = state["trailingItems"] as? [[String: Any]] {
+        sheet.trailingItems = trailingItems.compactMap { parseBarItem($0) }
+      } else {
+        sheet.trailingItems = []
+      }
       sheets[name] = sheet
     } else {
       sheets[name]?.presented = false
@@ -964,14 +978,41 @@ struct NativiteSheetModifier: ViewModifier {
   @ViewBuilder
   private func sheetContent(for sheet: NativiteChromeState.SheetState) -> some View {
     let resolvedURL = resolveSheetURL(sheet.url)
-    NativiteChildWebView(
-      instanceName: sheet.id,
-      url: resolvedURL,
-      baseURL: chromeState.primaryWebView?.url,
-      bridge: chromeState.bridge,
-      chromeState: chromeState,
-      backgroundColor: sheet.backgroundColor
-    )
+    NavigationStack {
+      NativiteChildWebView(
+        instanceName: sheet.id,
+        url: resolvedURL,
+        baseURL: chromeState.primaryWebView?.url,
+        bridge: chromeState.bridge,
+        chromeState: chromeState,
+        backgroundColor: sheet.backgroundColor
+      )
+      .navigationTitle(sheet.title ?? "")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar(sheetShowsHeader(sheet) ? .visible : .hidden, for: .navigationBar)
+      .toolbar {
+        ToolbarItemGroup(placement: .topBarLeading) {
+          ForEach(sheet.leadingItems) { item in
+            NativiteBarButton(
+              item: item,
+              eventName: "sheet.leadingItemPressed",
+              menuEventName: "sheet.leadingItemPressed",
+              onEvent: chromeState.onChromeEvent
+            )
+          }
+        }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+          ForEach(sheet.trailingItems) { item in
+            NativiteBarButton(
+              item: item,
+              eventName: "sheet.trailingItemPressed",
+              menuEventName: "sheet.trailingItemPressed",
+              onEvent: chromeState.onChromeEvent
+            )
+          }
+        }
+      }
+    }
     .presentationDetents(swiftUIDetents(from: sheet.detents))
     .presentationDragIndicator(sheet.grabberVisible ? .visible : .hidden)
     .presentationCornerRadius(sheet.cornerRadius ?? 12)
@@ -1004,6 +1045,11 @@ struct NativiteSheetModifier: ViewModifier {
       }
     }
     return result.isEmpty ? [.medium, .large] : result
+  }
+
+  private func sheetShowsHeader(_ sheet: NativiteChromeState.SheetState) -> Bool {
+    if let title = sheet.title, !title.isEmpty { return true }
+    return !sheet.leadingItems.isEmpty || !sheet.trailingItems.isEmpty
   }
 
   private func sendEvent(name: String, data: [String: Any]) {

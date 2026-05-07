@@ -219,6 +219,9 @@ interface SheetConfig extends ChildWebviewBase {
   readonly dismissible?: boolean;
   readonly cornerRadius?: number;
   readonly backgroundColor?: string;
+  readonly title?: string;
+  readonly leadingItems?: readonly BarItem[];
+  readonly trailingItems?: readonly BarItem[];
 }
 ```
 
@@ -283,6 +286,8 @@ type ChromeEvent =
   | { readonly type: "titleBar.leadingItemPressed"; readonly id: string }
   | { readonly type: "titleBar.trailingItemPressed"; readonly id: string }
   | { readonly type: "navigation.itemPressed"; readonly id: string }
+  | { readonly type: "sheet.leadingItemPressed"; readonly id: string }
+  | { readonly type: "sheet.trailingItemPressed"; readonly id: string }
   | { readonly type: "sheet.presented"; readonly name: string }
   | { readonly type: "sheet.dismissed"; readonly name: string }
   | { readonly type: "message"; readonly from: "main" | (string & {}); readonly payload: unknown }

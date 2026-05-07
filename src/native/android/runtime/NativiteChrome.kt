@@ -631,6 +631,10 @@ fun NativiteSheet(name: String, config: Map<*, *>, bridge: NativiteBridge) {
     val dismissible = config["dismissible"] as? Boolean ?: true
     val cornerRadius = (config["cornerRadius"] as? Number)?.toFloat()
     val bgColor = parseTintColor(config["backgroundColor"] as? String)
+    val title = config["title"] as? String
+    val leadingItems = extractItems(config["leadingItems"])
+    val trailingItems = extractItems(config["trailingItems"])
+    val showsHeader = title != null || leadingItems.isNotEmpty() || trailingItems.isNotEmpty()
 
     val skipPartiallyExpanded = detents.size == 1 && (detents[0] == "large" || detents[0] == "full")
     val sheetState = rememberModalBottomSheetState(
@@ -701,15 +705,38 @@ fun NativiteSheet(name: String, config: Map<*, *>, bridge: NativiteBridge) {
             null
         },
     ) {
-        NativiteWebView(
-            bridge = bridge,
-            instanceName = name,
-            url = url,
-            chromeArea = "sheet",
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(heightFraction),
-        )
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (showsHeader) {
+                TopAppBar(
+                    title = { Text(title ?: "") },
+                    navigationIcon = {
+                        for (item in leadingItems) {
+                            BarItemButton(item, bridge, "sheet.leadingItemPressed")
+                        }
+                    },
+                    actions = {
+                        for (item in trailingItems) {
+                            BarItemButton(item, bridge, "sheet.trailingItemPressed")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = bgColor ?: MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            }
+
+            NativiteWebView(
+                bridge = bridge,
+                instanceName = name,
+                url = url,
+                chromeArea = "sheet",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(heightFraction),
+            )
+        }
     }
 }
 

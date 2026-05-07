@@ -119,15 +119,18 @@ Icons are resolved via a static `when` expression in `materialIcon()`, mapping P
 
 ### Configuration
 
-| Property         | Type       | Description                                                     |
-| ---------------- | ---------- | --------------------------------------------------------------- |
-| `url`            | `String`   | URL to load in the sheet's webview                              |
-| `presented`      | `Boolean`  | Whether the sheet is shown                                      |
-| `detents`        | `String[]` | Allowed stop points: `"small"`, `"medium"`, `"large"`, `"full"` |
-| `activeDetent`   | `String?`  | Current detent                                                  |
-| `grabberVisible` | `Boolean`  | Show the drag handle                                            |
-| `dismissible`    | `Boolean`  | Whether swipe-to-dismiss is enabled                             |
-| `cornerRadius`   | `Number?`  | Custom corner radius                                            |
+| Property         | Type        | Description                                                     |
+| ---------------- | ----------- | --------------------------------------------------------------- |
+| `url`            | `String`    | URL to load in the sheet's webview                              |
+| `presented`      | `Boolean`   | Whether the sheet is shown                                      |
+| `detents`        | `String[]`  | Allowed stop points: `"small"`, `"medium"`, `"large"`, `"full"` |
+| `activeDetent`   | `String?`   | Current detent                                                  |
+| `grabberVisible` | `Boolean`   | Show the drag handle                                            |
+| `dismissible`    | `Boolean`   | Whether swipe-to-dismiss is enabled                             |
+| `cornerRadius`   | `Number?`   | Custom corner radius                                            |
+| `title`          | `String?`   | Optional Material 3 top app bar title inside the sheet          |
+| `leadingItems`   | `BarItem[]` | Optional top app bar leading actions                            |
+| `trailingItems`  | `BarItem[]` | Optional top app bar trailing actions                           |
 
 ### Detent Mapping
 
@@ -140,11 +143,13 @@ Icons are resolved via a static `when` expression in `materialIcon()`, mapping P
 
 ### Events
 
+- `sheet.leadingItemPressed` with `{ id }`
+- `sheet.trailingItemPressed` with `{ id }`
 - `sheet.presented` with `{ name }`
 - `sheet.dismissed` with `{ name }`
 - `sheet.detentChanged` with `{ name, detent }`
 
-Each sheet contains a `NativiteWebView` child for its content.
+When `title`, `leadingItems`, or `trailingItems` are present, the sheet renders a Material 3 `TopAppBar` above the embedded `NativiteWebView`.
 
 ## Drawers
 
