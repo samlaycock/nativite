@@ -88,6 +88,25 @@ function nativeProjectPath(
   return join(".nativite", runtime.id);
 }
 
+function platformDisplayName(runtime: ResolvedNativitePlatformRuntime): string {
+  if (runtime.id === "ios") return "iOS";
+  if (runtime.id === "macos") return "macOS";
+  if (runtime.id === "android") return "Android";
+
+  return runtime.id;
+}
+
+function buildNextStepsSummary(
+  config: NativiteConfig,
+  runtimes: ReadonlyArray<ResolvedNativitePlatformRuntime>,
+): string {
+  const steps = runtimes.map((runtime) => {
+    return `  ${platformDisplayName(runtime)}: open ${nativeProjectPath(config, runtime)}`;
+  });
+
+  return ["Next steps:", ...steps].join("\n");
+}
+
 export async function runBuildCommand(
   options: BuildCommandOptions,
   deps: BuildCommandDependencies = DEFAULT_BUILD_COMMAND_DEPS,
@@ -144,6 +163,7 @@ export async function runBuildCommand(
   logger.info(
     `Production build${targetRuntimes.length === 1 ? "" : "s"} complete for: ${platformList}`,
   );
+  logger.info(buildNextStepsSummary(config, targetRuntimes));
 
   return 0;
 }
