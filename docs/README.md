@@ -38,6 +38,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Client Bridge](./shared/client-bridge.md) — Low-level RPC and event subscription API
 - [CSS Variables Module](./shared/css-vars-module.md) — Observable access to `--nv-*` variables
 - [Native Test Scripts](./shared/native-test-scripts.md) — Bun commands for running Swift and Kotlin runtime tests
+- [CLI Init Command](./shared/cli-init.md) — One-command setup for existing Vite projects
 - [Vite Plugin](./shared/vite-plugin.md) — Build pipeline, dev server routing, HMR
 - [Platform Registry](./shared/platform-registry.md) — Platform plugin resolution and config merging
 - [Inter-Webview Messaging](./shared/inter-webview-messaging.md) — Communication between main and child webviews
