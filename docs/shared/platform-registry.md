@@ -38,7 +38,7 @@ Handles the CLI ↔ Vite handoff:
 type ResolvedNativitePlatformRuntime = {
   id: string; // "ios", "android", "macos"
   config: NativitePlatformConfig; // Platform-specific config
-  plugin: NativitePlatformPlugin; // Plugin with generate/dev/build hooks
+  plugin: NativitePlatformPlugin; // Plugin with generate/build hooks
   extensions: string[]; // [".ios", ".mobile", ".native"]
   environments: string[]; // ["ios", "ipad"]
   bundlePlatform: string; // Platform name for bundle manifest
@@ -68,11 +68,10 @@ For custom platform plugins, omitted traits default to:
 
 Each plugin implements:
 
-| Hook            | Purpose                                 |
-| --------------- | --------------------------------------- |
-| `generate(ctx)` | Generate the native project             |
-| `dev(ctx)`      | Optional terminal-owned dev launch flow |
-| `build(ctx)`    | Generate for production build           |
+| Hook            | Purpose                       |
+| --------------- | ----------------------------- |
+| `generate(ctx)` | Generate the native project   |
+| `build(ctx)`    | Generate for production build |
 
 ## Helper Functions
 

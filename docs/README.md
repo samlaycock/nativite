@@ -13,7 +13,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [App Entry Point](./ios/app-entry.md) — SwiftUI @main, root view, splash overlay
 - [Project Generation](./ios/project-generation.md) — Xcode project generation and structure
 - [OTA Updates](./ios/ota-updates.md) — Over-the-air bundle updates
-- [Dev Workflow](./ios/dev-workflow.md) — Simulator management and dev server integration
+- [Dev Workflow](./ios/dev-workflow.md) — IDE-owned debug runs and dev server integration
 
 ## Android
 
@@ -24,7 +24,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [CSS Variables](./android/css-variables.md) — Safe area and keyboard CSS properties
 - [Theme](./android/theme.md) — Material 3 dynamic colours and theming
 - [Project Generation](./android/project-generation.md) — Gradle project generation and structure
-- [Dev Workflow](./android/dev-workflow.md) — Emulator management and dev server integration
+- [Dev Workflow](./android/dev-workflow.md) — IDE-owned debug runs and dev server integration
 
 ## macOS
 

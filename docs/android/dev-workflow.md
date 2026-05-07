@@ -53,9 +53,8 @@ URL. Android debug builds convert host loopback URLs to the emulator host alias:
 `10.0.2.2` is the Android emulator's special IP for the host machine's loopback
 address.
 
-The older `nativite dev` command can still generate, build, install, and launch
-an emulator app from the terminal, but it is not the default setup path. Prefer
-Android Studio unless you specifically want terminal-owned emulator orchestration.
+Open and run the generated debug project in Android Studio. Nativite does not
+own emulator orchestration from the CLI.
 
 ## User-Agent Based Routing
 
