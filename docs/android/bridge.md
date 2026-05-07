@@ -1,6 +1,6 @@
 # Android Native Bridge
 
-> Maps to: `src/android/templates/nativite-bridge.ts`
+> Maps to: `src/native/android/runtime/NativiteBridge.kt`
 > Generated file: `NativiteBridge.kt`
 
 The bridge provides bidirectional communication between JavaScript and Kotlin using `WebMessagePort` (AndroidX WebKit).

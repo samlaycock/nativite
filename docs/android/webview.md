@@ -1,6 +1,6 @@
 # Android WebView
 
-> Maps to: `src/android/templates/nativite-webview.ts`
+> Maps to: `src/native/android/runtime/NativiteWebView.kt`
 > Generated file: `NativiteWebView.kt`
 
 The WebView module handles creation, lifecycle management, and URL resolution for both the main webview and child webviews (sheets, drawers, popovers).

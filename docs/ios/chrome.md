@@ -1,6 +1,6 @@
 # iOS Chrome State Reconciliation
 
-> Maps to: `src/ios/templates/nativite-chrome.ts`
+> Maps to: `src/native/ios/runtime/NativiteChrome.swift`
 > Generated file: `NativiteChrome.swift`
 
 The Chrome reconciler translates declarative JavaScript chrome state into imperative UIKit/SwiftUI native UI components.

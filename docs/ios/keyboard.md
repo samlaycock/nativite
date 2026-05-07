@@ -1,6 +1,6 @@
 # iOS Keyboard & Input Accessory
 
-> Maps to: `src/ios/templates/nativite-keyboard.ts`
+> Maps to: `src/native/ios/runtime/NativiteKeyboard.swift`
 > Generated file: `NativiteKeyboard.swift`
 
 The keyboard module provides a native input accessory bar above the software keyboard and configurable keyboard dismiss modes.

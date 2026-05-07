@@ -9,7 +9,19 @@ export default defineConfig([
     dts: true,
     outDir: "./dist",
     clean: true,
-    copy: ["./src/globals.d.ts"],
+    copy: [
+      "./src/globals.d.ts",
+      {
+        from: "./src/native/ios/runtime/*.swift",
+        to: "./dist/ios/runtime",
+        flatten: false,
+      },
+      {
+        from: "./src/native/android/runtime/*.kt",
+        to: "./dist/android/runtime",
+        flatten: false,
+      },
+    ],
   },
   {
     entry: [

@@ -1,6 +1,6 @@
 # iOS SwiftUI Chrome State Model
 
-> Maps to: `src/ios/templates/nativite-chrome-state.ts`
+> Maps to: `src/native/ios/runtime/NativiteChromeState.swift`
 > Generated file: `NativiteChromeState.swift`
 
 The Chrome State model bridges imperative UIKit chrome reconciliation with declarative SwiftUI views using the `@Observable` macro.

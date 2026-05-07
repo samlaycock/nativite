@@ -3,13 +3,13 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { NativiteConfig, NativitePlatformLogger, NativitePlatformPlugin } from "../index.ts";
-import type { AppleTargetPlatform } from "../ios/index.ts";
+import type { AppleTargetPlatform } from "../native/ios/index.ts";
 
-import { generateProject as generateAndroidProject } from "../android/index.ts";
 import { runGradle } from "../cli/gradle.ts";
 import { runXcodebuild } from "../cli/xcodebuild.ts";
 import { definePlatformPlugin } from "../index.ts";
-import { generateProject } from "../ios/index.ts";
+import { generateProject as generateAndroidProject } from "../native/android/index.ts";
+import { generateProject } from "../native/ios/index.ts";
 
 async function buildAndLaunchSimulator(
   config: NativiteConfig,

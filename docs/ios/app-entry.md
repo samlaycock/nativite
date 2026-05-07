@@ -1,6 +1,6 @@
 # iOS App Entry Point & Root View
 
-> Maps to: `src/ios/templates/main-entry.ts`, `src/ios/templates/app-delegate.ts`
+> Maps to: `src/native/ios/main-entry.ts`, `src/native/ios/app-delegate.ts`
 > Generated file: `NativiteApp.swift` (via `AppDelegate` template)
 
 The app entry point uses SwiftUI's `@main` attribute and wraps the UIKit `ViewController` in a SwiftUI hierarchy.

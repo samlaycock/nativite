@@ -1,6 +1,6 @@
 # iOS Native Bridge
 
-> Maps to: `src/ios/templates/nativite-bridge.ts`
+> Maps to: `src/native/ios/runtime/NativiteBridge.swift`
 > Generated file: `NativiteBridge.swift`
 
 The bridge provides bidirectional communication between JavaScript and native Swift code using `WKScriptMessageHandlerWithReply`.

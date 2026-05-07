@@ -1,6 +1,6 @@
 # Android CSS Variables
 
-> Maps to: `src/android/templates/nativite-vars.ts`
+> Maps to: `src/native/android/runtime/NativiteVars.kt`
 > Generated file: `NativiteVars.kt`
 
 The CSS variables module injects `--nv-*` CSS custom properties into the webview as a `<style>` block, observes Android window insets for keyboard tracking, and updates device/orientation/appearance flags from the current Android configuration.
