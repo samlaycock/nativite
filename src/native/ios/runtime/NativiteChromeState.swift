@@ -137,6 +137,7 @@ final class NativiteChromeState {
 
   struct BarItemState: Identifiable {
     let id: String
+    var nclpId: String? = nil
     var label: String?
     var icon: String?          // SF Symbol name
     var style: ItemStyle = .plain
@@ -181,6 +182,7 @@ final class NativiteChromeState {
 
   struct MenuItemState: Identifiable {
     let id: String
+    var nclpId: String? = nil
     var label: String
     var icon: String?
     var disabled: Bool = false
@@ -206,6 +208,7 @@ final class NativiteChromeState {
 
   struct NavigationItemState: Identifiable {
     let id: String
+    var nclpId: String? = nil
     var label: String
     var icon: String?         // SF Symbol name
     var badge: String?
@@ -646,6 +649,7 @@ final class NativiteChromeState {
     guard let id = state["id"] as? String,
           let label = state["label"] as? String else { return nil }
     var item = NavigationItemState(id: id, label: label)
+    item.nclpId = state["nclpId"] as? String
     item.icon = state["icon"] as? String
     if let badge = state["badge"] as? String {
       item.badge = badge
@@ -683,6 +687,7 @@ final class NativiteChromeState {
 
     guard let id = state["id"] as? String else { return nil }
     var item = BarItemState(id: id)
+    item.nclpId = state["nclpId"] as? String
     item.label = state["label"] as? String
     item.icon = state["icon"] as? String
     if let style = state["style"] as? String {
@@ -722,6 +727,7 @@ final class NativiteChromeState {
           let label = state["label"] as? String else { return nil }
 
     var item = MenuItemState(id: id, label: label)
+    item.nclpId = state["nclpId"] as? String
     item.icon = state["icon"] as? String
     item.disabled = (state["disabled"] as? Bool) ?? false
     item.checked = (state["checked"] as? Bool) ?? false
@@ -1056,7 +1062,7 @@ struct NativiteBarButton: View {
         Menu { menuContent(menu) } label: { styledLabel }
           .disabled(item.disabled)
       } else {
-        Button { onEvent?(eventName, ["id": item.id]) } label: { styledLabel }
+        Button { onEvent?(eventName, ["id": item.id, "nclpId": item.nclpId ?? item.id]) } label: { styledLabel }
           .disabled(item.disabled)
       }
     }
@@ -1106,7 +1112,7 @@ struct NativiteBarButton: View {
 
   @ViewBuilder private func menuLeaf(_ menuItem: NativiteChromeState.MenuItemState) -> some View {
     Button(role: menuItem.style == .destructive ? .destructive : nil) {
-      onEvent?(menuEventName, ["id": menuItem.id])
+      onEvent?(menuEventName, ["id": menuItem.id, "nclpId": menuItem.nclpId ?? menuItem.id])
     } label: {
       if let icon = menuItem.icon {
         Label(menuItem.label, systemImage: icon)
@@ -1260,7 +1266,7 @@ struct NativiteMacBarButton: View {
         Menu { menuContent(menu) } label: { styledLabel }
           .disabled(item.disabled)
       } else {
-        Button { onEvent?(eventName, ["id": item.id]) } label: { styledLabel }
+        Button { onEvent?(eventName, ["id": item.id, "nclpId": item.nclpId ?? item.id]) } label: { styledLabel }
           .disabled(item.disabled)
       }
     }
@@ -1333,7 +1339,7 @@ struct NativiteMacBarButton: View {
 
   @ViewBuilder private func menuLeaf(_ menuItem: NativiteChromeState.MenuItemState) -> some View {
     Button(role: menuItem.style == .destructive ? .destructive : nil) {
-      onEvent?(menuEventName, ["id": menuItem.id])
+      onEvent?(menuEventName, ["id": menuItem.id, "nclpId": menuItem.nclpId ?? menuItem.id])
     } label: {
       if let icon = menuItem.icon {
         Label(menuItem.label, systemImage: icon)
@@ -1591,7 +1597,8 @@ struct NativiteMacNavigationModifier: ViewModifier {
       set: { newValue in
         guard !newValue.isEmpty else { return }
         chromeState.navigationActiveItem = newValue
-        chromeState.onChromeEvent?("navigation.itemPressed", ["id": newValue])
+        let selectedItem = visibleItems.first { $0.id == newValue }
+        chromeState.onChromeEvent?("navigation.itemPressed", ["id": newValue, "nclpId": selectedItem?.nclpId ?? newValue])
       }
     )
   }
@@ -1888,7 +1895,7 @@ struct NativiteMenuBarCommands: Commands {
     if let key = keyEquivalent(from: item.keyEquivalent) {
       return AnyView(
         Button(role: item.style == .destructive ? .destructive : nil) {
-          chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id])
+          chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id, "nclpId": item.nclpId ?? item.id])
         } label: {
           menuButtonLabel(for: item)
         }
@@ -1899,7 +1906,7 @@ struct NativiteMenuBarCommands: Commands {
 
     return AnyView(
       Button(role: item.style == .destructive ? .destructive : nil) {
-        chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id])
+        chromeState.onChromeEvent?("menuBar.itemPressed", ["id": item.id, "nclpId": item.nclpId ?? item.id])
       } label: {
         menuButtonLabel(for: item)
       }

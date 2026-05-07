@@ -67,6 +67,8 @@ type NclpSnapshot = {
 type ShellReadyMessage = {
   readonly nativite: 2;
   readonly type: "shell.ready";
+  readonly platform: string;
+  readonly version: string;
   readonly areas: readonly string[];
 };
 type ChromeEventMessage = {
@@ -698,8 +700,8 @@ function mapNclpEvent(message: ChromeEventMessage): ChromeEvent | undefined {
 function receiveNativeMessage(detail: unknown): void {
   if (typeof detail !== "object" || detail === null) return;
   const message = detail as { readonly type?: unknown; readonly nativite?: unknown };
-  if (message.nativite === 2 && message.type === "shell.ready") {
-    _supportedAreas = new Set((message as ShellReadyMessage).areas);
+  if (isShellReadyMessage(message)) {
+    _supportedAreas = new Set(message.areas);
     if (layerStack.length > 0) scheduleFlush();
     return;
   }
@@ -713,6 +715,23 @@ function receiveNativeMessage(detail: unknown): void {
     const event = { type: legacy.event, ...(legacy.data as object) } as ChromeEvent;
     handleIncoming(event);
   }
+}
+
+function isShellReadyMessage(message: {
+  readonly type?: unknown;
+  readonly nativite?: unknown;
+}): message is ShellReadyMessage {
+  const ready = message as Partial<ShellReadyMessage>;
+  return (
+    ready.nativite === 2 &&
+    ready.type === "shell.ready" &&
+    typeof ready.platform === "string" &&
+    ready.platform.length > 0 &&
+    typeof ready.version === "string" &&
+    ready.version.length > 0 &&
+    Array.isArray(ready.areas) &&
+    ready.areas.every((area) => typeof area === "string" && area.length > 0)
+  );
 }
 
 function onNativiteEvent(e: Event): void {

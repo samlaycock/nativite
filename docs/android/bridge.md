@@ -101,13 +101,15 @@ Cleans up ports and references when a webview is destroyed.
 
 | Handler                                          | Description                                                                                                      |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `chrome.snapshot`                                | Converts an NCLP v2 snapshot to the current native chrome state model                                            |
+| `chrome.snapshot`                                | Validates and revision-gates an NCLP v2 snapshot, then converts it to the current native chrome state model      |
 | `__chrome__.__chrome_splash_hide__`              | Sets `splashKeepOnScreen = false` to dismiss the splash. See [Splash Screen Control](../shared/splash-screen.md) |
 | `__chrome__.__chrome_messaging_post_to_parent__` | Routes message from child to main webview                                                                        |
 | `__chrome__.__chrome_messaging_post_to_child__`  | Routes message from main to named child                                                                          |
 | `__chrome__.__chrome_messaging_broadcast__`      | Sends to all webviews except sender                                                                              |
 
 The old `__chrome__.__chrome_set_state__` handler remains as a compatibility path for older bundles.
+
+The snapshot adapter keeps full NCLP node IDs in internal `nclpId` fields alongside the short legacy `id` values expected by Compose chrome components. Native interaction events prefer those full IDs when emitting `chrome.event`, preserving the protocol contract that event targets reference NCLP nodes.
 
 ### Plugin Handlers
 

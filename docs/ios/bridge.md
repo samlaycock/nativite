@@ -87,7 +87,9 @@ Handlers are stored as `"namespace.method"` keys in a dictionary for O(1) lookup
 
 ### `chrome.snapshot`
 
-Receives the full NCLP v2 chrome document from JavaScript. The bridge accepts snapshots only from the **primary webview**, converts the NCLP document to the current native chrome state model, and applies it to the native UI.
+Receives the full NCLP v2 chrome document from JavaScript. The bridge accepts snapshots only from the **primary webview**, validates the NCLP envelope, rejects stale revisions per `docId`, converts the NCLP document to the current native chrome state model, and applies it to the native UI.
+
+The adapter preserves full NCLP node identity in internal `nclpId` fields while exposing the short legacy `id` values expected by existing SwiftUI/UIKit chrome renderers. Native chrome interactions prefer `nclpId` when creating `chrome.event` envelopes, so event targets remain valid NCLP node IDs even while the renderer still consumes the legacy state shape.
 
 The previous `__chrome__.__chrome_set_state__` path is retained only for compatibility with older JavaScript bundles.
 

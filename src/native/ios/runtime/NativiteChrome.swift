@@ -1,10 +1,14 @@
+import Foundation
+
 #if os(iOS)
 import UIKit
 import WebKit
 import SwiftUI
+#endif
 
 private func nativiteChromeEventPayload(name: String, data: [String: Any]) -> [String: Any]? {
   func idValue() -> String? { data["id"] as? String }
+  func nclpIdValue() -> String? { data["nclpId"] as? String }
   func nameValue() -> String? { data["name"] as? String }
 
   var event: String?
@@ -13,11 +17,11 @@ private func nativiteChromeEventPayload(name: String, data: [String: Any]) -> [S
 
   switch name {
   case "titleBar.leadingItemPressed":
-    if let id = idValue() { event = "activate"; target = "titleBar:leading:\(id)" }
+    if let id = idValue() { event = "activate"; target = nclpIdValue() ?? "titleBar:leading:\(id)" }
   case "titleBar.trailingItemPressed":
-    if let id = idValue() { event = "activate"; target = "titleBar:trailing:\(id)" }
+    if let id = idValue() { event = "activate"; target = nclpIdValue() ?? "titleBar:trailing:\(id)" }
   case "titleBar.menuItemPressed":
-    if let id = idValue() { event = "activate"; target = "titleBar:trailing:menu:\(id)" }
+    if let id = idValue() { event = "activate"; target = nclpIdValue() ?? "titleBar:trailing:menu:\(id)" }
   case "titleBar.backPressed":
     event = "back"; target = "titleBar"
   case "titleBar.searchChanged":
@@ -29,7 +33,7 @@ private func nativiteChromeEventPayload(name: String, data: [String: Any]) -> [S
   case "navigation.backPressed":
     event = "back"; target = "navigation"
   case "navigation.itemPressed":
-    if let id = idValue() { event = "select"; target = "navigation"; value = "navigation:\(id)" }
+    if let id = idValue() { event = "select"; target = "navigation"; value = nclpIdValue() ?? "navigation:\(id)" }
   case "navigation.searchChanged":
     event = "input"; target = "navigation:search-field"; value = data["value"] ?? NSNull()
   case "navigation.searchSubmitted":
@@ -37,11 +41,13 @@ private func nativiteChromeEventPayload(name: String, data: [String: Any]) -> [S
   case "navigation.searchCancelled":
     event = "cancel"; target = "navigation:search-field"
   case "toolbar.itemPressed":
-    if let id = idValue() { event = "activate"; target = "toolbar:\(id)" }
+    if let id = idValue() { event = "activate"; target = nclpIdValue() ?? "toolbar:\(id)" }
   case "toolbar.menuItemPressed":
-    if let id = idValue() { event = "activate"; target = "toolbar:menu:\(id)" }
+    if let id = idValue() { event = "activate"; target = nclpIdValue() ?? "toolbar:menu:\(id)" }
   case "keyboard.itemPressed":
-    if let id = idValue() { event = "activate"; target = "keyboard:\(id)" }
+    if let id = idValue() { event = "activate"; target = nclpIdValue() ?? "keyboard:\(id)" }
+  case "menuBar.itemPressed":
+    if let id = idValue() { event = "activate"; target = nclpIdValue() ?? "menuBar:\(id)" }
   case "sheet.presented":
     if let name = nameValue() { event = "open"; target = "sheets:\(name)" }
   case "sheet.dismissed":
@@ -83,6 +89,7 @@ private func nativiteChromeEventPayload(name: String, data: [String: Any]) -> [S
   ]
 }
 
+#if os(iOS)
 // MARK: - NativiteChrome
 
 /// Reconciles declarative "chrome" state from JavaScript onto UIKit.

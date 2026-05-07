@@ -39,4 +39,28 @@ describe("NativiteBridge.kt", () => {
     expect(kt).toContain("fun getDefaultChromeState(): Map<String, Any?>?");
     expect(kt).toContain("val json: String = NativiteConfig.defaultChromeStateJSON ?: return null");
   });
+
+  it("validates NCLP snapshots before applying chrome state", () => {
+    expect(kt).toContain("private val lastChromeRevisionByDocId = mutableMapOf<String, Int>()");
+    expect(kt).toContain('if (type == "chrome.snapshot")');
+    expect(kt).toContain("if (!acceptChromeSnapshot(msg)) return");
+    expect(kt).toContain('if (snapshot.optString("type") != "chrome.snapshot") return false');
+    expect(kt).toContain("revision <= lastRevision");
+    expect(kt).toContain("state.optJSONObject(bucket) == null");
+    expect(kt).toContain("nodes.optJSONObject(children.optString(i)) == null");
+  });
+
+  it("preserves NCLP node identity through the legacy chrome adapter", () => {
+    expect(kt).toContain('item["nclpId"] = nodeId');
+    expect(kt).toContain('item["nclpId"] = childId');
+    expect(kt).toContain('menu["nclpId"] = menuId');
+    expect(kt).toContain('state["menuBar"] = mapOf("menus" to menus)');
+  });
+
+  it("emits NCLP chrome.event targets using full node identity when provided", () => {
+    expect(kt).toContain('val nclpId = map?.get("nclpId")?.toString()');
+    expect(kt).toContain('target = nclpId ?: "toolbar:$id"');
+    expect(kt).toContain('target = nclpId ?: "titleBar:trailing:menu:$id"');
+    expect(kt).toContain('"menuBar.itemPressed" -> if (id != null)');
+  });
 });

@@ -47,4 +47,21 @@ describe("NativiteBridge.swift", () => {
     );
     expect(swift).toContain('chrome.broadcastMessage(from: fromName, payload: body["args"])');
   });
+
+  it("validates NCLP snapshots before applying chrome state", () => {
+    expect(swift).toContain("private var lastChromeRevisionByDocId: [String: Int] = [:]");
+    expect(swift).toContain("guard acceptChromeSnapshot(body) else");
+    expect(swift).toContain('snapshot["nativite"] as? Int == 2');
+    expect(swift).toContain('snapshot["type"] as? String == "chrome.snapshot"');
+    expect(swift).toContain("revision <= lastRevision");
+    expect(swift).toContain('state["selected"] is [String: Any]');
+    expect(swift).toContain("nodes[child] == nil");
+  });
+
+  it("preserves NCLP node identity through the legacy chrome adapter", () => {
+    expect(swift).toContain('item["nclpId"] = id');
+    expect(swift).toContain('item["nclpId"] = childId');
+    expect(swift).toContain('legacy["nclpId"] = menuId');
+    expect(swift).toContain('"menus": menuIds.compactMap');
+  });
 });

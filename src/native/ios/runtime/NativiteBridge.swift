@@ -276,6 +276,7 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
           guard let child = nodes[id] else { return nil }
           var item = child["meta"] as? [String: Any] ?? [:]
           item["id"] = id.split(separator: ":").last.map(String.init) ?? id
+          item["nclpId"] = id
           item["label"] = child["label"]
           item["icon"] = child["icon"]
           if let isDisabled = disabled[id] { item["disabled"] = isDisabled }
@@ -325,6 +326,17 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
           ]
         }
         state["keyboard"] = keyboard
+      } else if area == "menuBar", let node = nodes["menuBar"] {
+        let menuIds = node["children"] as? [String] ?? []
+        state["menuBar"] = [
+          "menus": menuIds.compactMap { menuId -> [String: Any]? in
+            guard let menu = legacyMenu(id: menuId, nodes: nodes, disabled: disabled) else { return nil }
+            var legacy = menu
+            legacy["id"] = menuId.split(separator: ":").last.map(String.init) ?? menuId
+            legacy["nclpId"] = menuId
+            return legacy
+          }
+        ]
       } else if area == "tabBottomAccessory", let node = nodes["tabBottomAccessory"] {
         var config = node["meta"] as? [String: Any] ?? [:]
         config["presented"] = !(hidden["tabBottomAccessory"] as? Bool ?? false)
@@ -361,6 +373,7 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
     }
     var item = node["meta"] as? [String: Any] ?? [:]
     item["id"] = id.split(separator: ":").last.map(String.init) ?? id
+    item["nclpId"] = id
     if let label = node["label"] { item["label"] = label }
     if let icon = node["icon"] { item["icon"] = icon }
     if let role = node["role"] as? String, role == "primary" || role == "destructive" {
@@ -387,6 +400,7 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
       guard let child = nodes[childId] else { return nil }
       var item = child["meta"] as? [String: Any] ?? [:]
       item["id"] = childId.split(separator: ":").last.map(String.init) ?? childId
+      item["nclpId"] = childId
       if let label = child["label"] { item["label"] = label }
       if let icon = child["icon"] { item["icon"] = icon }
       if let role = child["role"] as? String, role == "destructive" { item["style"] = role }

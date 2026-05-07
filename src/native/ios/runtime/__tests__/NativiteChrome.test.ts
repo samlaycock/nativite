@@ -87,6 +87,13 @@ describe("NativiteChrome.swift", () => {
       expect(body).toContain("chromeState?.onChromeEvent == nil");
       expect(body).toContain("self?.sendEvent(name: name, data: data)");
     });
+
+    it("emits NCLP chrome.event targets using full node identity when provided", () => {
+      expect(swift).toContain("func nclpIdValue() -> String?");
+      expect(swift).toContain('case "menuBar.itemPressed":');
+      expect(swift).toContain('target = nclpIdValue() ?? "toolbar:\\(id)"');
+      expect(swift).toContain('target = nclpIdValue() ?? "titleBar:trailing:menu:\\(id)"');
+    });
   });
 
   describe("navigation (tab bar)", () => {
