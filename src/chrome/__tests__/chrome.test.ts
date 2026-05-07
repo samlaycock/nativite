@@ -224,7 +224,7 @@ function legacyStateFromSnapshot(snapshot: NativeMessage): Record<string, unknow
         const name = id.split(":").at(-1)!;
         collection[name] = {
           ...((nodes[id]!["meta"] ?? {}) as Record<string, unknown>),
-          ...(buckets.hidden[id] ? { presented: false } : {}),
+          presented: !buckets.hidden[id],
         };
       }
       state[area] = collection;
@@ -612,6 +612,9 @@ describe("chrome()", () => {
     expect(lastState()).toEqual({
       sheets: { settings: { url: "/settings", presented: true } },
     });
+    const snapshot = lastSnapshot();
+    const nodes = snapshot["nodes"] as Record<string, { meta?: Record<string, unknown> }>;
+    expect(nodes["sheets:settings"]!.meta!["presented"]).toBeUndefined();
   });
 
   it("two sheets with different names coexist", () => {
@@ -1354,6 +1357,11 @@ describe("unified ButtonItem across chrome areas", () => {
     const state = lastState() as Record<string, unknown>;
     const tb = state["titleBar"] as { trailingItems: unknown[] };
     expect(tb.trailingItems[0]).toEqual(sortButton);
+    const snapshot = lastSnapshot();
+    const buckets = snapshot["state"] as { selected: Record<string, unknown> };
+    const nodes = snapshot["nodes"] as Record<string, { meta?: Record<string, unknown> }>;
+    expect(buckets.selected["titleBar:trailing:sort:menu:sort-name"]).toBeUndefined();
+    expect(nodes["titleBar:trailing:sort:menu:sort-name"]!.meta!["checked"]).toBe(true);
   });
 
   it("same button can be used in both titleBar and toolbar", () => {
