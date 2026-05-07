@@ -3,6 +3,86 @@ import UIKit
 import WebKit
 import SwiftUI
 
+private func nativiteChromeEventPayload(name: String, data: [String: Any]) -> [String: Any]? {
+  func idValue() -> String? { data["id"] as? String }
+  func nameValue() -> String? { data["name"] as? String }
+
+  var event: String?
+  var target: String?
+  var value: Any? = NSNull()
+
+  switch name {
+  case "titleBar.leadingItemPressed":
+    if let id = idValue() { event = "activate"; target = "titleBar:leading:\(id)" }
+  case "titleBar.trailingItemPressed":
+    if let id = idValue() { event = "activate"; target = "titleBar:trailing:\(id)" }
+  case "titleBar.menuItemPressed":
+    if let id = idValue() { event = "activate"; target = "titleBar:trailing:menu:\(id)" }
+  case "titleBar.backPressed":
+    event = "back"; target = "titleBar"
+  case "titleBar.searchChanged":
+    event = "input"; target = "titleBar:search"; value = data["value"] ?? NSNull()
+  case "titleBar.searchSubmitted":
+    event = "submit"; target = "titleBar:search"; value = data["value"] ?? NSNull()
+  case "titleBar.searchCancelled":
+    event = "cancel"; target = "titleBar:search"
+  case "navigation.backPressed":
+    event = "back"; target = "navigation"
+  case "navigation.itemPressed":
+    if let id = idValue() { event = "select"; target = "navigation"; value = "navigation:\(id)" }
+  case "navigation.searchChanged":
+    event = "input"; target = "navigation:search-field"; value = data["value"] ?? NSNull()
+  case "navigation.searchSubmitted":
+    event = "submit"; target = "navigation:search-field"; value = data["value"] ?? NSNull()
+  case "navigation.searchCancelled":
+    event = "cancel"; target = "navigation:search-field"
+  case "toolbar.itemPressed":
+    if let id = idValue() { event = "activate"; target = "toolbar:\(id)" }
+  case "toolbar.menuItemPressed":
+    if let id = idValue() { event = "activate"; target = "toolbar:menu:\(id)" }
+  case "keyboard.itemPressed":
+    if let id = idValue() { event = "activate"; target = "keyboard:\(id)" }
+  case "sheet.presented":
+    if let name = nameValue() { event = "open"; target = "sheets:\(name)" }
+  case "sheet.dismissed":
+    if let name = nameValue() { event = "close"; target = "sheets:\(name)" }
+  case "sheet.detentChanged":
+    if let name = nameValue() { event = "detent"; target = "sheets:\(name)"; value = data["detent"] ?? NSNull() }
+  case "sheet.loadFailed":
+    if let name = nameValue() { event = "error"; target = "sheets:\(name)"; value = data }
+  case "drawer.presented":
+    if let name = nameValue() { event = "open"; target = "drawers:\(name)" }
+  case "drawer.dismissed":
+    if let name = nameValue() { event = "close"; target = "drawers:\(name)" }
+  case "appWindow.presented":
+    if let name = nameValue() { event = "open"; target = "appWindows:\(name)" }
+  case "appWindow.dismissed":
+    if let name = nameValue() { event = "close"; target = "appWindows:\(name)" }
+  case "popover.presented":
+    if let name = nameValue() { event = "open"; target = "popovers:\(name)" }
+  case "popover.dismissed":
+    if let name = nameValue() { event = "close"; target = "popovers:\(name)" }
+  case "tabBottomAccessory.presented":
+    event = "open"; target = "tabBottomAccessory"
+  case "tabBottomAccessory.dismissed":
+    event = "close"; target = "tabBottomAccessory"
+  case "tabBottomAccessory.loadFailed":
+    event = "error"; target = "tabBottomAccessory"; value = data
+  default:
+    return nil
+  }
+
+  guard let event, let target else { return nil }
+  return [
+    "nativite": 2,
+    "type": "chrome.event",
+    "docId": "main",
+    "event": event,
+    "target": target,
+    "value": value ?? NSNull(),
+  ]
+}
+
 // MARK: - NativiteChrome
 
 /// Reconciles declarative "chrome" state from JavaScript onto UIKit.
@@ -911,6 +991,10 @@ class NativiteChrome: NSObject {
   // ── Event helper ───────────────────────────────────────────────────────────
 
   func sendEvent(name: String, data: [String: Any]) {
+    if let payload = nativiteChromeEventPayload(name: name, data: data) {
+      viewController?.sendToWebView(payload)
+      return
+    }
     viewController?.sendToWebView([
       "id": NSNull(),
       "type": "event",
@@ -1691,6 +1775,10 @@ class NativiteChrome: NSObject {
   // ── Event helper ───────────────────────────────────────────────────────────
 
   func sendEvent(name: String, data: [String: Any]) {
+    if let payload = nativiteChromeEventPayload(name: name, data: data) {
+      viewController?.sendToWebView(payload)
+      return
+    }
     viewController?.sendToWebView([
       "id": NSNull(),
       "type": "event",
