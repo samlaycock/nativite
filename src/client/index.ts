@@ -9,10 +9,18 @@ type BridgeCallMessage = {
 };
 
 type NativeToJsMessage = {
-  id: null;
-  type: "event";
-  event: string;
-  data: unknown;
+  readonly id?: null;
+  readonly type?: "event";
+  readonly event: string;
+  readonly data: unknown;
+};
+
+type NativeChromeMessage = {
+  readonly nativite: 2;
+  readonly type: "chrome.event";
+  readonly event: string;
+  readonly target: string;
+  readonly value?: unknown;
 };
 
 // ─── Native Transport ────────────────────────────────────────────────────────
@@ -140,7 +148,36 @@ const eventListeners = new Map<string, Set<(data: unknown) => void>>();
 // evaluateJavaScript on every webview that needs the event.
 // On Android, events may also arrive through the WebMessagePort.
 
-function receive(message: NativeToJsMessage): void {
+function isLegacyEventMessage(message: unknown): message is NativeToJsMessage {
+  if (typeof message !== "object" || message === null) return false;
+  const candidate = message as Partial<NativeToJsMessage>;
+  return typeof candidate.event === "string";
+}
+
+function isNativeChromeMessage(message: unknown): message is NativeChromeMessage {
+  if (typeof message !== "object" || message === null) return false;
+  const candidate = message as Partial<NativeChromeMessage>;
+  return (
+    candidate.nativite === 2 &&
+    candidate.type === "chrome.event" &&
+    typeof candidate.event === "string" &&
+    typeof candidate.target === "string"
+  );
+}
+
+function receive(message: NativeToJsMessage | NativeChromeMessage): void {
+  if (isNativeChromeMessage(message)) {
+    if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("__nativite_event__", {
+          detail: message,
+        }),
+      );
+    }
+    return;
+  }
+  if (!isLegacyEventMessage(message)) return;
+
   // Dispatch locally for bridge.subscribe handlers.
   const listeners = eventListeners.get(message.event);
   if (listeners) {
