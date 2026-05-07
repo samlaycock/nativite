@@ -11,6 +11,8 @@ Nativite gives you:
 
 > Status: early development. APIs are usable but may change between releases.
 
+The `nativite/chrome` JavaScript API is the app-facing interface for native chrome. Native shells receive compiled Native Chrome Layout Protocol v2 (`chrome.snapshot`) messages; NCLP v2 is the stable host wire protocol for Nativite 1.0 and is documented in [NCLP.md](./NCLP.md).
+
 ## Who This Is For
 
 Nativite is for teams that already have a Vite web app and want:

@@ -51,7 +51,9 @@ Named areas (sheets, drawers, etc.) are grouped under plural NCLP containers (`s
 
 ## NCLP v2 Wire Format
 
-The public authoring API still accepts `chrome()`, `titleBar()`, `navigation()`, and the other factory descriptors. Internally, the runtime compiles the merged `ChromeState` into Native Chrome Layout Protocol v2 messages before crossing the native transport.
+The public authoring API accepts `chrome()`, `titleBar()`, `navigation()`, and the other factory descriptors. That TypeScript API is the stable developer-facing chrome API for app code.
+
+Internally, the runtime compiles the merged `ChromeState` into Native Chrome Layout Protocol v2 messages before crossing the native transport. NCLP v2 is also stable for Nativite 1.0, but it is the host-implementation contract rather than the app-authoring API. App developers should use `nativite/chrome`; native shell authors and community host implementations should follow [`NCLP.md`](../../NCLP.md).
 
 The host must first send:
 
@@ -93,6 +95,19 @@ Chrome updates are sent as full snapshots:
 ```
 
 Snapshots use monotonically increasing revisions and stable node IDs following `NCLP.md`. Runtime state such as selection, disabled flags, hidden/presented state, badges, and input values is emitted through NCLP state buckets rather than duplicated into node metadata.
+
+### NCLP Versioning Rules
+
+The `nativite` integer on each NCLP message is the wire protocol version. Nativite 1.0 emits and accepts NCLP v2 (`"nativite": 2`) for chrome messages.
+
+Native host implementations should:
+
+- Reject unsupported major protocol versions instead of partially applying them.
+- Ignore unknown optional fields, unknown `meta` keys, and unknown namespaced `ext` entries.
+- Treat required message fields, core node kinds, core state buckets, and the documented `ChromeState` compilation mapping as stable for NCLP v2.
+- Use the `shell.ready areas` list for capability negotiation; a host can be NCLP v2 compatible without rendering every possible chrome area.
+
+Nativite may add optional fields in minor releases, but breaking wire-format changes require a new protocol version.
 
 ## Event System
 
