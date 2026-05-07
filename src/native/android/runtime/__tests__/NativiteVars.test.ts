@@ -2,17 +2,44 @@ import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
 
 const kt = await Bun.file(join(import.meta.dirname, "../NativiteVars.kt")).text();
+const sharedCssVars = await Bun.file(
+  join(import.meta.dirname, "../../../../css-vars/index.ts"),
+).text();
+
+function extractSharedVarNames(source: string): string[] {
+  const unionMatch = source.match(/export type NVVarName =([\s\S]*?)\n\n\/\/ ─── Default values/);
+  if (!unionMatch) return [];
+  const unionBody = unionMatch[1];
+  if (!unionBody) return [];
+  return [...unionBody.matchAll(/\|\s+"([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((name): name is string => Boolean(name));
+}
+
+function extractAndroidDefaultVars(source: string): string[] {
+  const defaultsMatch = source.match(/s\.textContent=':root\{([^']+)';/);
+  if (!defaultsMatch) return [];
+  const defaults = defaultsMatch[1];
+  if (!defaults) return [];
+  return [...defaults.matchAll(/--nv-([a-zA-Z0-9-]+):/g)]
+    .map((match) => match[1])
+    .filter((name): name is string => Boolean(name));
+}
 
 describe("NativiteVars.kt", () => {
-  it("observes only keyboard insets, not system bar insets", () => {
+  it("tracks safe area and keyboard insets", () => {
     expect(kt).toContain("WindowInsetsCompat.Type.ime()");
-    expect(kt).not.toContain("WindowInsetsCompat.Type.systemBars()");
+    expect(kt).toContain("WindowInsetsCompat.Type.systemBars()");
+    expect(kt).toContain("WindowInsetsCompat.Type.displayCutout()");
   });
 
   it("updates keyboard variables on inset change", () => {
     expect(kt).toContain('"--nv-keyboard-height"');
     expect(kt).toContain('"--nv-keyboard-visible"');
+    expect(kt).toContain('"--nv-keyboard-floating"');
     expect(kt).toContain('"--nv-keyboard-inset"');
+    expect(kt).toContain('"--nv-keyboard-duration"');
+    expect(kt).toContain('"--nv-keyboard-curve"');
   });
 
   it("updates device/orientation/theme flags from runtime configuration", () => {
@@ -22,8 +49,19 @@ describe("NativiteVars.kt", () => {
     expect(kt).toContain('"--nv-is-tablet"');
     expect(kt).toContain('"--nv-is-portrait"');
     expect(kt).toContain('"--nv-is-landscape"');
+    expect(kt).toContain('"--nv-display-scale"');
+    expect(kt).toContain('"--nv-display-corner"');
+    expect(kt).toContain('"--nv-is-compact-width"');
+    expect(kt).toContain('"--nv-split-fraction"');
     expect(kt).toContain('"--nv-is-dark"');
     expect(kt).toContain('"--nv-is-light"');
+    expect(kt).toContain('"--nv-contrast"');
+    expect(kt).toContain('"--nv-reduced-motion"');
+    expect(kt).toContain('"--nv-reduced-transparency"');
+    expect(kt).toContain('"--nv-accent-r"');
+    expect(kt).toContain('"--nv-accent-g"');
+    expect(kt).toContain('"--nv-accent-b"');
+    expect(kt).toContain('"--nv-accent"');
     expect(kt).toContain('"--nv-font-scale"');
   });
 
@@ -32,11 +70,29 @@ describe("NativiteVars.kt", () => {
     expect(kt).toContain("ViewCompat.requestApplyInsets(webView)");
   });
 
-  it("does not set safe area variables from system bars", () => {
+  it("animates keyboard variable updates with window inset animations", () => {
+    expect(kt).toContain("WindowInsetsAnimationCompat.Callback");
+    expect(kt).toContain("ViewCompat.setWindowInsetsAnimationCallback");
+    expect(kt).toContain("override fun onProgress");
+  });
+
+  it("does not use legacy safe-area variable names", () => {
     expect(kt).not.toContain("--nv-safe-area-top");
     expect(kt).not.toContain("--nv-safe-area-bottom");
     expect(kt).not.toContain("--nv-safe-area-left");
     expect(kt).not.toContain("--nv-safe-area-right");
+  });
+
+  it("keeps the Android default variable set aligned with the shared NVVarName contract", () => {
+    const sharedVars = extractSharedVarNames(sharedCssVars).sort();
+    const androidVars = extractAndroidDefaultVars(kt).sort();
+
+    expect(androidVars).toEqual(sharedVars);
+  });
+
+  it("does not expose undocumented sidebar css variables", () => {
+    expect(kt).not.toContain("--nv-sidebar-width");
+    expect(kt).not.toContain("--nv-sidebar-visible");
   });
 
   it("flushes via __nv_patch helper", () => {
@@ -56,7 +112,7 @@ describe("NativiteVars.kt", () => {
       expect(kt).toContain("window.__nv_patch=function(vars,attrs)");
     });
 
-    it("defaults safe area variables to 0px", () => {
+    it("defaults safe area variables to 0px before the first inset pass", () => {
       expect(kt).toContain("--nv-safe-top:0px");
       expect(kt).toContain("--nv-safe-bottom:0px");
       expect(kt).toContain("--nv-safe-left:0px");
@@ -83,13 +139,51 @@ describe("NativiteVars.kt", () => {
     it("defaults keyboard variables to 0", () => {
       expect(kt).toContain("--nv-keyboard-height:0px");
       expect(kt).toContain("--nv-keyboard-visible:0");
+      expect(kt).toContain("--nv-keyboard-floating:0");
       expect(kt).toContain("--nv-keyboard-inset:0px");
+      expect(kt).toContain("--nv-keyboard-duration:250ms");
+      expect(kt).toContain("--nv-keyboard-curve:ease-in-out");
     });
 
     it("defaults device type to phone", () => {
       expect(kt).toContain("--nv-is-phone:1");
       expect(kt).toContain("--nv-is-tablet:0");
       expect(kt).toContain("--nv-is-desktop:0");
+    });
+
+    it("defaults shared device and appearance variables", () => {
+      expect(kt).toContain("--nv-display-scale:2");
+      expect(kt).toContain("--nv-display-corner:0px");
+      expect(kt).toContain("--nv-is-compact-width:0");
+      expect(kt).toContain("--nv-split-fraction:1");
+      expect(kt).toContain("--nv-accent-r:0");
+      expect(kt).toContain("--nv-accent-g:122");
+      expect(kt).toContain("--nv-accent-b:255");
+      expect(kt).toContain(
+        "--nv-accent:rgb(var(--nv-accent-r),var(--nv-accent-g),var(--nv-accent-b))",
+      );
+    });
+
+    it("defaults shared navigation-state variables", () => {
+      expect(kt).toContain("--nv-nav-depth:0");
+      expect(kt).toContain("--nv-title-collapse:0");
+      expect(kt).toContain("--nv-pop-gesture:0");
+      expect(kt).toContain("--nv-sheet-visible:0");
+      expect(kt).toContain("--nv-sheet-detent:0");
+    });
+
+    it("defaults shared font-size variables", () => {
+      expect(kt).toContain("--nv-font-body:17px");
+      expect(kt).toContain("--nv-font-callout:16px");
+      expect(kt).toContain("--nv-font-caption1:12px");
+      expect(kt).toContain("--nv-font-caption2:11px");
+      expect(kt).toContain("--nv-font-footnote:13px");
+      expect(kt).toContain("--nv-font-headline:17px");
+      expect(kt).toContain("--nv-font-subheadline:15px");
+      expect(kt).toContain("--nv-font-title1:28px");
+      expect(kt).toContain("--nv-font-title2:22px");
+      expect(kt).toContain("--nv-font-title3:20px");
+      expect(kt).toContain("--nv-font-largeTitle:34px");
     });
 
     it("defaults theme to light", () => {

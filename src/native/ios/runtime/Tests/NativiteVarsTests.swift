@@ -33,6 +33,12 @@ final class NativiteVarsTests: XCTestCase {
         XCTAssertTrue(script.contains("--nv-keyboard-visible:0"), "keyboard visible defaults to 0")
     }
 
+    func testBuildInitScriptDoesNotIncludeUndocumentedSidebarVariables() {
+        let script = NativiteVarsTestHarness.buildInitScript()
+        XCTAssertFalse(script.contains("--nv-sidebar-width"), "sidebar width should not be seeded")
+        XCTAssertFalse(script.contains("--nv-sidebar-visible"), "sidebar visibility should not be seeded")
+    }
+
     // MARK: - px helper
 
     func testPxFormatsOneDecimalPlace() {

@@ -41,7 +41,7 @@ Includes safe area plus any native chrome that overlaps the webview:
 | ------------------- | ---- | -------------------------------------------------------------- |
 | `--nv-inset-top`    | `px` | Safe area + nav bar height (status bar is reported separately) |
 | `--nv-inset-bottom` | `px` | Safe area + tab bar / toolbar height                           |
-| `--nv-inset-left`   | `px` | Safe area + sidebar width                                      |
+| `--nv-inset-left`   | `px` | Safe area                                                      |
 | `--nv-inset-right`  | `px` | Safe area                                                      |
 
 ### Chrome Geometry

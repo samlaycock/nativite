@@ -292,7 +292,6 @@ class NativiteVars: NSObject {
       --nv-keyboard-duration:250ms;--nv-keyboard-curve:ease-in-out;
       --nv-accessory-height:0px;
       --nv-nav-depth:0;--nv-title-collapse:0;--nv-pop-gesture:0;
-      --nv-sidebar-width:0px;--nv-sidebar-visible:0;
       --nv-sheet-visible:0;--nv-sheet-detent:0;
       --nv-display-scale:2;--nv-display-corner:0px;
       --nv-is-phone:0;--nv-is-tablet:0;--nv-is-desktop:0;
@@ -659,7 +658,6 @@ class NativiteVars: NSObject {
       --nv-keyboard-duration:250ms;--nv-keyboard-curve:ease-in-out;
       --nv-accessory-height:0px;
       --nv-nav-depth:0;--nv-title-collapse:0;--nv-pop-gesture:0;
-      --nv-sidebar-width:0px;--nv-sidebar-visible:0;
       --nv-sheet-visible:0;--nv-sheet-detent:0;
       --nv-display-scale:2;--nv-display-corner:0px;
       --nv-is-phone:0;--nv-is-tablet:0;--nv-is-desktop:0;

@@ -95,14 +95,20 @@ The `NVVarName` type defines all valid variable names:
 
 ## Platform Availability
 
-Not all variables are available on all platforms:
+All platforms seed the shared `NVVarName` surface, but some values are fixed defaults or approximate on specific runtimes:
 
 | Category        | iOS | Android | macOS      | Browser  |
 | --------------- | --- | ------- | ---------- | -------- |
 | Safe area       | Yes | Yes     | Limited    | Defaults |
 | Chrome geometry | Yes | Yes     | Yes        | Defaults |
-| Keyboard        | Yes | Partial | No         | Defaults |
-| Device          | Yes | No      | Yes        | Defaults |
-| Appearance      | Yes | No      | Yes        | Defaults |
-| Dynamic Type    | Yes | No      | No (fixed) | Defaults |
-| Accent colour   | Yes | No      | Yes        | Defaults |
+| Keyboard        | Yes | Yes     | No         | Defaults |
+| Device          | Yes | Yes     | Yes        | Defaults |
+| Appearance      | Yes | Yes     | Yes        | Defaults |
+| Dynamic Type    | Yes | Yes     | No (fixed) | Defaults |
+| Accent colour   | Yes | Yes     | Yes        | Defaults |
+
+Android-specific notes:
+
+- `safe-*` values come from `systemBars + displayCutout` insets after the first layout pass.
+- `inset-*` values remain `0px` because Compose `Scaffold` keeps native chrome outside the WebView bounds.
+- `keyboard-floating` is always `0` on Android.

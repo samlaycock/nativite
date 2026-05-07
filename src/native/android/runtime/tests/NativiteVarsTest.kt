@@ -46,4 +46,21 @@ class NativiteVarsTest {
         val script = NativiteVars.buildInitScript()
         assertTrue("data-nv-theme attribute is set", script.contains("data-nv-theme"))
     }
+
+    @Test
+    fun buildInitScript_includesSharedKeyboardAndAppearanceDefaults() {
+        val script = NativiteVars.buildInitScript()
+        assertTrue("keyboard floating defaults to 0", script.contains("--nv-keyboard-floating:0"))
+        assertTrue("keyboard duration defaults to 250ms", script.contains("--nv-keyboard-duration:250ms"))
+        assertTrue("keyboard curve defaults to ease-in-out", script.contains("--nv-keyboard-curve:ease-in-out"))
+        assertTrue("display scale default is present", script.contains("--nv-display-scale:2"))
+        assertTrue("accent default is present", script.contains("--nv-accent:rgb(var(--nv-accent-r),var(--nv-accent-g),var(--nv-accent-b))"))
+    }
+
+    @Test
+    fun buildInitScript_doesNotIncludeUndocumentedSidebarVariables() {
+        val script = NativiteVars.buildInitScript()
+        assertTrue("sidebar width css var should not be emitted", !script.contains("--nv-sidebar-width"))
+        assertTrue("sidebar visible css var should not be emitted", !script.contains("--nv-sidebar-visible"))
+    }
 }
