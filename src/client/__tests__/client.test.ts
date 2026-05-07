@@ -35,8 +35,11 @@ function removeNativeHandler(): void {
 }
 
 // ─── Import SUT ──────────────────────────────────────────────────────────────
+// Use a dynamic import so the client module sees the window shim above during
+// module evaluation. Static ESM imports are evaluated before this file's
+// top-level setup runs, which breaks nativiteReceive registration in CI.
 
-import { bridge } from "../index.ts";
+const { bridge } = await import("../index.ts");
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
