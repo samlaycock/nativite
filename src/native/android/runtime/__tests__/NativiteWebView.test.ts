@@ -2,6 +2,19 @@ import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
 
 const kt = await Bun.file(join(import.meta.dirname, "../NativiteWebView.kt")).text();
+const chromeKt = await Bun.file(join(import.meta.dirname, "../NativiteChrome.kt")).text();
+
+function androidShellReadyAreas() {
+  const areasBlockMatch = kt.match(/"areas",\s*org\.json\.JSONArray\(listOf\(([\s\S]*?)\)\),/);
+  const areasBlock = areasBlockMatch?.[1];
+  if (areasBlock == null) throw new Error("Android shell.ready areas were not found");
+
+  return [...areasBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+}
+
+function androidRenderedChromeAreas() {
+  return [...chromeKt.matchAll(/chromeState\["([^"]+)"\]/g)].map((match) => match[1]);
+}
 
 describe("NativiteWebView.kt", () => {
   it("uses WebViewAssetLoader for bundled assets", () => {
@@ -131,5 +144,22 @@ describe("NativiteWebView.kt", () => {
   it("sets child webview background to transparent so parent container color shows through while loading", () => {
     expect(kt).toContain("setBackgroundColor(android.graphics.Color.TRANSPARENT)");
     expect(kt).toContain("chromeArea != null");
+  });
+
+  it("only advertises shell.ready areas rendered by Android Compose chrome", () => {
+    expect(androidShellReadyAreas()).toEqual([
+      "titleBar",
+      "navigation",
+      "toolbar",
+      "statusBar",
+      "homeIndicator",
+      "keyboard",
+      "tabBottomAccessory",
+      "sheets",
+      "drawers",
+      "popovers",
+    ]);
+
+    expect(new Set(androidRenderedChromeAreas())).toEqual(new Set(androidShellReadyAreas()));
   });
 });

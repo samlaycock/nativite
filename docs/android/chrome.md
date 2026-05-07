@@ -3,7 +3,9 @@
 > Maps to: `src/native/android/runtime/NativiteChrome.kt`
 > Generated file: `NativiteChrome.kt` (contains `NativiteApp` and all chrome composables)
 
-The Chrome UI layer is implemented entirely in Jetpack Compose with Material 3 components. The root `NativiteApp` composable reads from `bridge.chromeState` and renders all chrome areas.
+The Chrome UI layer is implemented entirely in Jetpack Compose with Material 3 components. The root `NativiteApp` composable reads from `bridge.chromeState` and renders every Android-advertised chrome area.
+
+Android currently advertises and renders `titleBar`, `navigation`, `toolbar`, `statusBar`, `homeIndicator`, `keyboard`, `tabBottomAccessory`, `sheets`, `drawers`, and `popovers`. `sidebarPanel`, `menuBar`, and `appWindows` remain unsupported on Android and are not included in `shell.ready.areas`.
 
 ## Root Composable
 
