@@ -80,6 +80,11 @@ export interface NavigationItem {
   readonly icon: string;
   /** Secondary text below the label. Shown in the iOS 18+ floating tab bar. */
   readonly subtitle?: string;
+  /**
+   * Custom foreground colour applied to the icon and label.
+   * Accepts any platform colour string (e.g. "#FF6600").
+   */
+  readonly tint?: string;
   readonly badge?: string | number | null;
   readonly disabled?: boolean;
   /**

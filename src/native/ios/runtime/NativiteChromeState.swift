@@ -214,9 +214,19 @@ final class NativiteChromeState {
     var nclpId: String? = nil
     var label: String
     var icon: String?         // SF Symbol name
+    var tint: String?         // Hex colour (e.g. "#FF6600")
     var badge: String?
     var role: String?         // "search", nil for normal tab
     var hidden: Bool = false
+
+    var resolvedTint: Color? {
+      guard let tint else { return nil }
+      #if os(iOS)
+      return Color(uiColor: UIColor(hex: tint))
+      #else
+      return Color(nsColor: NSColor(hex: tint))
+      #endif
+    }
   }
 
   // ── Sidebar Panel (macOS) ──────────────────────────────────────────────────
@@ -665,6 +675,7 @@ final class NativiteChromeState {
     var item = NavigationItemState(id: id, label: label)
     item.nclpId = state["nclpId"] as? String
     item.icon = state["icon"] as? String
+    item.tint = state["tint"] as? String
     if let badge = state["badge"] as? String {
       item.badge = badge
     } else if let badge = state["badge"] as? Int {
@@ -1655,9 +1666,9 @@ struct NativiteMacNavigationModifier: ViewModifier {
         Picker("", selection: activeItemBinding) {
           ForEach(visibleItems) { item in
             if let icon = item.icon {
-              Label(item.label, systemImage: icon).tag(item.id)
+              Label(item.label, systemImage: icon).tint(item.resolvedTint).tag(item.id)
             } else {
-              Text(item.label).tag(item.id)
+              Text(item.label).tint(item.resolvedTint).tag(item.id)
             }
           }
         }

@@ -77,6 +77,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
@@ -472,12 +473,24 @@ fun NativiteNavigationBar(config: Map<*, *>, bridge: NativiteBridge) {
                 val icon = item["icon"] as? String
                 val badge = item["badge"]?.toString()
                 val subtitle = item["subtitle"] as? String
+                val tintColor = parseTintColor(item["tint"] as? String)
                 val disabled = item["disabled"] as? Boolean ?: false
                 val selected = id == activeItem
+                val colors = if (tintColor != null) {
+                    NavigationBarItemDefaults.colors(
+                        selectedIconColor = tintColor,
+                        selectedTextColor = tintColor,
+                        unselectedIconColor = tintColor,
+                        unselectedTextColor = tintColor,
+                    )
+                } else {
+                    NavigationBarItemDefaults.colors()
+                }
 
                 NavigationBarItem(
                     selected = selected,
                     enabled = !disabled,
+                    colors = colors,
                     onClick = {
                         bridge.sendEventToPrimary("navigation.itemPressed", mapOf("id" to id, "nclpId" to nclpId))
                     },
@@ -498,7 +511,7 @@ fun NativiteNavigationBar(config: Map<*, *>, bridge: NativiteBridge) {
                                 Text(
                                     subtitle,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = tintColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         } else {

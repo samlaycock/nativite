@@ -111,6 +111,13 @@ describe("NativiteChromeState.swift", () => {
     expect(swift).toContain("item.customization = BarItemState.CustomizationBehavior");
   });
 
+  it("parses and renders navigation item tint", () => {
+    expect(swift).toContain("var tint: String?");
+    expect(swift).toContain('item.tint = state["tint"] as? String');
+    expect(swift).toContain("Label(item.label, systemImage: icon).tint(item.resolvedTint)");
+    expect(swift).toContain("Text(item.label).tint(item.resolvedTint)");
+  });
+
   it("sets underPageBackgroundColor on child webviews for dark-mode-aware overscroll", () => {
     expect(swift).toContain("webView.underPageBackgroundColor = .systemBackground");
     expect(swift).toContain("webView.underPageBackgroundColor = .windowBackgroundColor");
