@@ -19,9 +19,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.webkit.WebViewAssetLoader
+import java.net.URI
 
 private const val PRODUCTION_BASE_URL = "https://appassets.androidplatform.net/assets/dist/index.html"
 private const val SET_PLATFORM_ATTRIBUTE_SCRIPT = "document.documentElement.setAttribute('data-nv-platform','android');"
+private const val ANDROID_EMULATOR_LOOPBACK_HOST = "10.0.2.2"
 
 @SuppressLint("SetJavaScriptEnabled")
 fun createNativiteWebView(
@@ -260,9 +262,29 @@ private fun getDevUrl(context: Context): String? {
         val devJson = context.assets.open("dev.json").bufferedReader().readText()
         val parsed = org.json.JSONObject(devJson)
         val devUrl = parsed.optString("devURL", "")
-        if (devUrl.isNotEmpty()) return devUrl
+        if (devUrl.isNotEmpty()) return normalizeAndroidDevUrl(devUrl)
     } catch (_: Exception) {}
     return null
+}
+
+private fun normalizeAndroidDevUrl(devUrl: String): String {
+    return try {
+        val uri = URI(devUrl)
+        val host = uri.host ?: return devUrl
+        if (host != "localhost" && host != "127.0.0.1" && host != "::1") return devUrl
+
+        URI(
+            uri.scheme,
+            uri.userInfo,
+            ANDROID_EMULATOR_LOOPBACK_HOST,
+            uri.port,
+            uri.path,
+            uri.query,
+            uri.fragment,
+        ).toString()
+    } catch (_: Exception) {
+        devUrl
+    }
 }
 
 private fun resolveContentUrl(context: Context): String {

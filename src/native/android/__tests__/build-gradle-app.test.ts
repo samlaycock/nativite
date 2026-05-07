@@ -62,4 +62,15 @@ describe("buildGradleAppTemplate", () => {
     expect(output).toContain('if (name == "mergeReleaseAssets")');
     expect(output).toContain("dependsOn(copyNativiteWebBundle)");
   });
+
+  it("removes stale dev metadata before release assets are merged", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+
+    expect(output).toContain(
+      'val nativiteDevMetadataFile = layout.projectDirectory.file("src/main/assets/dev.json")',
+    );
+    expect(output).toContain("val deleteNativiteDevMetadata by tasks.registering(Delete::class)");
+    expect(output).toContain("delete(nativiteDevMetadataFile)");
+    expect(output).toContain("dependsOn(deleteNativiteDevMetadata)");
+  });
 });

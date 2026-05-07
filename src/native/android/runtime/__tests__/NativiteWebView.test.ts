@@ -57,6 +57,15 @@ describe("NativiteWebView.kt", () => {
     expect(kt).toContain("if (!BuildConfig.DEBUG) return null");
     expect(kt).toContain("dev.json");
     expect(kt).toContain("devURL");
+    expect(kt).toContain("normalizeAndroidDevUrl(devUrl)");
+  });
+
+  it("normalizes loopback dev URLs for Android emulator access", () => {
+    expect(kt).toContain('private const val ANDROID_EMULATOR_LOOPBACK_HOST = "10.0.2.2"');
+    expect(kt).toContain("fun normalizeAndroidDevUrl(devUrl: String): String");
+    expect(kt).toContain('host != "localhost"');
+    expect(kt).toContain('host != "127.0.0.1"');
+    expect(kt).toContain('host != "::1"');
   });
 
   it("defines PRODUCTION_BASE_URL constant", () => {

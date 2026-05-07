@@ -50,14 +50,17 @@ bunx vite dev
 ```
 
 The Nativite Vite plugin writes `.nativite/dev.json` with the resolved dev server
-URL. Android debug builds convert host loopback URLs to the emulator host alias:
+URL, then mirrors it into `.nativite/android/app/src/main/assets/dev.json` for
+debug packaging. Android debug builds convert host loopback URLs to the emulator
+host alias:
 
 ```json
 { "devURL": "http://10.0.2.2:5173" }
 ```
 
 `10.0.2.2` is the Android emulator's special IP for the host machine's loopback
-address.
+address. Generated non-dev and build flows remove the Android asset copy so
+release builds do not package stale dev server metadata.
 
 Open and run the generated debug project in Android Studio. Nativite does not
 own emulator orchestration from the CLI.

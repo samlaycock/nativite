@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { androidConfig } from "../../../__tests__/fixtures.ts";
+import { normalizeAndroidDevServerUrl, syncAndroidDevMetadata } from "../dev-metadata.ts";
 import { generateProject } from "../generator.ts";
 
 describe("generateProject", () => {
@@ -21,6 +22,59 @@ describe("generateProject", () => {
       rmSync(dir, { recursive: true, force: true });
     }
     tempDirs.length = 0;
+  });
+
+  it("copies dev metadata into Android debug assets in dev mode", () => {
+    const cwd = makeTempDir();
+    const sourcePath = join(cwd, ".nativite", "dev.json");
+    const destinationPath = join(
+      cwd,
+      ".nativite",
+      "android",
+      "app",
+      "src",
+      "main",
+      "assets",
+      "dev.json",
+    );
+    mkdirSync(join(cwd, ".nativite"), { recursive: true });
+    writeFileSync(sourcePath, JSON.stringify({ devURL: "http://localhost:5173/" }));
+
+    syncAndroidDevMetadata(cwd, "dev");
+
+    expect(JSON.parse(readFileSync(destinationPath, "utf-8"))).toEqual({
+      devURL: "http://10.0.2.2:5173/",
+    });
+  });
+
+  it("removes stale Android dev metadata outside dev mode", () => {
+    const cwd = makeTempDir();
+    const destinationPath = join(
+      cwd,
+      ".nativite",
+      "android",
+      "app",
+      "src",
+      "main",
+      "assets",
+      "dev.json",
+    );
+    mkdirSync(join(destinationPath, ".."), { recursive: true });
+    writeFileSync(destinationPath, JSON.stringify({ devURL: "http://10.0.2.2:5173/" }));
+
+    syncAndroidDevMetadata(cwd, "build");
+
+    expect(existsSync(destinationPath)).toBe(false);
+  });
+
+  it("normalizes loopback dev server URLs for Android emulators", () => {
+    expect(normalizeAndroidDevServerUrl("http://localhost:5173/app?x=1#hash")).toBe(
+      "http://10.0.2.2:5173/app?x=1#hash",
+    );
+    expect(normalizeAndroidDevServerUrl("http://127.0.0.1:5173/")).toBe("http://10.0.2.2:5173/");
+    expect(normalizeAndroidDevServerUrl("http://192.168.1.10:5173/")).toBe(
+      "http://192.168.1.10:5173/",
+    );
   });
 
   it.skip(
