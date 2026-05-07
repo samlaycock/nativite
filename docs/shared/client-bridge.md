@@ -111,11 +111,11 @@ Platform notes:
 When native sends an event:
 
 1. Native calls `evaluateJavaScript("window.nativiteReceive({...})")`.
-2. `window.nativiteReceive()` dispatches to `bridge.subscribe()` handlers.
-3. Also dispatches a `CustomEvent("__nativite_event__")` on `window`.
+2. Legacy `{ event, data }` messages dispatch to matching `bridge.subscribe()` handlers.
+3. Legacy events and `nativite: 2` chrome events both dispatch a `CustomEvent("__nativite_event__")` on `window`.
 4. The Chrome module listens on `"__nativite_event__"` for chrome-specific events.
 
-This dual-dispatch ensures both the low-level bridge API and the high-level Chrome API receive events.
+This preserves low-level bridge subscriptions while forwarding native chrome envelopes unchanged so `chrome.on()` can normalize platform event targets such as menu item taps.
 
 ## Environment Detection
 

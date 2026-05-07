@@ -1351,6 +1351,47 @@ describe("nativiteReceive", () => {
     });
     unsub();
   });
+
+  it("chrome events delivered through nativite/client reach menu item handlers", async () => {
+    await import("../../client/index.ts");
+    const receive = (globalThis as unknown as Record<string, unknown>)["nativiteReceive"] as (
+      msg: unknown,
+    ) => void;
+
+    const cases = [
+      {
+        type: "titleBar.menuItemPressed" as const,
+        target: "titleBar:trailing:more:menu:share",
+      },
+      {
+        type: "toolbar.menuItemPressed" as const,
+        target: "toolbar:more:menu:share",
+      },
+      {
+        type: "menuBar.itemPressed" as const,
+        target: "menuBar:file:share",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const handler = mock(() => {});
+      const unsub = chrome.on(testCase.type, handler);
+
+      receive({
+        nativite: 2,
+        type: "chrome.event",
+        event: "activate",
+        target: testCase.target,
+      });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({
+        type: testCase.type,
+        id: "share",
+      });
+      unsub();
+    }
+  });
 });
 
 // ─── chrome.splash ──────────────────────────────────────────────────────────
