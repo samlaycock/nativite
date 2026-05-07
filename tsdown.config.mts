@@ -13,13 +13,13 @@ export default defineConfig([
       "./src/globals.d.ts",
       {
         from: "./src/native/ios/runtime/*.swift",
-        to: "./dist/ios/runtime",
-        flatten: false,
+        to: "./dist/runtime",
+        flatten: true,
       },
       {
         from: "./src/native/android/runtime/*.kt",
-        to: "./dist/android/runtime",
-        flatten: false,
+        to: "./dist/runtime",
+        flatten: true,
       },
     ],
   },
