@@ -71,6 +71,8 @@ window.nativiteReceive({ id: null, type: "event", event: "eventName", data: { ..
 
 After the primary webview finishes loading and the message channel is attached, Android sends `shell.ready` through `window.nativiteReceive(...)` with the supported chrome area list. The JavaScript runtime waits for this before sending snapshots.
 
+Android advertises only the areas rendered by the Compose chrome root: `titleBar`, `navigation`, `toolbar`, `statusBar`, `homeIndicator`, `keyboard`, `tabBottomAccessory`, `sheets`, `drawers`, and `popovers`. Platform-specific areas that do not currently have Android renderers, including `sidebarPanel`, `menuBar`, and `appWindows`, are intentionally omitted so JavaScript filters them out before sending snapshots.
+
 ## WebView Attachment
 
 ```kotlin

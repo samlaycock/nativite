@@ -30,6 +30,8 @@ A side-by-side comparison of how nativite features are implemented across iOS, A
 | App Windows        | N/A                                                                 | N/A                                 | Separate `NSWindow`                                                                  |
 | Popovers           | N/A                                                                 | `Popup`                             | `NSPopover`                                                                          |
 
+Android `shell.ready.areas` advertises only areas with active Compose renderers: `titleBar`, `navigation`, `toolbar`, `statusBar`, `homeIndicator`, `keyboard`, `tabBottomAccessory`, `sheets`, `drawers`, and `popovers`. Android does not advertise `sidebarPanel`, `menuBar`, or `appWindows`.
+
 ## Bridge Transport
 
 | Aspect          | iOS                                                 | Android                                               |
