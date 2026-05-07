@@ -77,7 +77,8 @@ The generator resolves platform-specific settings:
 
 Validation notes:
 
-- `minSdk` is required and must be an integer.
+- `android()` uses the default `minSdk` of `26` when omitted.
+- `minSdk` must be an integer when provided.
 - `targetSdk` is optional, but must be an integer when provided.
 
 ## Gradle Configuration

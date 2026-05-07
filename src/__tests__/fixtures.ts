@@ -1,8 +1,8 @@
 import { android, ios, macos, type NativiteConfig, type NativiteUserConfig } from "../index.ts";
 
-const iosPlatformEntry = ios({ minimumVersion: "17.0" });
-const macosPlatformEntry = macos({ minimumVersion: "14.0" });
-const androidPlatformEntry = android({ minSdk: 26 });
+const iosPlatformEntry = ios();
+const macosPlatformEntry = macos();
+const androidPlatformEntry = android();
 
 /** Minimal valid user config input shape. */
 export const baseUserConfig: NativiteUserConfig = {

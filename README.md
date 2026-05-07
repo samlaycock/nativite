@@ -73,11 +73,7 @@ export default defineConfig({
     version: "1.0.0",
     buildNumber: 1,
   },
-  platforms: [
-    ios({ minimumVersion: "17.0" }),
-    macos({ minimumVersion: "14.0" }),
-    android({ minSdk: 26 }),
-  ],
+  platforms: [ios(), macos(), android()],
 });
 ```
 
@@ -154,12 +150,13 @@ URL so native debug builds can discover it.
 
 ### Built-in platform helpers
 
-- `ios({ minimumVersion, target?, simulator?, errorOverlay?, overrides? })`
-- `macos({ minimumVersion, overrides? })`
-- `android({ minSdk, targetSdk?, overrides? })`
+- `ios({ minimumVersion?, target?, simulator?, errorOverlay?, overrides? })`
+- `macos({ minimumVersion?, overrides? })`
+- `android({ minSdk?, targetSdk?, overrides? })`
 
 Notes:
 
+- `ios()`, `macos()`, and `android()` can be called with no arguments. Defaults are iOS `17.0`, macOS `14.0`, Android `minSdk` `26`, and Android `targetSdk` `35`.
 - `ios.errorOverlay` controls the default Vite HMR overlay behaviour in dev. `NATIVITE_DEV_ERROR_OVERLAY` still takes precedence when set.
 - `android.targetSdk` must be an integer when provided.
 

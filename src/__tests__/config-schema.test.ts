@@ -49,9 +49,37 @@ describe("NativiteConfigSchema", () => {
     expect(() =>
       NativiteConfigSchema.parse({
         ...baseUserConfig,
-        platforms: [ios({ minimumVersion: "17.0" }), macos({ minimumVersion: "14.0" })],
+        platforms: [ios(), macos()],
       }),
     ).not.toThrow();
+  });
+
+  it("resolves built-in platform defaults when helper config is omitted", () => {
+    const result = NativiteConfigSchema.parse({
+      ...baseUserConfig,
+      platforms: [ios(), macos(), android()],
+    });
+
+    expect(minimumVersionFor(result, "ios")).toBe("17.0");
+    expect(minimumVersionFor(result, "macos")).toBe("14.0");
+    expect(result.platforms?.find((entry) => entry.platform === "android")).toMatchObject({
+      minSdk: 26,
+      targetSdk: 35,
+    });
+  });
+
+  it("resolves built-in platform defaults from plain object entries", () => {
+    const result = NativiteConfigSchema.parse({
+      ...baseUserConfig,
+      platforms: [{ platform: "ios" }, { platform: "macos" }, { platform: "android" }],
+    });
+
+    expect(minimumVersionFor(result, "ios")).toBe("17.0");
+    expect(minimumVersionFor(result, "macos")).toBe("14.0");
+    expect(result.platforms?.find((entry) => entry.platform === "android")).toMatchObject({
+      minSdk: 26,
+      targetSdk: 35,
+    });
   });
 
   it("accepts platform overrides for built-in platforms", () => {
@@ -485,6 +513,24 @@ describe("NativiteConfigSchema", () => {
     });
 
     expect(minimumVersionFor(result, "ios")).toBe("17.0");
+  });
+
+  it("keeps explicit built-in platform overrides", () => {
+    const result = NativiteConfigSchema.parse({
+      ...baseUserConfig,
+      platforms: [
+        ios({ minimumVersion: "18.0" }),
+        macos({ minimumVersion: "15.0" }),
+        android({ minSdk: 28, targetSdk: 36 }),
+      ],
+    });
+
+    expect(minimumVersionFor(result, "ios")).toBe("18.0");
+    expect(minimumVersionFor(result, "macos")).toBe("15.0");
+    expect(result.platforms?.find((entry) => entry.platform === "android")).toMatchObject({
+      minSdk: 28,
+      targetSdk: 36,
+    });
   });
 
   it("does not include legacy normalized app.platforms metadata", () => {

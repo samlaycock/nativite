@@ -64,6 +64,10 @@ Generates the Xcode project structure with:
 | `SDKROOT`             | `iphoneos`                 | `macosx`               |
 | `INFOPLIST_FILE`      | `{AppName}/Info.plist`     | `{AppName}/Info.plist` |
 
+Deployment defaults are resolved before project generation. `ios()` uses iOS
+`17.0` unless `minimumVersion` is provided, and `macos()` uses macOS `14.0`
+unless `minimumVersion` is provided.
+
 ## Info.plist
 
 > Maps to: `src/native/ios/info-plist.ts`
