@@ -190,7 +190,7 @@ class NativiteBridge {
     // ─── Event dispatch ─────────────────────────────────────────────────────
 
     fun sendEvent(webView: WebView, name: String, data: Any?) {
-        val event = JSONObject().apply {
+        val event = chromeEventPayload(name, data) ?: JSONObject().apply {
             put("id", JSONObject.NULL)
             put("type", "event")
             put("event", name)
@@ -411,6 +411,106 @@ class NativiteBridge {
                 }
             }
             return state
+        }
+
+        fun chromeEventPayload(name: String, data: Any?): JSONObject? {
+            val map = data as? Map<*, *>
+            val id = map?.get("id")?.toString()
+            val instanceName = map?.get("name")?.toString()
+            var event: String? = null
+            var target: String? = null
+            var value: Any? = JSONObject.NULL
+
+            when (name) {
+                "titleBar.leadingItemPressed" -> if (id != null) {
+                    event = "activate"; target = "titleBar:leading:$id"
+                }
+                "titleBar.trailingItemPressed" -> if (id != null) {
+                    event = "activate"; target = "titleBar:trailing:$id"
+                }
+                "titleBar.menuItemPressed" -> if (id != null) {
+                    event = "activate"; target = "titleBar:trailing:menu:$id"
+                }
+                "titleBar.backPressed" -> {
+                    event = "back"; target = "titleBar"
+                }
+                "titleBar.searchChanged" -> {
+                    event = "input"; target = "titleBar:search"; value = map?.get("value") ?: JSONObject.NULL
+                }
+                "titleBar.searchSubmitted" -> {
+                    event = "submit"; target = "titleBar:search"; value = map?.get("value") ?: JSONObject.NULL
+                }
+                "titleBar.searchCancelled" -> {
+                    event = "cancel"; target = "titleBar:search"
+                }
+                "navigation.backPressed" -> {
+                    event = "back"; target = "navigation"
+                }
+                "navigation.itemPressed" -> if (id != null) {
+                    event = "select"; target = "navigation"; value = "navigation:$id"
+                }
+                "navigation.searchChanged" -> {
+                    event = "input"; target = "navigation:search-field"; value = map?.get("value") ?: JSONObject.NULL
+                }
+                "navigation.searchSubmitted" -> {
+                    event = "submit"; target = "navigation:search-field"; value = map?.get("value") ?: JSONObject.NULL
+                }
+                "navigation.searchCancelled" -> {
+                    event = "cancel"; target = "navigation:search-field"
+                }
+                "toolbar.itemPressed" -> if (id != null) {
+                    event = "activate"; target = "toolbar:$id"
+                }
+                "toolbar.menuItemPressed" -> if (id != null) {
+                    event = "activate"; target = "toolbar:menu:$id"
+                }
+                "keyboard.itemPressed" -> if (id != null) {
+                    event = "activate"; target = "keyboard:$id"
+                }
+                "sheet.presented" -> if (instanceName != null) {
+                    event = "open"; target = "sheets:$instanceName"
+                }
+                "sheet.dismissed" -> if (instanceName != null) {
+                    event = "close"; target = "sheets:$instanceName"
+                }
+                "sheet.detentChanged" -> if (instanceName != null) {
+                    event = "detent"; target = "sheets:$instanceName"; value = map?.get("detent") ?: JSONObject.NULL
+                }
+                "sheet.loadFailed" -> if (instanceName != null) {
+                    event = "error"; target = "sheets:$instanceName"; value = data ?: JSONObject.NULL
+                }
+                "drawer.presented" -> if (instanceName != null) {
+                    event = "open"; target = "drawers:$instanceName"
+                }
+                "drawer.dismissed" -> if (instanceName != null) {
+                    event = "close"; target = "drawers:$instanceName"
+                }
+                "popover.presented" -> if (instanceName != null) {
+                    event = "open"; target = "popovers:$instanceName"
+                }
+                "popover.dismissed" -> if (instanceName != null) {
+                    event = "close"; target = "popovers:$instanceName"
+                }
+                "tabBottomAccessory.presented" -> {
+                    event = "open"; target = "tabBottomAccessory"
+                }
+                "tabBottomAccessory.dismissed" -> {
+                    event = "close"; target = "tabBottomAccessory"
+                }
+                "tabBottomAccessory.loadFailed" -> {
+                    event = "error"; target = "tabBottomAccessory"; value = data ?: JSONObject.NULL
+                }
+            }
+
+            if (event == null || target == null) return null
+            return JSONObject().apply {
+                put("nativite", 2)
+                put("type", "chrome.event")
+                put("docId", "main")
+                put("event", event)
+                put("target", target)
+                put("value", toJsonValue(value))
+            }
         }
 
         private fun jsonArrayToList(array: org.json.JSONArray): List<Any?> {
