@@ -64,6 +64,19 @@ The generator creates a complete Android Gradle project from the user's configur
 
 Same as iOS: SHA256 hash of normalised config (including plugin fingerprints). Skips regeneration if hash matches the stored `.hash-android` file.
 
+## Native Plugin Contributions
+
+Android native plugin contributions are currently unsupported. If Android is
+enabled and a plugin declares `platforms.android.sources`, `resources`,
+`registrars`, or `dependencies`, plugin resolution throws before Gradle project
+generation. The generated Android project does not copy plugin Kotlin sources,
+merge plugin resources, add plugin dependencies, or generate an Android plugin
+registrant.
+
+This is an explicit contract boundary for the current release: iOS/macOS consume
+native plugin contributions, while Android support must be implemented before
+plugins can rely on parity.
+
 ## Configuration
 
 The generator resolves platform-specific settings:

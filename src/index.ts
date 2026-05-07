@@ -33,6 +33,13 @@ export type NativitePluginContribution = {
   bridge?: {
     namespaces?: NativiteBridgeNamespace[];
   };
+  /**
+   * First-party native plugin source/resource/registrar/dependency contributions.
+   *
+   * Android native contributions are not currently supported by the generated
+   * Gradle project. Declaring `platforms.android` causes plugin resolution to
+   * fail before generation so unsupported native code is not silently ignored.
+   */
   platforms?: Record<string, NativiteApplePlatformContribution | undefined>;
 };
 

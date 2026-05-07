@@ -34,6 +34,16 @@ func registerNativitePlugins(on bridge: NativiteBridge) {
 
 ### Android (Kotlin)
 
+Android native plugin contributions are not supported yet. A plugin must not
+declare `platforms.android.sources`, `resources`, `registrars`, or
+`dependencies`; when Android is an enabled platform, plugin resolution fails
+before project generation if any of those fields are present. This prevents
+Kotlin sources or Gradle dependencies from being silently omitted from the
+generated project.
+
+The Android bridge still supports built-in handlers, and generated Android
+runtime code can register handlers directly:
+
 Plugins register handlers on the bridge's handler map:
 
 ```kotlin
@@ -78,6 +88,7 @@ This allows O(1) lookup and prevents namespace collisions between plugins.
 
 During project generation, plugins are resolved from the config:
 
-- Plugin packages are discovered and their native registration functions identified.
-- The generator creates the `NativitePluginRegistrant` file with conditional compilation for each platform.
+- Plugin packages are discovered and their Apple native registration functions identified.
+- iOS/macOS generation creates the `NativitePluginRegistrant` file with conditional compilation for each Apple platform.
+- Android `platforms.android` native source/resource/registrar/dependency contributions are rejected because Android Gradle inclusion and native registrant generation are not implemented.
 - Plugin fingerprints are included in the config hash for dirty-check optimization.

@@ -126,4 +126,47 @@ describe("resolveNativitePlugins", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("throws when Android native plugin contributions are declared", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nativite-plugin-android-unsupported-"));
+    try {
+      mkdirSync(join(root, "native", "android"), { recursive: true });
+      writeFileSync(join(root, "native", "android", "CameraPlugin.kt"), "class CameraPlugin\n");
+      const baseConfig = makeBaseConfig();
+
+      const config: NativiteConfig = {
+        ...baseConfig,
+        platforms: [
+          { platform: "ios", minimumVersion: "17.0" },
+          { platform: "macos", minimumVersion: "14.0" },
+          { platform: "android", minSdk: 26 },
+        ],
+        plugins: [
+          {
+            name: "camera-plugin",
+            platforms: {
+              android: {
+                sources: ["./native/android/CameraPlugin.kt"],
+                registrars: ["registerCameraPlugin"],
+              },
+            },
+          },
+        ],
+      };
+
+      let error: unknown;
+      try {
+        await resolveNativitePlugins(config, root, "generate");
+      } catch (err) {
+        error = err;
+      }
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(
+        'Plugin "camera-plugin" declares Android native plugin contributions',
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

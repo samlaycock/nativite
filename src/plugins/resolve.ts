@@ -268,6 +268,30 @@ function normalizePlatformContribution(
   };
 }
 
+function hasNativePlatformContribution(
+  contribution: NativiteApplePlatformContribution | undefined,
+): boolean {
+  return (
+    (contribution?.sources?.length ?? 0) > 0 ||
+    (contribution?.resources?.length ?? 0) > 0 ||
+    (contribution?.registrars?.length ?? 0) > 0 ||
+    (contribution?.dependencies?.length ?? 0) > 0
+  );
+}
+
+function assertNoAndroidNativeContribution(
+  pluginName: string,
+  contribution: NativiteApplePlatformContribution | undefined,
+): void {
+  if (!hasNativePlatformContribution(contribution)) return;
+
+  throw new Error(
+    `[nativite] Plugin "${pluginName}" declares Android native plugin contributions, ` +
+      "but Android plugin source/resource/registrar/dependency inclusion is not supported yet. " +
+      "Remove platforms.android from the plugin or gate it until Android native plugin support is implemented.",
+  );
+}
+
 function aggregatePlatform(
   plugins: ResolvedNativitePlugin[],
   platform: PlatformKey,
@@ -398,6 +422,9 @@ export async function resolveNativitePlugins(
         : undefined;
 
     const mergedContribution = mergeContributions(staticContribution, dynamicContribution);
+    if (androidEnabled) {
+      assertNoAndroidNativeContribution(plugin.name, mergedContribution.platforms?.android);
+    }
 
     const normalizedPlatforms = {
       ios: iosEnabled
@@ -406,9 +433,7 @@ export async function resolveNativitePlugins(
       macos: macosEnabled
         ? normalizePlatformContribution(plugin.name, rootDir, mergedContribution.platforms?.macos)
         : emptyPlatformContribution(),
-      android: androidEnabled
-        ? normalizePlatformContribution(plugin.name, rootDir, mergedContribution.platforms?.android)
-        : emptyPlatformContribution(),
+      android: emptyPlatformContribution(),
     };
 
     const fingerprint = computePluginFingerprint(plugin, mergedContribution, normalizedPlatforms);
