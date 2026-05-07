@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 type PlatformRuntime = {
@@ -41,7 +41,6 @@ type RegistryChunk = {
 
 describe("published runtime template paths", () => {
   const tempDirs: string[] = [];
-  const originalPath = process.env.PATH;
 
   function makeTempDir(prefix: string): string {
     const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -50,7 +49,6 @@ describe("published runtime template paths", () => {
   }
 
   afterEach(() => {
-    process.env.PATH = originalPath;
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -64,6 +62,22 @@ describe("published runtime template paths", () => {
 
       const registryChunk = Array.from(new Bun.Glob("dist/registry-*.mjs").scanSync()).at(0);
       expect(registryChunk).toBeDefined();
+
+      void mock.module("node:child_process", () => ({
+        execSync(command: string, options?: { cwd?: string }) {
+          if (!command.startsWith("gradle wrapper ")) {
+            throw new Error(`Unexpected command: ${command}`);
+          }
+
+          const cwd = options?.cwd ?? process.cwd();
+          const gradleWrapperDir = join(cwd, "gradle", "wrapper");
+          mkdirSync(gradleWrapperDir, { recursive: true });
+          writeFileSync(join(cwd, "gradlew"), "#!/usr/bin/env sh\n");
+          writeFileSync(join(cwd, "gradlew.bat"), "");
+          writeFileSync(join(gradleWrapperDir, "gradle-wrapper.jar"), "fake jar");
+          return "";
+        },
+      }));
 
       const registry = (await import(
         `${pathToFileURL(join(process.cwd(), registryChunk!)).href}?runtime-paths`
@@ -79,23 +93,6 @@ describe("published runtime template paths", () => {
         platforms: [{ platform: "ios" }, { platform: "macos" }, { platform: "android" }],
       };
       const logger = { info() {}, warn() {}, error() {} };
-      const fakeGradleBin = makeTempDir("nativite-fake-gradle-bin-");
-      const fakeGradlePath = join(fakeGradleBin, "gradle");
-
-      writeFileSync(
-        fakeGradlePath,
-        [
-          "#!/usr/bin/env sh",
-          "mkdir -p gradle/wrapper",
-          "printf '#!/usr/bin/env sh\\n' > gradlew",
-          "chmod +x gradlew",
-          "printf '' > gradlew.bat",
-          "printf 'fake jar' > gradle/wrapper/gradle-wrapper.jar",
-        ].join("\n"),
-      );
-      chmodSync(fakeGradlePath, 0o755);
-      process.env.PATH = `${fakeGradleBin}${delimiter}${originalPath ?? ""}`;
-
       const runtimes = registry.r(config);
 
       for (const platformId of ["ios", "macos", "android"]) {
