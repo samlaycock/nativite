@@ -35,3 +35,11 @@ Next steps:
 The block includes only platforms that were requested and successfully built. If
 a build fails, the command exits immediately and does not print final next
 steps.
+
+## Published Runtime Templates
+
+The package build copies first-party Swift and Kotlin runtime templates into
+`dist/runtime`. The bundled platform generators resolve runtime templates
+relative to the emitted registry chunk, so published `nativite build` and
+generation flows must keep those template files as direct siblings under that
+directory.
