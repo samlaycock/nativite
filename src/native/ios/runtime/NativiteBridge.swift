@@ -16,6 +16,7 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
 
   // Keyed as "namespace.method" for O(1) dispatch
   private var handlers: [String: NativiteHandler] = [:]
+  private var lastChromeRevisionByDocId: [String: Int] = [:]
 
   // Chrome handler — lazily wired to viewController after init
   lazy var chrome: NativiteChrome = {
@@ -54,6 +55,10 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
     if type == "chrome.snapshot" {
       guard isMessageFromPrimaryWebView(message) else {
         replyHandler(nil, nil)
+        return
+      }
+      guard acceptChromeSnapshot(body) else {
+        replyHandler(nil, "Malformed or stale chrome.snapshot")
         return
       }
       chrome.viewController = viewController
@@ -162,6 +167,44 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
     handler(args, completion)
   }
 
+  private func acceptChromeSnapshot(_ snapshot: [String: Any]) -> Bool {
+    guard
+      snapshot["nativite"] as? Int == 2,
+      snapshot["type"] as? String == "chrome.snapshot",
+      let docId = snapshot["docId"] as? String,
+      !docId.isEmpty,
+      let revision = snapshot["revision"] as? Int,
+      revision > 0,
+      let rootId = snapshot["root"] as? String,
+      let nodes = snapshot["nodes"] as? [String: [String: Any]],
+      let rootNode = nodes[rootId],
+      let state = snapshot["state"] as? [String: Any],
+      state["selected"] is [String: Any],
+      state["disabled"] is [String: Any],
+      state["hidden"] is [String: Any],
+      state["badges"] is [String: Any],
+      state["values"] is [String: Any],
+      (rootNode["id"] as? String) == rootId
+    else {
+      return false
+    }
+    if let lastRevision = lastChromeRevisionByDocId[docId], revision <= lastRevision {
+      return false
+    }
+    for (id, node) in nodes {
+      guard (node["id"] as? String) == id, node["kind"] is String else {
+        return false
+      }
+      if let children = node["children"] as? [String] {
+        for child in children where nodes[child] == nil {
+          return false
+        }
+      }
+    }
+    lastChromeRevisionByDocId[docId] = revision
+    return true
+  }
+
   // ── Native-push events ──────────────────────────────────────────────────────
   // Events (native→JS push) still use evaluateJavaScript — there is no direct
   // reply channel in the native→JS direction.
@@ -198,13 +241,33 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
       return [:]
     }
 
+    let selected = buckets["selected"] ?? [:]
+    let disabled = buckets["disabled"] ?? [:]
     let hidden = buckets["hidden"] ?? [:]
+    let badges = buckets["badges"] ?? [:]
+    let values = buckets["values"] ?? [:]
     var state: [String: Any] = [:]
 
     for area in rootChildren {
       if area == "titleBar", let title = nodes["titleBar:title"] {
         var titleBar: [String: Any] = title["meta"] as? [String: Any] ?? [:]
         if let label = title["label"] { titleBar["title"] = label }
+        if let bar = nodes["titleBar"], let children = bar["children"] as? [String] {
+          let leadingItems = children
+            .filter { $0.hasPrefix("titleBar:leading:") }
+            .compactMap { legacyBarItem(id: $0, nodes: nodes, disabled: disabled, badges: badges) }
+          let trailingItems = children
+            .filter { $0.hasPrefix("titleBar:trailing:") }
+            .compactMap { legacyBarItem(id: $0, nodes: nodes, disabled: disabled, badges: badges) }
+          if !leadingItems.isEmpty { titleBar["leadingItems"] = leadingItems }
+          if !trailingItems.isEmpty { titleBar["trailingItems"] = trailingItems }
+        }
+        if let search = nodes["titleBar:search"] {
+          var searchBar = search["meta"] as? [String: Any] ?? [:]
+          if let value = values["titleBar:search"] { searchBar["value"] = value }
+          titleBar["searchBar"] = searchBar
+        }
+        if let isHidden = hidden["titleBar"] { titleBar["hidden"] = isHidden }
         state["titleBar"] = titleBar
       } else if area == "navigation", let node = nodes["navigation"] {
         let children = node["children"] as? [String] ?? []
@@ -215,17 +278,53 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
           item["id"] = id.split(separator: ":").last.map(String.init) ?? id
           item["label"] = child["label"]
           item["icon"] = child["icon"]
+          if let isDisabled = disabled[id] { item["disabled"] = isDisabled }
+          if let badge = badges[id] { item["badge"] = badge }
           return item
+        }
+        if let active = selected["navigation"] as? String {
+          navigation["activeItem"] = active.split(separator: ":").last.map(String.init) ?? active
+        }
+        if let isHidden = hidden["navigation"] { navigation["hidden"] = isHidden }
+        if let search = nodes["navigation:search-field"] {
+          var searchBar = search["meta"] as? [String: Any] ?? [:]
+          if let value = values["navigation:search-field"] { searchBar["value"] = value }
+          navigation["searchBar"] = searchBar
         }
         state["navigation"] = navigation
       } else if area == "toolbar", let node = nodes["toolbar"] {
-        state["toolbar"] = node["meta"] as? [String: Any] ?? [:]
+        var toolbar = node["meta"] as? [String: Any] ?? [:]
+        let children = node["children"] as? [String] ?? []
+        if children.allSatisfy({ $0.hasPrefix("toolbar:group-") }) && !children.isEmpty {
+          toolbar["groups"] = children.compactMap { id -> [String: Any]? in
+            guard let group = nodes[id] else { return nil }
+            let itemIds = group["children"] as? [String] ?? []
+            return [
+              "placement": group["placement"] ?? "automatic",
+              "items": itemIds.compactMap { legacyBarItem(id: $0, nodes: nodes, disabled: disabled, badges: badges) },
+            ]
+          }
+        } else {
+          toolbar["items"] = children.compactMap { legacyBarItem(id: $0, nodes: nodes, disabled: disabled, badges: badges) }
+        }
+        if let isHidden = hidden["toolbar"] { toolbar["hidden"] = isHidden }
+        if let toolbarId = toolbar.removeValue(forKey: "toolbarId") { toolbar["id"] = toolbarId }
+        state["toolbar"] = toolbar
       } else if area == "statusBar", let node = nodes["statusBar"] {
-        state["statusBar"] = node["meta"] as? [String: Any] ?? [:]
+        var statusBar = node["meta"] as? [String: Any] ?? [:]
+        if let isHidden = hidden["statusBar"] { statusBar["hidden"] = isHidden }
+        state["statusBar"] = statusBar
       } else if area == "homeIndicator" {
         state["homeIndicator"] = ["hidden": hidden["homeIndicator"] as? Bool ?? false]
       } else if area == "keyboard", let node = nodes["keyboard"] {
-        state["keyboard"] = node["meta"] as? [String: Any] ?? [:]
+        var keyboard = node["meta"] as? [String: Any] ?? [:]
+        let itemIds = node["children"] as? [String] ?? []
+        if !itemIds.isEmpty {
+          keyboard["accessory"] = [
+            "items": itemIds.compactMap { legacyBarItem(id: $0, nodes: nodes, disabled: disabled, badges: badges) }
+          ]
+        }
+        state["keyboard"] = keyboard
       } else if area == "tabBottomAccessory", let node = nodes["tabBottomAccessory"] {
         var config = node["meta"] as? [String: Any] ?? [:]
         config["presented"] = !(hidden["tabBottomAccessory"] as? Bool ?? false)
@@ -244,6 +343,60 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
       }
     }
     return state
+  }
+
+  private static func legacyBarItem(
+    id: String,
+    nodes: [String: [String: Any]],
+    disabled: [String: Any],
+    badges: [String: Any]
+  ) -> [String: Any]? {
+    guard let node = nodes[id], let kind = node["kind"] as? String else { return nil }
+    if kind == "spacer" {
+      let meta = node["meta"] as? [String: Any] ?? [:]
+      if meta["fixed"] as? Bool == true {
+        return ["type": "fixed-space", "width": meta["width"] ?? 0]
+      }
+      return ["type": "flexible-space"]
+    }
+    var item = node["meta"] as? [String: Any] ?? [:]
+    item["id"] = id.split(separator: ":").last.map(String.init) ?? id
+    if let label = node["label"] { item["label"] = label }
+    if let icon = node["icon"] { item["icon"] = icon }
+    if let role = node["role"] as? String, role == "primary" || role == "destructive" {
+      item["style"] = role
+    }
+    if let isDisabled = disabled[id] { item["disabled"] = isDisabled }
+    if let badge = badges[id] { item["badge"] = badge }
+    if let children = node["children"] as? [String], let menuId = children.first, let menu = legacyMenu(id: menuId, nodes: nodes, disabled: disabled) {
+      item["menu"] = menu
+    }
+    return item
+  }
+
+  private static func legacyMenu(
+    id: String,
+    nodes: [String: [String: Any]],
+    disabled: [String: Any]
+  ) -> [String: Any]? {
+    guard let node = nodes[id] else { return nil }
+    var menu: [String: Any] = [:]
+    if let label = node["label"] { menu["title"] = label }
+    let children = node["children"] as? [String] ?? []
+    menu["items"] = children.compactMap { childId -> [String: Any]? in
+      guard let child = nodes[childId] else { return nil }
+      var item = child["meta"] as? [String: Any] ?? [:]
+      item["id"] = childId.split(separator: ":").last.map(String.init) ?? childId
+      if let label = child["label"] { item["label"] = label }
+      if let icon = child["icon"] { item["icon"] = icon }
+      if let role = child["role"] as? String, role == "destructive" { item["style"] = role }
+      if let isDisabled = disabled[childId] { item["disabled"] = isDisabled }
+      if let nested = child["children"] as? [String], let nestedId = nested.first, let submenu = legacyMenu(id: nestedId, nodes: nodes, disabled: disabled) {
+        item["children"] = (submenu["items"] as? [[String: Any]]) ?? []
+      }
+      return item
+    }
+    return menu
   }
 }
 

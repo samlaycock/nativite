@@ -21,6 +21,7 @@ class NativiteBridge {
     private var primaryWebView: WebView? = null
     private var primaryPort: WebMessagePortCompat? = null
     private var primaryVars: NativiteVars? = null
+    private val lastChromeRevisionByDocId = mutableMapOf<String, Int>()
     private val childWebViews = mutableMapOf<String, WebView>()
     private val childPorts = mutableMapOf<String, WebMessagePortCompat>()
     private data class ChromeGeometry(
@@ -119,6 +120,7 @@ class NativiteBridge {
             val id = if (msg.isNull("id")) null else msg.optString("id")
             val type = msg.optString("type")
             if (type == "chrome.snapshot") {
+                if (!acceptChromeSnapshot(msg)) return
                 mainHandler.post {
                     chromeState.value = legacyChromeStateFromSnapshot(msg)
                 }
@@ -185,6 +187,41 @@ class NativiteBridge {
         } catch (e: Exception) {
             // Silently ignore malformed messages
         }
+    }
+
+    private fun acceptChromeSnapshot(snapshot: JSONObject): Boolean {
+        if (snapshot.optInt("nativite") != 2) return false
+        if (snapshot.optString("type") != "chrome.snapshot") return false
+        val docId = snapshot.optString("docId")
+        if (docId.isEmpty()) return false
+        val revision = snapshot.optInt("revision")
+        if (revision <= 0) return false
+        val rootId = snapshot.optString("root")
+        if (rootId.isEmpty()) return false
+        val nodes = snapshot.optJSONObject("nodes") ?: return false
+        val state = snapshot.optJSONObject("state") ?: return false
+        for (bucket in listOf("selected", "disabled", "hidden", "badges", "values")) {
+            if (state.optJSONObject(bucket) == null) return false
+        }
+        val root = nodes.optJSONObject(rootId) ?: return false
+        if (root.optString("id") != rootId) return false
+        val lastRevision = lastChromeRevisionByDocId[docId]
+        if (lastRevision != null && revision <= lastRevision) return false
+        val keys = nodes.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val node = nodes.optJSONObject(key) ?: return false
+            if (node.optString("id") != key) return false
+            if (node.optString("kind").isEmpty()) return false
+            val children = node.optJSONArray("children")
+            if (children != null) {
+                for (i in 0 until children.length()) {
+                    if (nodes.optJSONObject(children.optString(i)) == null) return false
+                }
+            }
+        }
+        lastChromeRevisionByDocId[docId] = revision
+        return true
     }
 
     // ─── Event dispatch ─────────────────────────────────────────────────────
@@ -349,7 +386,11 @@ class NativiteBridge {
         fun legacyChromeStateFromSnapshot(snapshot: JSONObject): Map<String, Any?> {
             val nodes = snapshot.optJSONObject("nodes") ?: return emptyMap()
             val buckets = snapshot.optJSONObject("state")
+            val selected = buckets?.optJSONObject("selected")
+            val disabled = buckets?.optJSONObject("disabled")
             val hidden = buckets?.optJSONObject("hidden")
+            val badges = buckets?.optJSONObject("badges")
+            val values = buckets?.optJSONObject("values")
             val rootChildren = nodes.optJSONObject("root")?.optJSONArray("children") ?: return emptyMap()
             val state = mutableMapOf<String, Any?>()
 
@@ -360,6 +401,25 @@ class NativiteBridge {
                         val title = nodes.optJSONObject("titleBar:title") ?: continue
                         val config = jsonToMap(title.optJSONObject("meta")).toMutableMap()
                         if (title.has("label")) config["title"] = title.opt("label")
+                        val barChildren = nodes.optJSONObject("titleBar")?.optJSONArray("children") ?: org.json.JSONArray()
+                        val leadingItems = mutableListOf<Map<String, Any?>>()
+                        val trailingItems = mutableListOf<Map<String, Any?>>()
+                        for (j in 0 until barChildren.length()) {
+                            val nodeId = barChildren.optString(j)
+                            val item = legacyBarItem(nodeId, nodes, disabled, badges) ?: continue
+                            when {
+                                nodeId.startsWith("titleBar:leading:") -> leadingItems.add(item)
+                                nodeId.startsWith("titleBar:trailing:") -> trailingItems.add(item)
+                            }
+                        }
+                        if (leadingItems.isNotEmpty()) config["leadingItems"] = leadingItems
+                        if (trailingItems.isNotEmpty()) config["trailingItems"] = trailingItems
+                        nodes.optJSONObject("titleBar:search")?.let { search ->
+                            val searchBar = jsonToMap(search.optJSONObject("meta")).toMutableMap()
+                            if (values?.has("titleBar:search") == true) searchBar["value"] = values.opt("titleBar:search")
+                            config["searchBar"] = searchBar
+                        }
+                        if (hidden?.has("titleBar") == true) config["hidden"] = hidden.opt("titleBar")
                         state["titleBar"] = config
                     }
                     "navigation" -> {
@@ -374,22 +434,73 @@ class NativiteBridge {
                             item["id"] = nodeId.substringAfterLast(":")
                             item["label"] = child.opt("label")
                             item["icon"] = child.opt("icon")
+                            if (disabled?.has(nodeId) == true) item["disabled"] = disabled.opt(nodeId)
+                            if (badges?.has(nodeId) == true) item["badge"] = badges.opt(nodeId)
                             items.add(item)
                         }
                         config["items"] = items
+                        if (selected?.has("navigation") == true) {
+                            config["activeItem"] = selected.optString("navigation").substringAfterLast(":")
+                        }
+                        if (hidden?.has("navigation") == true) config["hidden"] = hidden.opt("navigation")
+                        nodes.optJSONObject("navigation:search-field")?.let { search ->
+                            val searchBar = jsonToMap(search.optJSONObject("meta")).toMutableMap()
+                            if (values?.has("navigation:search-field") == true) {
+                                searchBar["value"] = values.opt("navigation:search-field")
+                            }
+                            config["searchBar"] = searchBar
+                        }
                         state["navigation"] = config
                     }
                     "toolbar" -> {
-                        state["toolbar"] = jsonToMap(nodes.optJSONObject("toolbar")?.optJSONObject("meta"))
+                        val node = nodes.optJSONObject("toolbar") ?: continue
+                        val config = jsonToMap(node.optJSONObject("meta")).toMutableMap()
+                        val children = node.optJSONArray("children") ?: org.json.JSONArray()
+                        val hasGroups = children.length() > 0 && (0 until children.length()).all {
+                            children.optString(it).startsWith("toolbar:group-")
+                        }
+                        if (hasGroups) {
+                            val groups = mutableListOf<Map<String, Any?>>()
+                            for (j in 0 until children.length()) {
+                                val groupId = children.optString(j)
+                                val group = nodes.optJSONObject(groupId) ?: continue
+                                val itemIds = group.optJSONArray("children") ?: org.json.JSONArray()
+                                val items = mutableListOf<Map<String, Any?>>()
+                                for (k in 0 until itemIds.length()) {
+                                    legacyBarItem(itemIds.optString(k), nodes, disabled, badges)?.let { items.add(it) }
+                                }
+                                groups.add(mapOf("placement" to group.opt("placement"), "items" to items))
+                            }
+                            config["groups"] = groups
+                        } else {
+                            val items = mutableListOf<Map<String, Any?>>()
+                            for (j in 0 until children.length()) {
+                                legacyBarItem(children.optString(j), nodes, disabled, badges)?.let { items.add(it) }
+                            }
+                            config["items"] = items
+                        }
+                        if (hidden?.has("toolbar") == true) config["hidden"] = hidden.opt("toolbar")
+                        config.remove("toolbarId")?.let { config["id"] = it }
+                        state["toolbar"] = config
                     }
                     "statusBar" -> {
-                        state["statusBar"] = jsonToMap(nodes.optJSONObject("statusBar")?.optJSONObject("meta"))
+                        val config = jsonToMap(nodes.optJSONObject("statusBar")?.optJSONObject("meta")).toMutableMap()
+                        if (hidden?.has("statusBar") == true) config["hidden"] = hidden.opt("statusBar")
+                        state["statusBar"] = config
                     }
                     "homeIndicator" -> {
                         state["homeIndicator"] = mapOf("hidden" to (hidden?.optBoolean("homeIndicator") ?: false))
                     }
                     "keyboard" -> {
-                        state["keyboard"] = jsonToMap(nodes.optJSONObject("keyboard")?.optJSONObject("meta"))
+                        val node = nodes.optJSONObject("keyboard") ?: continue
+                        val config = jsonToMap(node.optJSONObject("meta")).toMutableMap()
+                        val itemIds = node.optJSONArray("children") ?: org.json.JSONArray()
+                        val items = mutableListOf<Map<String, Any?>>()
+                        for (j in 0 until itemIds.length()) {
+                            legacyBarItem(itemIds.optString(j), nodes, disabled, badges)?.let { items.add(it) }
+                        }
+                        if (items.isNotEmpty()) config["accessory"] = mapOf("items" to items)
+                        state["keyboard"] = config
                     }
                     "tabBottomAccessory" -> {
                         val config = jsonToMap(nodes.optJSONObject("tabBottomAccessory")?.optJSONObject("meta")).toMutableMap()
@@ -411,6 +522,66 @@ class NativiteBridge {
                 }
             }
             return state
+        }
+
+        private fun legacyBarItem(
+            nodeId: String,
+            nodes: JSONObject,
+            disabled: JSONObject?,
+            badges: JSONObject?,
+        ): Map<String, Any?>? {
+            val node = nodes.optJSONObject(nodeId) ?: return null
+            if (node.optString("kind") == "spacer") {
+                val meta = node.optJSONObject("meta")
+                return if (meta?.optBoolean("fixed") == true) {
+                    mapOf("type" to "fixed-space", "width" to meta.opt("width"))
+                } else {
+                    mapOf("type" to "flexible-space")
+                }
+            }
+            val item = jsonToMap(node.optJSONObject("meta")).toMutableMap()
+            item["id"] = nodeId.substringAfterLast(":")
+            if (node.has("label")) item["label"] = node.opt("label")
+            if (node.has("icon")) item["icon"] = node.opt("icon")
+            val role = node.optString("role")
+            if (role == "primary" || role == "destructive") item["style"] = role
+            if (disabled?.has(nodeId) == true) item["disabled"] = disabled.opt(nodeId)
+            if (badges?.has(nodeId) == true) item["badge"] = badges.opt(nodeId)
+            val children = node.optJSONArray("children")
+            if (children != null && children.length() > 0) {
+                legacyMenu(children.optString(0), nodes, disabled)?.let { item["menu"] = it }
+            }
+            return item
+        }
+
+        private fun legacyMenu(
+            nodeId: String,
+            nodes: JSONObject,
+            disabled: JSONObject?,
+        ): Map<String, Any?>? {
+            val node = nodes.optJSONObject(nodeId) ?: return null
+            val menu = mutableMapOf<String, Any?>()
+            if (node.has("label")) menu["title"] = node.opt("label")
+            val children = node.optJSONArray("children") ?: org.json.JSONArray()
+            val items = mutableListOf<Map<String, Any?>>()
+            for (i in 0 until children.length()) {
+                val childId = children.optString(i)
+                val child = nodes.optJSONObject(childId) ?: continue
+                val item = jsonToMap(child.optJSONObject("meta")).toMutableMap()
+                item["id"] = childId.substringAfterLast(":")
+                if (child.has("label")) item["label"] = child.opt("label")
+                if (child.has("icon")) item["icon"] = child.opt("icon")
+                if (child.optString("role") == "destructive") item["style"] = "destructive"
+                if (disabled?.has(childId) == true) item["disabled"] = disabled.opt(childId)
+                val nested = child.optJSONArray("children")
+                if (nested != null && nested.length() > 0) {
+                    val submenu = legacyMenu(nested.optString(0), nodes, disabled)
+                    item["children"] = submenu?.get("items")
+                }
+                items.add(item)
+            }
+            menu["items"] = items
+            return menu
         }
 
         fun chromeEventPayload(name: String, data: Any?): JSONObject? {
@@ -467,6 +638,9 @@ class NativiteBridge {
                 "keyboard.itemPressed" -> if (id != null) {
                     event = "activate"; target = "keyboard:$id"
                 }
+                "sidebarPanel.itemPressed" -> if (id != null) {
+                    event = "activate"; target = "sidebarPanel:$id"
+                }
                 "sheet.presented" -> if (instanceName != null) {
                     event = "open"; target = "sheets:$instanceName"
                 }
@@ -484,6 +658,12 @@ class NativiteBridge {
                 }
                 "drawer.dismissed" -> if (instanceName != null) {
                     event = "close"; target = "drawers:$instanceName"
+                }
+                "appWindow.presented" -> if (instanceName != null) {
+                    event = "open"; target = "appWindows:$instanceName"
+                }
+                "appWindow.dismissed" -> if (instanceName != null) {
+                    event = "close"; target = "appWindows:$instanceName"
                 }
                 "popover.presented" -> if (instanceName != null) {
                     event = "open"; target = "popovers:$instanceName"

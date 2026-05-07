@@ -226,7 +226,6 @@ function compileMenuItems(
       }),
     });
     if (item.disabled) state.disabled[id] = true;
-    if (item.checked !== undefined) state.selected[id] = item.checked;
     if (item.children) {
       const menuId = `${id}:menu`;
       addNode(nodes, {
@@ -535,7 +534,8 @@ function compileChromeState(
     addNode(nodes, { id: area, kind: "group", children });
     for (const [name, config] of Object.entries(collection)) {
       const id = `${area}:${name}`;
-      addNode(nodes, { id, kind: "window", meta: { ...config } });
+      const { presented: _presented, ...meta } = config;
+      addNode(nodes, { id, kind: "window", meta });
       if (config.presented === false) state.hidden[id] = true;
     }
     rootChildren.push(area);
