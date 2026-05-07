@@ -41,6 +41,7 @@ interface NavigationItem {
   readonly label: string;
   readonly icon: string; // Required (SF Symbol / Material Icon)
   readonly subtitle?: string; // iOS 18+
+  readonly tint?: string; // Hex colour override for icon/label
   readonly badge?: string | number | null;
   readonly disabled?: boolean;
   readonly role?: "search"; // Creates UISearchTab on iOS 18+

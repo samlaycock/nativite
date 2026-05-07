@@ -59,6 +59,7 @@ The `accessory` property configures the items displayed in the bar above the key
 
 - Each item follows the same `BarItem` format as title bar and toolbar items
 - Supports buttons, flexible spaces, and fixed spaces
+- Applies per-button `tint` colours and destructive button styling to `UIBarButtonItem.tintColor`
 - Item presses fire `keyboard.itemPressed` events with the item `id`
 
 When `accessory` is `nil` or has no items, the accessory bar is hidden.

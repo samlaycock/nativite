@@ -63,12 +63,12 @@ Renders a `BasicTextField` with search icon below the title bar.
 
 ### Configuration
 
-| Property     | Type               | Description                           |
-| ------------ | ------------------ | ------------------------------------- |
-| `items`      | `NavigationItem[]` | Tab items (label, icon required)      |
-| `activeItem` | `String?`          | Currently selected tab ID             |
-| `searchBar`  | `SearchBarConfig?` | Search field used by search-role item |
-| `hidden`     | `Boolean`          | Whether to hide the nav bar           |
+| Property     | Type               | Description                                    |
+| ------------ | ------------------ | ---------------------------------------------- |
+| `items`      | `NavigationItem[]` | Tab items (label, icon required, tint allowed) |
+| `activeItem` | `String?`          | Currently selected tab ID                      |
+| `searchBar`  | `SearchBarConfig?` | Search field used by search-role item          |
+| `hidden`     | `Boolean`          | Whether to hide the nav bar                    |
 
 ### Icon Resolution
 

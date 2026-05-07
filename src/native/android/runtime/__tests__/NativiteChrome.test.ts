@@ -75,6 +75,13 @@ describe("NativiteChrome.kt", () => {
     expect(kt).toContain("enabled = !disabled");
   });
 
+  it("supports per-navigation-item tint color", () => {
+    expect(kt).toContain('parseTintColor(item["tint"]');
+    expect(kt).toContain("NavigationBarItemDefaults.colors(");
+    expect(kt).toContain("selectedIconColor = tintColor");
+    expect(kt).toContain("unselectedTextColor = tintColor");
+  });
+
   it("supports navigation item subtitle", () => {
     expect(kt).toContain('item["subtitle"] as? String');
   });

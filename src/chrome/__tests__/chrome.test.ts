@@ -444,6 +444,16 @@ describe("item constructors", () => {
     expect(navItem(config)).toBe(config);
   });
 
+  it("navItem() passes through the tint property", () => {
+    const config = {
+      id: "inbox",
+      label: "Inbox",
+      icon: "tray.fill",
+      tint: "#FF6600",
+    };
+    expect(navItem(config)).toBe(config);
+  });
+
   it("menuItem() returns the MenuItem config unchanged", () => {
     const config = { id: "sort", label: "Sort" };
     expect(menuItem(config)).toBe(config);

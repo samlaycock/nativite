@@ -195,6 +195,11 @@ private class NativiteAccessoryView: UIInputView {
 
       barItem.accessibilityIdentifier = id
       barItem.isEnabled = !((state["disabled"] as? Bool) ?? false)
+      if let tint = state["tint"] as? String {
+        barItem.tintColor = UIColor(hex: tint)
+      } else if state["style"] as? String == "destructive" {
+        barItem.tintColor = .systemRed
+      }
       return barItem
     }
   }

@@ -39,4 +39,10 @@ describe("NativiteKeyboard.swift", () => {
     expect(swift).toContain("var lockRootScroll: Bool = true");
     expect(swift).toContain("guard lockRootScroll else { return }");
   });
+
+  it("applies tint to keyboard accessory button items", () => {
+    expect(swift).toContain('state["tint"] as? String');
+    expect(swift).toContain("barItem.tintColor = UIColor(hex: tint)");
+    expect(swift).toContain('state["style"] as? String == "destructive"');
+  });
 });

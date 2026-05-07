@@ -129,6 +129,21 @@ struct BarItemState: Identifiable {
 }
 ```
 
+## Navigation Item State
+
+Navigation tabs retain per-item foreground tint in the shared SwiftUI state:
+
+```swift
+struct NavigationItemState: Identifiable {
+    let id: String
+    var label: String
+    var icon: String?
+    var tint: String?          // Hex colour override
+    var badge: String?
+    var role: String?
+}
+```
+
 ## Alert/Confirm/Prompt Dialogs
 
 ```swift
