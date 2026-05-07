@@ -152,6 +152,36 @@ describe("runBuildCommand", () => {
     expect(info).toHaveBeenCalledWith("Web bundle: dist-ios");
   });
 
+  it("prints next steps for every successfully built configured platform", async () => {
+    const info = mock(() => {});
+    const logger: NativiteLogger = {
+      ...createMockLogger(),
+      info,
+    };
+    const deps = createDependencies({ logger });
+
+    const exitCode = await runBuildCommand({}, deps);
+
+    expect(exitCode).toBe(0);
+    expect(info).toHaveBeenCalledWith(
+      "Next steps:\n  iOS: open .nativite/ios/TestApp.xcodeproj\n  macOS: open .nativite/macos/TestApp.xcodeproj\n  Android: open .nativite/android",
+    );
+  });
+
+  it("prints only the targeted platform in the next steps", async () => {
+    const info = mock(() => {});
+    const logger: NativiteLogger = {
+      ...createMockLogger(),
+      info,
+    };
+    const deps = createDependencies({ logger });
+
+    const exitCode = await runBuildCommand({ platform: "ios" }, deps);
+
+    expect(exitCode).toBe(0);
+    expect(info).toHaveBeenCalledWith("Next steps:\n  iOS: open .nativite/ios/TestApp.xcodeproj");
+  });
+
   it("returns 1 for an unknown platform", async () => {
     const build = mock(async () => {
       return;
@@ -165,6 +195,11 @@ describe("runBuildCommand", () => {
   });
 
   it("stops on the first build failure", async () => {
+    const info = mock(() => {});
+    const logger: NativiteLogger = {
+      ...createMockLogger(),
+      info,
+    };
     const observedPlatforms: string[] = [];
     const build = mock(async () => {
       observedPlatforms.push(process.env["NATIVITE_PLATFORM"] ?? "");
@@ -173,12 +208,15 @@ describe("runBuildCommand", () => {
       }
     });
 
-    const deps = createDependencies({ build });
+    const deps = createDependencies({ build, logger });
     const exitCode = await runBuildCommand({}, deps);
 
     expect(exitCode).toBe(1);
     expect(build).toHaveBeenCalledTimes(2);
     expect(observedPlatforms).toEqual(["ios", "macos"]);
+    expect(info).not.toHaveBeenCalledWith(
+      "Next steps:\n  iOS: open .nativite/ios/TestApp.xcodeproj\n  macOS: open .nativite/macos/TestApp.xcodeproj\n  Android: open .nativite/android",
+    );
   });
 
   it("returns 1 when no platforms are configured", async () => {
