@@ -73,6 +73,7 @@ function createDependencies(options?: {
   runtimes?: ResolvedNativitePlatformRuntime[];
   build?: ViteApi["build"];
   loadViteApi?: BuildCommandDependencies["loadViteApi"];
+  logger?: NativiteLogger;
 }): BuildCommandDependencies {
   const runtimes = options?.runtimes ?? [
     createRuntime("ios"),
@@ -96,7 +97,7 @@ function createDependencies(options?: {
       (async () => ({
         build: viteBuild,
       })),
-    createLogger: () => createMockLogger(),
+    createLogger: () => options?.logger ?? createMockLogger(),
   };
 }
 
@@ -134,6 +135,21 @@ describe("runBuildCommand", () => {
     expect(exitCode).toBe(0);
     expect(build).toHaveBeenCalledTimes(1);
     expect(observedPlatforms).toEqual(["android"]);
+  });
+
+  it("prints the native project and web bundle paths for the target platform", async () => {
+    const info = mock(() => {});
+    const logger: NativiteLogger = {
+      ...createMockLogger(),
+      info,
+    };
+    const deps = createDependencies({ logger });
+
+    const exitCode = await runBuildCommand({ platform: "ios" }, deps);
+
+    expect(exitCode).toBe(0);
+    expect(info).toHaveBeenCalledWith("Native project: .nativite/ios/TestApp.xcodeproj");
+    expect(info).toHaveBeenCalledWith("Web bundle: dist-ios");
   });
 
   it("returns 1 for an unknown platform", async () => {

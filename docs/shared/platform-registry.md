@@ -71,7 +71,7 @@ Each plugin implements:
 | Hook            | Purpose                                 |
 | --------------- | --------------------------------------- |
 | `generate(ctx)` | Generate the native project             |
-| `dev(ctx)`      | Generate, build, launch with dev server |
+| `dev(ctx)`      | Optional terminal-owned dev launch flow |
 | `build(ctx)`    | Generate for production build           |
 
 ## Helper Functions

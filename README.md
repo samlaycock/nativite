@@ -70,48 +70,54 @@ export default defineConfig({
 });
 ```
 
-### 3. Run Vite dev
-
-```bash
-bunx vite dev
-```
-
-### 4. Run the native dev manager (separate terminal)
-
-```bash
-bunx nativite dev
-```
-
-Important:
-
-- `nativite dev` does not start Vite.
-- It reads `.nativite/dev.json` (written by the Vite plugin) or accepts `--url`.
-
-Optional explicit URL:
-
-```bash
-bunx nativite dev --url http://127.0.0.1:5173
-```
-
-### 5. Trigger platform builds from the CLI table
-
-The CLI shows configured platforms with a hotkey per platform (for example `i + enter` for ios).
-Press that hotkey to build and launch that platform runtime.
-
-### 6. Build production bundles for native platforms
+### 3. Generate native projects and web bundles
 
 ```bash
 bunx nativite build
 ```
 
 This runs a production Vite build for each configured native platform and writes
-platform-specific bundles (for example `dist-ios`, `dist-macos`, `dist-android`).
+the matching native projects locally:
+
+```text
+.nativite/ios
+.nativite/macos
+.nativite/android
+dist-ios
+dist-macos
+dist-android
+```
 
 Optional single-platform build:
 
 ```bash
 bunx nativite build --platform ios
 ```
+
+### 4. Open the generated native project
+
+Use the native IDE or simulator workflow you already use for the target platform:
+
+```bash
+open .nativite/ios/MyApp.xcodeproj
+open .nativite/android
+```
+
+Xcode and Android Studio own native build settings, signing, simulator/device
+selection, and launch. Nativite owns generating the native project code and the
+web bundles those projects embed.
+
+### 5. Optional web dev server
+
+Run your normal Vite dev server when you want the generated debug native project
+to load web code from Vite instead of the embedded production bundle.
+
+```bash
+bunx vite dev
+```
+
+Nativite's Vite plugin writes `.nativite/dev.json` with the resolved dev server
+URL so native debug builds can discover it.
 
 ## Configuration Overview
 

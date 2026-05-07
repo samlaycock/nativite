@@ -2,33 +2,50 @@
 
 > Maps to: `src/platforms/first-party.ts` (iOS platform plugin)
 
-The iOS platform plugin manages the full development lifecycle: project generation, simulator management, and app launch with hot-reloading.
+The iOS platform plugin generates an Xcode project that developers run with
+normal Xcode simulator, device, signing, and archive workflows.
 
-## Dev Mode Flow
+## Primary Flow
 
-When running `nativite dev` for iOS:
+When running `nativite build` for iOS:
 
-### 1. Generate Project
+### 1. Build the web bundle
 
-Calls `generateProject(config, cwd, false, "ios")` to create or update the Xcode project in `.nativite/ios/`.
+The CLI runs a production Vite build with `NATIVITE_PLATFORM=ios`.
+The Vite plugin writes the iOS web bundle to `dist-ios/` and emits
+`dist-ios/manifest.json`.
 
-### 2. Boot Simulator
+### 2. Generate the Xcode project
 
-- Checks if the target simulator is already booted.
-- If not, boots the configured simulator (default: `"iPhone 16 Pro"`).
-- The simulator name is configurable in the platform config.
+The iOS platform build hook calls `generateProject(config, cwd, false, "build", "ios")`
+to create or update the Xcode project in `.nativite/ios/`.
 
-### 3. Build & Launch
+### 3. Open and run in Xcode
 
-- Builds the app using `xcodebuild`.
-- Installs the built app on the simulator using `simctl install`.
-- Launches the app using `simctl launch`.
+Open the generated project and use Xcode for simulator/device selection,
+debugging, signing, and archiving:
 
-### 4. Dev URL Injection
+```bash
+open .nativite/ios/MyApp.xcodeproj
+```
 
-The dev server URL is passed to the app via the `SIMCTL_CHILD_NATIVITE_DEV_URL` environment variable. This is a special `simctl` environment variable prefix that forwards to the app's process environment.
+Release builds copy the embedded web bundle from `dist-ios/` into the app bundle.
 
-The app reads this URL in the `ViewController.loadContent()` method to connect to the Vite dev server instead of loading the embedded bundle.
+## Debug Builds With Vite Dev
+
+Run your normal Vite dev server when you want the generated debug app to load web
+code from Vite:
+
+```bash
+bunx vite dev
+```
+
+The Nativite Vite plugin writes `.nativite/dev.json` with the resolved dev server
+URL. Debug native builds can use that URL instead of loading the embedded bundle.
+
+The older `nativite dev` command can still generate, build, install, and launch a
+simulator app from the terminal, but it is not the default setup path. Prefer
+Xcode unless you specifically want terminal-owned simulator orchestration.
 
 ## User-Agent Based Routing
 
@@ -48,18 +65,10 @@ The Vite plugin bridges HMR for native variant files:
 - When a `.ios.ts` file changes, the HMR update is forwarded to the client environment's HMR channel.
 - The webview picks up the update and hot-reloads without a full page refresh.
 
-## Build Mode
-
-When running `nativite build`:
-
-- The CLI runs production builds for each configured platform by default.
-- During the iOS build pass, the iOS platform plugin generates the project in build mode.
-- Writes `manifest.json` with version info and asset list to the iOS-specific output directory.
-- Release builds do not bundle or read `dev.json`; dev URL resolution is debug-only.
-- Does not automatically build or archive the Xcode project (left to the developer's CI/CD pipeline).
+## Single-Platform Build
 
 To build only iOS:
 
 ```bash
-nativite build --platform ios
+bunx nativite build --platform ios
 ```
