@@ -29,10 +29,11 @@ The generator creates a complete Android Gradle project from the user's configur
 │   │   │   └── mipmap-anydpi-v26/
 │   │   │       └── ic_launcher.xml     (adaptive icon)
 │   │   ├── assets/
-│   │   │   ├── dist/                   (web bundle, copied at build)
 │   │   │   └── dev.json                (dev URL, debug/dev only)
 │   │   └── AndroidManifest.xml
 │   └── build.gradle.kts
+│   └── build/generated/nativite/assets/
+│       └── dist/                       (web bundle, copied for release)
 ├── gradle/
 │   ├── wrapper/
 │   │   ├── gradle-wrapper.properties
@@ -107,6 +108,16 @@ Validation notes:
 - Compose enabled: `compose = true`
 - Release builds with ProGuard minification
 - Assets sourced from `src/main/assets`
+- Release asset merging depends on `copyNativiteWebBundle`, which copies
+  `../../dist-android` into `app/build/generated/nativite/assets/dist`
+- Release builds fail before asset merging if `dist-android` is missing, with
+  instructions to run `bunx nativite build --platform android`
+
+The generated Gradle project keeps production web assets in Gradle's build
+directory rather than mutating `src/main/assets`. Debug assets such as
+`src/main/assets/dev.json` remain source-controlled/generated project inputs,
+while the production bundle is copied from the latest web build whenever release
+assets are merged.
 
 ### Dependencies
 

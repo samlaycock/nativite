@@ -23,6 +23,12 @@ to create or update the Gradle project in `.nativite/android/`.
 Build and generate modes remove any stale debug `assets/dev.json` so release
 runtime code does not read a dev server URL.
 
+The generated Gradle release asset pipeline copies `dist-android/` into
+`app/build/generated/nativite/assets/dist/` before `mergeReleaseAssets`.
+Release builds fail with a clear message if the web bundle is missing, so run
+`bunx nativite build --platform android` before producing an APK or AAB from
+Android Studio.
+
 ### 3. Open and run in Android Studio
 
 Open the generated project and use Android Studio for emulator/device selection,

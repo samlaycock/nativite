@@ -11,6 +11,22 @@ export function buildGradleAppTemplate(
     alias(libs.plugins.kotlin.compose)
 }
 
+val nativiteWebBundleDir = rootProject.layout.projectDirectory.dir("../../dist-android")
+val nativiteGeneratedAssetsDir = layout.buildDirectory.dir("generated/nativite/assets")
+
+val copyNativiteWebBundle by tasks.registering(Copy::class) {
+    val bundlePath = nativiteWebBundleDir.asFile
+
+    doFirst {
+        if (!bundlePath.isDirectory) {
+            throw GradleException("Missing Android web bundle at \${bundlePath.path}. Run \`bunx nativite build --platform android\` before building release.")
+        }
+    }
+
+    from(nativiteWebBundleDir)
+    into(nativiteGeneratedAssetsDir.map { it.dir("dist") })
+}
+
 android {
     namespace = "${config.app.bundleId}"
     compileSdk = ${targetSdk}
@@ -53,7 +69,14 @@ android {
     sourceSets {
         getByName("main") {
             assets.srcDirs("src/main/assets")
+            assets.srcDir(nativiteGeneratedAssetsDir)
         }
+    }
+}
+
+tasks.configureEach {
+    if (name == "mergeReleaseAssets") {
+        dependsOn(copyNativiteWebBundle)
     }
 }
 
