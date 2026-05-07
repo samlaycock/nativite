@@ -1,6 +1,6 @@
 # iOS CSS Variables
 
-> Maps to: `src/ios/templates/nativite-vars.ts`
+> Maps to: `src/native/ios/runtime/NativiteVars.swift`
 > Generated file: `NativiteVars.swift`
 
 The CSS variables layer injects 70+ `--nv-*` CSS custom properties into the webview, keeping web content aware of native layout, device state, and accessibility settings in real time.

@@ -59,6 +59,9 @@
   },
   "scripts": {
     "test": "bun test",
+    "test:native": "bun run test:native:ios && bun run test:native:android",
+    "test:native:ios": "bun run scripts/test-native-ios.ts",
+    "test:native:android": "bun run scripts/test-native-android.ts",
     "lint": "oxlint . --type-aware",
     "lint:fix": "oxlint . --type-aware --fix",
     "fmt": "oxfmt .",

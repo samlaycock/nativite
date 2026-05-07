@@ -41,7 +41,7 @@ Developers author chrome using the Nativite JavaScript API:
 chrome(
   titleBar({ title: "Inbox", trailingItems: [button({ id: "compose", label: "Compose" })] }),
   navigation({ items: [{ id: "inbox", label: "Inbox", icon: "tray.fill" }], activeItem: "inbox" }),
-)
+);
 ```
 
 The `chrome()` callable internally compiles this to an NCLP snapshot before sending it over the transport. The host platform receives NCLP and renders it using whatever native primitives are appropriate for that platform.
@@ -196,12 +196,12 @@ The host must respond to each `shell.ready` with readiness for incoming snapshot
 
 All NCLP messages are JSON objects. Every message carries a `nativite` field set to the integer protocol version.
 
-| Direction       | Type               | Description                              |
-|-----------------|--------------------|------------------------------------------|
-| Host → Runtime  | `shell.ready`      | Capabilities advertisement               |
-| Runtime → Host  | `chrome.snapshot`  | Full chrome state replacement            |
-| Runtime → Host  | `chrome.patch`     | Incremental chrome state update          |
-| Host → Runtime  | `chrome.event`     | User interaction from host-rendered chrome |
+| Direction      | Type              | Description                                |
+| -------------- | ----------------- | ------------------------------------------ |
+| Host → Runtime | `shell.ready`     | Capabilities advertisement                 |
+| Runtime → Host | `chrome.snapshot` | Full chrome state replacement              |
+| Runtime → Host | `chrome.patch`    | Incremental chrome state update            |
+| Host → Runtime | `chrome.event`    | User interaction from host-rendered chrome |
 
 Bridge calls (capability plugins: camera, location, etc.) are a separate protocol and must not be mixed with NCLP messages.
 
@@ -267,7 +267,7 @@ Sent by the runtime to fully replace the current chrome state for a docId.
   "docId": "main",
   "revision": 1,
   "root": "root",
-  "nodes": { },
+  "nodes": {},
   "state": {
     "selected": {},
     "disabled": {},
@@ -728,6 +728,7 @@ Each `BarItem` compiles to a node. Node IDs are scoped: `"titleBar:leading:<item
 ```
 
 `style` → `role` mapping:
+
 - `"primary"` → `"primary"`
 - `"destructive"` → `"destructive"`
 - `"plain"` or absent → omit role
@@ -1157,6 +1158,7 @@ For anonymous nodes (title, search, spacers): use deterministic suffixes based o
 3. If `revision` is greater than the current revision, reconcile.
 
 A host may choose:
+
 - **Atomic replacement**: discard all current state and re-render from scratch.
 - **Incremental reconciliation**: diff the new snapshot against current state and update only what changed. Recommended.
 
@@ -1359,38 +1361,38 @@ The Nativite runtime maps incoming `chrome.event` messages to typed `ChromeEvent
 
 Hosts do not need to produce `ChromeEvent`-style strings — they only fire the generic events above. The mapping is performed in the runtime.
 
-| NCLP event | target prefix       | ChromeEvent type                  |
-|------------|---------------------|-----------------------------------|
-| `activate` | `titleBar:leading:` | `titleBar.leadingItemPressed`     |
-| `activate` | `titleBar:trailing:`| `titleBar.trailingItemPressed`    |
-| `activate` | `titleBar:*:menu:`  | `titleBar.menuItemPressed`        |
-| `back`     | `titleBar`          | `titleBar.backPressed`            |
-| `input`    | `titleBar:search`   | `titleBar.searchChanged`          |
-| `submit`   | `titleBar:search`   | `titleBar.searchSubmitted`        |
-| `cancel`   | `titleBar:search`   | `titleBar.searchCancelled`        |
-| `back`     | `navigation`        | `navigation.backPressed`          |
-| `select`   | `navigation`        | `navigation.itemPressed`          |
-| `input`    | `navigation:*`      | `navigation.searchChanged`        |
-| `submit`   | `navigation:*`      | `navigation.searchSubmitted`      |
-| `cancel`   | `navigation:*`      | `navigation.searchCancelled`      |
-| `activate` | `sidebarPanel:`     | `sidebarPanel.itemPressed`        |
-| `activate` | `toolbar:`          | `toolbar.itemPressed`             |
-| `activate` | `toolbar:*:menu:`   | `toolbar.menuItemPressed`         |
-| `activate` | `keyboard:`         | `keyboard.itemPressed`            |
-| `activate` | `menuBar:`          | `menuBar.itemPressed`             |
-| `open`     | `sheets:`           | `sheet.presented`                 |
-| `close`    | `sheets:`           | `sheet.dismissed`                 |
-| `detent`   | `sheets:`           | `sheet.detentChanged`             |
-| `error`    | `sheets:`           | `sheet.loadFailed`                |
-| `open`     | `drawers:`          | `drawer.presented`                |
-| `close`    | `drawers:`          | `drawer.dismissed`                |
-| `open`     | `appWindows:`       | `appWindow.presented`             |
-| `close`    | `appWindows:`       | `appWindow.dismissed`             |
-| `open`     | `popovers:`         | `popover.presented`               |
-| `close`    | `popovers:`         | `popover.dismissed`               |
-| `open`     | `tabBottomAccessory`| `tabBottomAccessory.presented`    |
-| `close`    | `tabBottomAccessory`| `tabBottomAccessory.dismissed`    |
-| `error`    | `tabBottomAccessory`| `tabBottomAccessory.loadFailed`   |
+| NCLP event | target prefix        | ChromeEvent type                |
+| ---------- | -------------------- | ------------------------------- |
+| `activate` | `titleBar:leading:`  | `titleBar.leadingItemPressed`   |
+| `activate` | `titleBar:trailing:` | `titleBar.trailingItemPressed`  |
+| `activate` | `titleBar:*:menu:`   | `titleBar.menuItemPressed`      |
+| `back`     | `titleBar`           | `titleBar.backPressed`          |
+| `input`    | `titleBar:search`    | `titleBar.searchChanged`        |
+| `submit`   | `titleBar:search`    | `titleBar.searchSubmitted`      |
+| `cancel`   | `titleBar:search`    | `titleBar.searchCancelled`      |
+| `back`     | `navigation`         | `navigation.backPressed`        |
+| `select`   | `navigation`         | `navigation.itemPressed`        |
+| `input`    | `navigation:*`       | `navigation.searchChanged`      |
+| `submit`   | `navigation:*`       | `navigation.searchSubmitted`    |
+| `cancel`   | `navigation:*`       | `navigation.searchCancelled`    |
+| `activate` | `sidebarPanel:`      | `sidebarPanel.itemPressed`      |
+| `activate` | `toolbar:`           | `toolbar.itemPressed`           |
+| `activate` | `toolbar:*:menu:`    | `toolbar.menuItemPressed`       |
+| `activate` | `keyboard:`          | `keyboard.itemPressed`          |
+| `activate` | `menuBar:`           | `menuBar.itemPressed`           |
+| `open`     | `sheets:`            | `sheet.presented`               |
+| `close`    | `sheets:`            | `sheet.dismissed`               |
+| `detent`   | `sheets:`            | `sheet.detentChanged`           |
+| `error`    | `sheets:`            | `sheet.loadFailed`              |
+| `open`     | `drawers:`           | `drawer.presented`              |
+| `close`    | `drawers:`           | `drawer.dismissed`              |
+| `open`     | `appWindows:`        | `appWindow.presented`           |
+| `close`    | `appWindows:`        | `appWindow.dismissed`           |
+| `open`     | `popovers:`          | `popover.presented`             |
+| `close`    | `popovers:`          | `popover.dismissed`             |
+| `open`     | `tabBottomAccessory` | `tabBottomAccessory.presented`  |
+| `close`    | `tabBottomAccessory` | `tabBottomAccessory.dismissed`  |
+| `error`    | `tabBottomAccessory` | `tabBottomAccessory.loadFailed` |
 
 The `id` field in the resulting `ChromeEvent` is the last path component of the NCLP target, e.g. `"titleBar:trailing:compose"` → `id: "compose"`.
 

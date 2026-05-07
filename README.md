@@ -340,8 +340,14 @@ bun run build
 bun run typecheck
 bun run lint
 bun run test
+bun run test:native:ios
+bun run test:native:android
 ```
 
 ## License
 
 MIT
+
+---
+
+![Nativite](branding/poster.png)

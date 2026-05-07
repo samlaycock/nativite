@@ -1,6 +1,6 @@
 # Android Main Activity
 
-> Maps to: `src/android/templates/main-activity.ts`
+> Maps to: `src/native/android/main-activity.ts`
 > Generated file: `MainActivity.kt`
 
 The `MainActivity` is the single entry point for the Android app, extending `ComponentActivity` for Jetpack Compose support.
@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
 
 ## Android Manifest Configuration
 
-> Maps to: `src/android/templates/android-manifest.ts`
+> Maps to: `src/native/android/android-manifest.ts`
 
 ```xml
 <activity

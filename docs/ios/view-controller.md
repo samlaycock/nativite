@@ -1,6 +1,6 @@
 # iOS View Controller
 
-> Maps to: `src/ios/templates/view-controller.ts`
+> Maps to: `src/native/ios/runtime/ViewController.swift`
 > Generated file: `ViewController.swift`
 
 The `ViewController` is the primary `UIViewController` that hosts the main `WKWebView` and orchestrates all native subsystems (bridge, chrome, vars, keyboard).

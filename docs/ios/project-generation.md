@@ -1,6 +1,6 @@
 # iOS Project Generation
 
-> Maps to: `src/ios/generator.ts`
+> Maps to: `src/native/ios/generator.ts`
 > Generated output: `.nativite/ios/` or `.nativite/macos/`
 
 The generator creates a complete Xcode project from the user's configuration. It supports both iOS and macOS targets via the `AppleTargetPlatform` parameter.
@@ -43,7 +43,7 @@ A force regeneration is triggered when:
 
 ## Xcode Project File (`project.pbxproj`)
 
-> Maps to: `src/ios/templates/pbxproj.ts`
+> Maps to: `src/native/ios/pbxproj.ts`
 
 Generates the Xcode project structure with:
 
@@ -66,7 +66,7 @@ Generates the Xcode project structure with:
 
 ## Info.plist
 
-> Maps to: `src/ios/templates/info-plist.ts`
+> Maps to: `src/native/ios/info-plist.ts`
 
 ### iOS
 
@@ -83,7 +83,7 @@ Generates the Xcode project structure with:
 
 ## App Icon
 
-> Maps to: `src/ios/templates/app-icon-contents.ts`
+> Maps to: `src/native/ios/app-icon-contents.ts`
 
 Uses Xcode 14+ single-image format:
 
@@ -93,7 +93,7 @@ Uses Xcode 14+ single-image format:
 
 ## Launch Screen (iOS Only)
 
-> Maps to: `src/ios/templates/launch-screen.ts`
+> Maps to: `src/native/ios/launch-screen.ts`
 
 Generates `LaunchScreen.storyboard` with:
 
@@ -103,7 +103,7 @@ Generates `LaunchScreen.storyboard` with:
 
 ## Plugin Registration
 
-> Maps to: `src/ios/templates/nativite-plugin-registrant.ts`
+> Maps to: `src/native/ios/nativite-plugin-registrant.ts`
 
 Auto-generated file that registers all resolved plugins on the bridge:
 

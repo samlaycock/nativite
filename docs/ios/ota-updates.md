@@ -1,6 +1,6 @@
 # iOS OTA Updates
 
-> Maps to: `src/ios/templates/ota-updater.ts`
+> Maps to: `src/native/ios/runtime/OTAUpdater.swift`
 > Generated file: `OTAUpdater.swift`
 
 The OTA (Over-the-Air) update system allows the web bundle to be updated without going through the App Store review process.

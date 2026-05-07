@@ -1,6 +1,6 @@
 # Android Chrome UI Components
 
-> Maps to: `src/android/templates/nativite-chrome.ts`
+> Maps to: `src/native/android/runtime/NativiteChrome.kt`
 > Generated file: `NativiteChrome.kt` (contains `NativiteApp` and all chrome composables)
 
 The Chrome UI layer is implemented entirely in Jetpack Compose with Material 3 components. The root `NativiteApp` composable reads from `bridge.chromeState` and renders all chrome areas.

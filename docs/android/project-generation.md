@@ -1,6 +1,6 @@
 # Android Project Generation
 
-> Maps to: `src/android/generator.ts`
+> Maps to: `src/native/android/generator.ts`
 > Generated output: `.nativite/android/`
 
 The generator creates a complete Android Gradle project from the user's configuration.
@@ -84,7 +84,7 @@ Validation notes:
 
 ### Version Catalog (`libs.versions.toml`)
 
-> Maps to: `src/android/templates/version-catalog.ts`
+> Maps to: `src/native/android/version-catalog.ts`
 
 | Dependency            | Version    |
 | --------------------- | ---------- |
@@ -99,7 +99,7 @@ Validation notes:
 
 ### App Build Configuration (`build.gradle.kts`)
 
-> Maps to: `src/android/templates/build-gradle-app.ts`
+> Maps to: `src/native/android/build-gradle-app.ts`
 
 - `namespace` and `applicationId` from bundleId
 - Java/Kotlin version 17
@@ -118,7 +118,7 @@ Validation notes:
 
 ### Gradle Properties
 
-> Maps to: `src/android/templates/gradle-properties.ts`
+> Maps to: `src/native/android/gradle-properties.ts`
 
 ```properties
 org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
@@ -129,7 +129,7 @@ android.nonTransitiveRClass=true
 
 ## App Icon
 
-> Maps to: `src/android/templates/app-icon.ts`
+> Maps to: `src/native/android/app-icon.ts`
 
 ### Adaptive Icon (API 26+)
 

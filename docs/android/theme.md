@@ -1,6 +1,6 @@
 # Android Theme
 
-> Maps to: `src/android/templates/nativite-theme.ts`
+> Maps to: `src/native/android/runtime/NativiteTheme.kt`
 > Generated file: `NativiteTheme.kt`
 
 The theme module wraps the app in a Material 3 theme with dynamic colour support.
@@ -33,7 +33,7 @@ Uses `isSystemInDarkTheme()` to automatically detect the system dark mode prefer
 
 ## XML Theme
 
-> Maps to: `src/android/templates/resources.ts`
+> Maps to: `src/native/android/resources.ts`
 
 The XML theme extends `android:Theme.Material.Light.NoActionBar` with:
 
