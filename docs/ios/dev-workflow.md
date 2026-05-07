@@ -43,9 +43,8 @@ bunx vite dev
 The Nativite Vite plugin writes `.nativite/dev.json` with the resolved dev server
 URL. Debug native builds can use that URL instead of loading the embedded bundle.
 
-The older `nativite dev` command can still generate, build, install, and launch a
-simulator app from the terminal, but it is not the default setup path. Prefer
-Xcode unless you specifically want terminal-owned simulator orchestration.
+Open and run the generated debug project in Xcode. Nativite does not own
+simulator orchestration from the CLI.
 
 ## User-Agent Based Routing
 

@@ -435,6 +435,22 @@ describe("NativiteConfigSchema", () => {
     ).toThrow();
   });
 
+  it("rejects legacy iOS terminal-owned dev options", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platforms: [
+          {
+            platform: "ios",
+            minimumVersion: "17.0",
+            target: "simulator",
+            simulator: "iPhone 17 Pro",
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
   it("rejects android.targetSdk when it is not an integer", () => {
     expect(() =>
       NativiteConfigSchema.parse({
@@ -458,23 +474,6 @@ describe("NativiteConfigSchema", () => {
     expect(result.app.buildNumber).toBe(1);
   });
 
-  it("maps iOS platform dev options into normalized dev config", () => {
-    const result = NativiteConfigSchema.parse({
-      ...baseUserConfig,
-      platforms: [
-        ios({
-          minimumVersion: "17.0",
-          target: "simulator",
-          simulator: "iPhone 17 Pro",
-        }),
-      ],
-    });
-
-    expect(minimumVersionFor(result, "ios")).toBe("17.0");
-    expect(result.dev?.target).toBe("simulator");
-    expect(result.dev?.simulator).toBe("iPhone 17 Pro");
-  });
-
   it("maps iOS errorOverlay dev option into normalized dev config", () => {
     const result = NativiteConfigSchema.parse({
       ...baseUserConfig,
@@ -488,8 +487,6 @@ describe("NativiteConfigSchema", () => {
 
     expect(minimumVersionFor(result, "ios")).toBe("17.0");
     expect(result.dev?.errorOverlay).toBe(true);
-    expect(result.dev?.target).toBe("simulator");
-    expect(result.dev?.simulator).toBe("iPhone 16 Pro");
   });
 
   it("rejects legacy app.platforms objects", () => {

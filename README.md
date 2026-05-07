@@ -150,7 +150,7 @@ URL so native debug builds can discover it.
 
 ### Built-in platform helpers
 
-- `ios({ minimumVersion?, target?, simulator?, errorOverlay?, overrides? })`
+- `ios({ minimumVersion?, errorOverlay?, overrides? })`
 - `macos({ minimumVersion?, overrides? })`
 - `android({ minSdk?, targetSdk?, overrides? })`
 
@@ -283,7 +283,6 @@ const electronPlatform = definePlatformPlugin({
   extensions: [".electron", ".desktop", ".native"],
   environments: ["electron"],
   async generate(ctx) {},
-  async dev(ctx) {},
   async build(ctx) {},
 });
 
@@ -335,9 +334,6 @@ to `true`.
 - `nativite/cli`: CLI entry point
 
 ## Troubleshooting
-
-- `Dev server: waiting for vite dev...`
-  - Start Vite first (`bunx vite dev`) or pass `--url`.
 
 - `No platforms are configured.`
   - Add at least one entry in `platforms`.

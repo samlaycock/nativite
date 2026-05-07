@@ -68,8 +68,6 @@ export type NativitePlugin = {
   [key: string]: unknown;
 };
 
-export type NativiteDevTarget = "simulator" | "device";
-
 export const DEFAULT_IOS_MINIMUM_VERSION = "17.0";
 export const DEFAULT_MACOS_MINIMUM_VERSION = "14.0";
 export const DEFAULT_ANDROID_MIN_SDK = 26;
@@ -104,17 +102,13 @@ export type NativiteRootConfigOverrides = {
     image?: string;
   };
   dev?: {
-    target: NativiteDevTarget;
-    simulator: string;
-    errorOverlay?: boolean;
+    errorOverlay: boolean;
   };
 };
 
 export type NativiteIOSPlatformConfig = {
   platform: "ios";
   minimumVersion: string;
-  target?: NativiteDevTarget;
-  simulator?: string;
   errorOverlay?: boolean;
   overrides?: NativiteRootConfigOverrides;
 };
@@ -164,12 +158,6 @@ export type NativitePlatformGenerateContext = NativitePlatformHookContext & {
   mode?: NativitePluginMode;
 };
 
-export type NativitePlatformDevContext = NativitePlatformHookContext & {
-  devUrl: string;
-  launchTarget?: NativiteDevTarget;
-  simulatorName?: string;
-};
-
 export type NativitePlatformBuildContext = NativitePlatformHookContext & {
   outDir: string;
   manifest: {
@@ -213,7 +201,6 @@ export type NativitePlatformPlugin = {
    * Optional hooks for third-party platform lifecycle integration.
    */
   generate?: (ctx: NativitePlatformGenerateContext) => void | Promise<void>;
-  dev?: (ctx: NativitePlatformDevContext) => void | Promise<void>;
   build?: (ctx: NativitePlatformBuildContext) => void | Promise<void>;
 };
 
@@ -222,7 +209,7 @@ export type NativitePlatformPlugin = {
  *
  * @example
  * platforms: [ios()]
- * platforms: [ios({ minimumVersion: "18.0", target: "simulator", simulator: "iPhone 17 Pro", errorOverlay: false })]
+ * platforms: [ios({ minimumVersion: "18.0", errorOverlay: false })]
  */
 export function ios(
   config: Partial<Omit<NativiteIOSPlatformConfig, "platform" | "minimumVersion">> &
@@ -309,7 +296,6 @@ function isPlatformPluginConfig(value: unknown): value is NativitePlatformPlugin
     extensions?: unknown;
     environments?: unknown;
     generate?: unknown;
-    dev?: unknown;
     build?: unknown;
   };
   if (typeof candidate.name !== "string" || candidate.name.length === 0) return false;
@@ -332,7 +318,6 @@ function isPlatformPluginConfig(value: unknown): value is NativitePlatformPlugin
     return false;
   }
   if (candidate.generate !== undefined && typeof candidate.generate !== "function") return false;
-  if (candidate.dev !== undefined && typeof candidate.dev !== "function") return false;
   if (candidate.build !== undefined && typeof candidate.build !== "function") return false;
   return true;
 }
@@ -368,9 +353,7 @@ type NormalizedNativiteConfig = {
     image?: string;
   };
   dev?: {
-    target: NativiteDevTarget;
-    simulator: string;
-    errorOverlay?: boolean;
+    errorOverlay: boolean;
   };
 };
 
@@ -436,9 +419,7 @@ const RootConfigOverridesSchema = z
       .optional(),
     dev: z
       .object({
-        target: z.enum(["simulator", "device"]),
-        simulator: z.string(),
-        errorOverlay: z.boolean().optional(),
+        errorOverlay: z.boolean(),
       })
       .optional(),
   })
@@ -568,6 +549,17 @@ export const NativiteConfigSchema = z
         }
       }
 
+      if (entry.platform === "ios") {
+        if (entry["target"] !== undefined || entry["simulator"] !== undefined) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["platforms"],
+            message:
+              'Built-in platform "ios" no longer supports terminal-owned dev target or simulator options.',
+          });
+        }
+      }
+
       if (entry.platform === "android") {
         if (
           entry["minSdk"] !== undefined &&
@@ -644,15 +636,10 @@ export const NativiteConfigSchema = z
       (entry): entry is NativiteIOSPlatformConfig => entry.platform === "ios",
     );
 
-    const hasIosDevOverrides =
-      iosPlatformConfig?.target !== undefined ||
-      iosPlatformConfig?.simulator !== undefined ||
-      iosPlatformConfig?.errorOverlay !== undefined;
+    const hasIosDevOverrides = iosPlatformConfig?.errorOverlay !== undefined;
     const normalizedDev = hasIosDevOverrides
       ? {
-          target: iosPlatformConfig?.target ?? "simulator",
-          simulator: iosPlatformConfig?.simulator ?? "iPhone 16 Pro",
-          errorOverlay: iosPlatformConfig?.errorOverlay,
+          errorOverlay: iosPlatformConfig.errorOverlay!,
         }
       : undefined;
 
