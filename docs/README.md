@@ -45,3 +45,4 @@ Technical reference for how nativite features are implemented on each native pla
 - [Inter-Webview Messaging](./shared/inter-webview-messaging.md) — Communication between main and child webviews
 - [Plugin System](./shared/plugin-system.md) — Third-party native capability registration
 - [Platform Comparison](./shared/platform-comparison.md) — Side-by-side feature comparison across platforms
+- [Package Exports](./shared/package-exports.md) — Published import and require entrypoint contract
