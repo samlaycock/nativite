@@ -45,7 +45,24 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
   ) {
     guard
       let body = message.body as? [String: Any],
-      let type = body["type"] as? String,
+      let type = body["type"] as? String
+    else {
+      replyHandler(nil, "Malformed bridge message")
+      return
+    }
+
+    if type == "chrome.snapshot" {
+      guard isMessageFromPrimaryWebView(message) else {
+        replyHandler(nil, nil)
+        return
+      }
+      chrome.viewController = viewController
+      chrome.applyState(NativiteBridge.legacyChromeState(fromSnapshot: body))
+      replyHandler(nil, nil)
+      return
+    }
+
+    guard
       type == "call",
       let namespace = body["namespace"] as? String,
       let method = body["method"] as? String
@@ -171,6 +188,62 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
         completion(.success(status))
       }
     }
+  }
+
+  private static func legacyChromeState(fromSnapshot snapshot: [String: Any]) -> [String: Any] {
+    guard let nodes = snapshot["nodes"] as? [String: [String: Any]],
+          let buckets = snapshot["state"] as? [String: [String: Any]],
+          let root = nodes["root"],
+          let rootChildren = root["children"] as? [String] else {
+      return [:]
+    }
+
+    let hidden = buckets["hidden"] ?? [:]
+    var state: [String: Any] = [:]
+
+    for area in rootChildren {
+      if area == "titleBar", let title = nodes["titleBar:title"] {
+        var titleBar: [String: Any] = title["meta"] as? [String: Any] ?? [:]
+        if let label = title["label"] { titleBar["title"] = label }
+        state["titleBar"] = titleBar
+      } else if area == "navigation", let node = nodes["navigation"] {
+        let children = node["children"] as? [String] ?? []
+        var navigation: [String: Any] = node["meta"] as? [String: Any] ?? [:]
+        navigation["items"] = children.compactMap { id -> [String: Any]? in
+          guard let child = nodes[id] else { return nil }
+          var item = child["meta"] as? [String: Any] ?? [:]
+          item["id"] = id.split(separator: ":").last.map(String.init) ?? id
+          item["label"] = child["label"]
+          item["icon"] = child["icon"]
+          return item
+        }
+        state["navigation"] = navigation
+      } else if area == "toolbar", let node = nodes["toolbar"] {
+        state["toolbar"] = node["meta"] as? [String: Any] ?? [:]
+      } else if area == "statusBar", let node = nodes["statusBar"] {
+        state["statusBar"] = node["meta"] as? [String: Any] ?? [:]
+      } else if area == "homeIndicator" {
+        state["homeIndicator"] = ["hidden": hidden["homeIndicator"] as? Bool ?? false]
+      } else if area == "keyboard", let node = nodes["keyboard"] {
+        state["keyboard"] = node["meta"] as? [String: Any] ?? [:]
+      } else if area == "tabBottomAccessory", let node = nodes["tabBottomAccessory"] {
+        var config = node["meta"] as? [String: Any] ?? [:]
+        config["presented"] = !(hidden["tabBottomAccessory"] as? Bool ?? false)
+        state["tabBottomAccessory"] = config
+      } else if ["sheets", "drawers", "appWindows", "popovers"].contains(area),
+                let group = nodes[area],
+                let children = group["children"] as? [String] {
+        var collection: [String: Any] = [:]
+        for id in children {
+          guard let node = nodes[id] else { continue }
+          var config = node["meta"] as? [String: Any] ?? [:]
+          config["presented"] = !(hidden[id] as? Bool ?? false)
+          collection[id.split(separator: ":").last.map(String.init) ?? id] = config
+        }
+        state[area] = collection
+      }
+    }
+    return state
   }
 }
 

@@ -118,6 +118,12 @@ class NativiteBridge {
             val msg = JSONObject(json)
             val id = if (msg.isNull("id")) null else msg.optString("id")
             val type = msg.optString("type")
+            if (type == "chrome.snapshot") {
+                mainHandler.post {
+                    chromeState.value = legacyChromeStateFromSnapshot(msg)
+                }
+                return
+            }
             if (type != "call") return
 
             val namespace = msg.optString("namespace")
@@ -338,6 +344,73 @@ class NativiteBridge {
                 }
             }
             return map
+        }
+
+        fun legacyChromeStateFromSnapshot(snapshot: JSONObject): Map<String, Any?> {
+            val nodes = snapshot.optJSONObject("nodes") ?: return emptyMap()
+            val buckets = snapshot.optJSONObject("state")
+            val hidden = buckets?.optJSONObject("hidden")
+            val rootChildren = nodes.optJSONObject("root")?.optJSONArray("children") ?: return emptyMap()
+            val state = mutableMapOf<String, Any?>()
+
+            for (i in 0 until rootChildren.length()) {
+                val area = rootChildren.optString(i)
+                when (area) {
+                    "titleBar" -> {
+                        val title = nodes.optJSONObject("titleBar:title") ?: continue
+                        val config = jsonToMap(title.optJSONObject("meta")).toMutableMap()
+                        if (title.has("label")) config["title"] = title.opt("label")
+                        state["titleBar"] = config
+                    }
+                    "navigation" -> {
+                        val node = nodes.optJSONObject("navigation") ?: continue
+                        val config = jsonToMap(node.optJSONObject("meta")).toMutableMap()
+                        val children = node.optJSONArray("children") ?: org.json.JSONArray()
+                        val items = mutableListOf<Map<String, Any?>>()
+                        for (j in 0 until children.length()) {
+                            val nodeId = children.optString(j)
+                            val child = nodes.optJSONObject(nodeId) ?: continue
+                            val item = jsonToMap(child.optJSONObject("meta")).toMutableMap()
+                            item["id"] = nodeId.substringAfterLast(":")
+                            item["label"] = child.opt("label")
+                            item["icon"] = child.opt("icon")
+                            items.add(item)
+                        }
+                        config["items"] = items
+                        state["navigation"] = config
+                    }
+                    "toolbar" -> {
+                        state["toolbar"] = jsonToMap(nodes.optJSONObject("toolbar")?.optJSONObject("meta"))
+                    }
+                    "statusBar" -> {
+                        state["statusBar"] = jsonToMap(nodes.optJSONObject("statusBar")?.optJSONObject("meta"))
+                    }
+                    "homeIndicator" -> {
+                        state["homeIndicator"] = mapOf("hidden" to (hidden?.optBoolean("homeIndicator") ?: false))
+                    }
+                    "keyboard" -> {
+                        state["keyboard"] = jsonToMap(nodes.optJSONObject("keyboard")?.optJSONObject("meta"))
+                    }
+                    "tabBottomAccessory" -> {
+                        val config = jsonToMap(nodes.optJSONObject("tabBottomAccessory")?.optJSONObject("meta")).toMutableMap()
+                        config["presented"] = !(hidden?.optBoolean("tabBottomAccessory") ?: false)
+                        state["tabBottomAccessory"] = config
+                    }
+                    "sheets", "drawers", "appWindows", "popovers" -> {
+                        val group = nodes.optJSONObject(area) ?: continue
+                        val children = group.optJSONArray("children") ?: org.json.JSONArray()
+                        val collection = mutableMapOf<String, Any?>()
+                        for (j in 0 until children.length()) {
+                            val nodeId = children.optString(j)
+                            val config = jsonToMap(nodes.optJSONObject(nodeId)?.optJSONObject("meta")).toMutableMap()
+                            config["presented"] = !(hidden?.optBoolean(nodeId) ?: false)
+                            collection[nodeId.substringAfterLast(":")] = config
+                        }
+                        state[area] = collection
+                    }
+                }
+            }
+            return state
         }
 
         private fun jsonArrayToList(array: org.json.JSONArray): List<Any?> {

@@ -34,6 +34,7 @@ function removeNativeHandler(): void {
 import {
   _drainFlush,
   _handleIncoming,
+  _receiveNativeMessage,
   _resetChromeState,
   appWindow,
   button,
@@ -61,6 +62,27 @@ beforeEach(() => {
   nativeMessages = [];
   installNativeHandler();
   _resetChromeState();
+  _receiveNativeMessage({
+    nativite: 2,
+    type: "shell.ready",
+    platform: "ios",
+    version: "test",
+    areas: [
+      "titleBar",
+      "navigation",
+      "toolbar",
+      "sidebarPanel",
+      "statusBar",
+      "homeIndicator",
+      "keyboard",
+      "menuBar",
+      "tabBottomAccessory",
+      "sheets",
+      "drawers",
+      "appWindows",
+      "popovers",
+    ],
+  });
 });
 
 afterEach(() => {
@@ -72,7 +94,186 @@ afterEach(() => {
 /** Extract the chrome state from the last native message. */
 function lastState(): unknown {
   const msg = nativeMessages[nativeMessages.length - 1]!;
-  return msg["args"];
+  if (msg["type"] !== "chrome.snapshot") return msg["args"];
+  return legacyStateFromSnapshot(msg);
+}
+
+function lastSnapshot(): NativeMessage {
+  return nativeMessages[nativeMessages.length - 1]!;
+}
+
+function stringValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
+function legacyStateFromSnapshot(snapshot: NativeMessage): Record<string, unknown> {
+  const nodes = snapshot["nodes"] as Record<string, Record<string, unknown>>;
+  const buckets = snapshot["state"] as {
+    selected: Record<string, unknown>;
+    disabled: Record<string, unknown>;
+    hidden: Record<string, unknown>;
+    badges: Record<string, unknown>;
+    values: Record<string, unknown>;
+  };
+  const state: Record<string, unknown> = {};
+  const root = nodes["root"]!;
+  const rootChildren = root["children"] as string[];
+
+  for (const area of rootChildren) {
+    if (area === "titleBar") {
+      const title = nodes["titleBar:title"]!;
+      const meta = (title["meta"] ?? {}) as Record<string, unknown>;
+      const bar = nodes["titleBar"]!;
+      const leadingItems = ((bar["children"] as string[]) ?? [])
+        .filter((id) => id.startsWith("titleBar:leading:"))
+        .map((id) => legacyBarItem(nodes, id));
+      const trailingItems = ((bar["children"] as string[]) ?? [])
+        .filter((id) => id.startsWith("titleBar:trailing:"))
+        .map((id) => legacyBarItem(nodes, id));
+      state["titleBar"] = {
+        ...(title["label"] !== undefined ? { title: title["label"] } : {}),
+        ...meta,
+        ...(leadingItems.length > 0 ? { leadingItems } : {}),
+        ...(trailingItems.length > 0 ? { trailingItems } : {}),
+      };
+      continue;
+    }
+    if (area === "navigation") {
+      const node = nodes["navigation"]!;
+      const children = node["children"] as string[];
+      state["navigation"] = {
+        items: children.map((id) => {
+          const child = nodes[id]!;
+          return {
+            id: id.split(":").at(-1),
+            label: child["label"],
+            icon: child["icon"],
+            ...((child["meta"] ?? {}) as Record<string, unknown>),
+          };
+        }),
+        ...Object.fromEntries(
+          Object.entries((node["meta"] ?? {}) as Record<string, unknown>).filter(
+            ([key, value]) => !(key === "style" && value === "auto"),
+          ),
+        ),
+        ...(buckets.selected["navigation"]
+          ? { activeItem: stringValue(buckets.selected["navigation"]).split(":").at(-1) }
+          : {}),
+        ...(nodes["navigation:search-field"]
+          ? {
+              searchBar: {
+                ...((nodes["navigation:search-field"]!["meta"] ?? {}) as Record<string, unknown>),
+                ...(buckets.values["navigation:search-field"] !== undefined
+                  ? { value: buckets.values["navigation:search-field"] }
+                  : {}),
+              },
+            }
+          : {}),
+      };
+      continue;
+    }
+    if (area === "toolbar") {
+      const node = nodes["toolbar"]!;
+      const children = node["children"] as string[];
+      const toolbar: Record<string, unknown> = {
+        ...((node["meta"] ?? {}) as Record<string, unknown>),
+        ...(buckets.hidden["toolbar"] ? { hidden: true } : {}),
+      };
+      if (toolbar["toolbarId"] !== undefined) {
+        toolbar["id"] = toolbar["toolbarId"];
+        delete toolbar["toolbarId"];
+      }
+      if (children.length > 0 && children.every((id) => id.startsWith("toolbar:group-"))) {
+        state["toolbar"] = {
+          ...toolbar,
+          groups: children.map((id) => {
+            const group = nodes[id]!;
+            return {
+              placement: group["placement"],
+              items: ((group["children"] as string[]) ?? []).map((itemId) =>
+                legacyBarItem(nodes, itemId),
+              ),
+            };
+          }),
+        };
+      } else {
+        state["toolbar"] = {
+          ...toolbar,
+          items: children.map((id) => legacyBarItem(nodes, id)),
+        };
+      }
+      continue;
+    }
+    if (area === "statusBar") {
+      state["statusBar"] = { ...((nodes["statusBar"]!["meta"] ?? {}) as Record<string, unknown>) };
+      continue;
+    }
+    if (area === "tabBottomAccessory") {
+      state["tabBottomAccessory"] = {
+        ...((nodes["tabBottomAccessory"]!["meta"] ?? {}) as Record<string, unknown>),
+        presented: !buckets.hidden["tabBottomAccessory"],
+      };
+      continue;
+    }
+    if (["sheets", "drawers", "appWindows", "popovers"].includes(area)) {
+      const collection: Record<string, unknown> = {};
+      const group = nodes[area]!;
+      for (const id of group["children"] as string[]) {
+        const name = id.split(":").at(-1)!;
+        collection[name] = {
+          ...((nodes[id]!["meta"] ?? {}) as Record<string, unknown>),
+          ...(buckets.hidden[id] ? { presented: false } : {}),
+        };
+      }
+      state[area] = collection;
+      continue;
+    }
+    state[area] = {};
+  }
+  return state;
+}
+
+function legacyBarItem(nodes: Record<string, Record<string, unknown>>, id: string): unknown {
+  const node = nodes[id]!;
+  if (node["kind"] === "spacer") {
+    const meta = (node["meta"] ?? {}) as Record<string, unknown>;
+    if (meta["fixed"]) return { type: "fixed-space", width: meta["width"] };
+    return { type: "flexible-space" };
+  }
+  const meta = (node["meta"] ?? {}) as Record<string, unknown>;
+  return {
+    id: id.split(":").at(-1),
+    ...(node["label"] !== undefined ? { label: node["label"] } : {}),
+    ...(node["icon"] !== undefined ? { icon: node["icon"] } : {}),
+    ...(node["role"] === "primary" || node["role"] === "destructive"
+      ? { style: node["role"] }
+      : {}),
+    ...(meta["tint"] !== undefined ? { tint: meta["tint"] } : {}),
+    ...(meta["badge"] !== undefined ? { badge: meta["badge"] } : {}),
+    ...(meta["customization"] !== undefined ? { customization: meta["customization"] } : {}),
+    ...(node["children"] ? { menu: legacyMenu(nodes, (node["children"] as string[])[0]!) } : {}),
+  };
+}
+
+function legacyMenu(nodes: Record<string, Record<string, unknown>>, id: string): unknown {
+  const node = nodes[id]!;
+  return {
+    ...(node["label"] !== undefined ? { title: node["label"] } : {}),
+    items: ((node["children"] as string[]) ?? []).map((itemId) => {
+      const item = nodes[itemId]!;
+      return {
+        id: itemId.split(":").at(-1),
+        label: item["label"],
+        ...(item["icon"] !== undefined ? { icon: item["icon"] } : {}),
+        ...(item["role"] === "destructive" ? { style: "destructive" } : {}),
+        ...(((item["meta"] ?? {}) as Record<string, unknown>)["checked"] !== undefined
+          ? { checked: ((item["meta"] ?? {}) as Record<string, unknown>)["checked"] }
+          : {}),
+      };
+    }),
+  };
 }
 
 /** Simulate an incoming native event via the chrome event dispatcher. */
@@ -252,6 +453,51 @@ describe("item constructors", () => {
 // ─── chrome() callable ──────────────────────────────────────────────────────
 
 describe("chrome()", () => {
+  it("waits for shell.ready before sending the first chrome.snapshot", () => {
+    _resetChromeState();
+    postMessage.mockClear();
+    nativeMessages = [];
+
+    chrome(titleBar({ title: "Inbox" }));
+    _drainFlush();
+    expect(postMessage).not.toHaveBeenCalled();
+
+    _receiveNativeMessage({
+      nativite: 2,
+      type: "shell.ready",
+      platform: "ios",
+      version: "test",
+      areas: ["titleBar"],
+    });
+    _drainFlush();
+    expect(lastSnapshot()).toMatchObject({
+      nativite: 2,
+      type: "chrome.snapshot",
+      docId: "main",
+      root: "root",
+    });
+  });
+
+  it("filters chrome.snapshot areas using shell.ready", () => {
+    _resetChromeState();
+    postMessage.mockClear();
+    nativeMessages = [];
+    _receiveNativeMessage({
+      nativite: 2,
+      type: "shell.ready",
+      platform: "ios",
+      version: "test",
+      areas: ["titleBar"],
+    });
+
+    chrome(titleBar({ title: "Inbox" }), statusBar({ style: "auto" }));
+    _drainFlush();
+    const snapshot = lastSnapshot();
+    const nodes = snapshot["nodes"] as Record<string, unknown>;
+    expect(nodes["titleBar"]).toBeDefined();
+    expect(nodes["statusBar"]).toBeUndefined();
+  });
+
   it("sends the declared chrome areas to native", () => {
     chrome(titleBar({ title: "Inbox" }), statusBar({ style: "auto" }));
     _drainFlush();
@@ -549,6 +795,24 @@ describe("chrome()", () => {
 // ─── chrome.on — specific event type ────────────────────────────────────────
 
 describe("chrome.on(type, handler)", () => {
+  it("maps incoming NCLP chrome.event values to ChromeEvent handlers", () => {
+    const handler = mock(() => {});
+    const unsub = chrome.on("navigation.itemPressed", handler);
+    _receiveNativeMessage({
+      nativite: 2,
+      type: "chrome.event",
+      docId: "main",
+      event: "select",
+      target: "navigation",
+      value: "navigation:inbox",
+    });
+    expect(handler).toHaveBeenCalledWith({
+      type: "navigation.itemPressed",
+      id: "inbox",
+    });
+    unsub();
+  });
+
   it("fires handler when the matching event arrives", () => {
     const handler = mock(() => {});
     const unsub = chrome.on("titleBar.trailingItemPressed", handler);
@@ -1105,8 +1369,10 @@ describe("unified ButtonItem across chrome areas", () => {
     _drainFlush();
     const toolbarState = lastState() as Record<string, unknown>;
 
-    expect((titleBarState["titleBar"] as { trailingItems: unknown[] }).trailingItems[0]).toBe(btn);
-    expect((toolbarState["toolbar"] as { items: unknown[] }).items[0]).toBe(btn);
+    expect((titleBarState["titleBar"] as { trailingItems: unknown[] }).trailingItems[0]).toEqual(
+      btn,
+    );
+    expect((toolbarState["toolbar"] as { items: unknown[] }).items[0]).toEqual(btn);
   });
 
   it("flexible-space and fixed-space work in toolbar items", () => {

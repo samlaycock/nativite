@@ -47,7 +47,51 @@ Each `chrome()` call returns a cleanup function. When called, it removes that la
 | `appWindow(name, config)` | Separate window (macOS)           | Yes    |
 | `popover(name, config)`   | Floating popover                  | Yes    |
 
-Named areas (sheets, drawers, etc.) are grouped under plural keys in the state (`sheets`, `drawers`, `appWindows`, `popovers`).
+Named areas (sheets, drawers, etc.) are grouped under plural NCLP containers (`sheets`, `drawers`, `appWindows`, `popovers`).
+
+## NCLP v2 Wire Format
+
+The public authoring API still accepts `chrome()`, `titleBar()`, `navigation()`, and the other factory descriptors. Internally, the runtime compiles the merged `ChromeState` into Native Chrome Layout Protocol v2 messages before crossing the native transport.
+
+The host must first send:
+
+```json
+{
+  "nativite": 2,
+  "type": "shell.ready",
+  "platform": "ios",
+  "version": "1.0.0",
+  "areas": ["titleBar", "navigation", "toolbar"]
+}
+```
+
+The runtime does not send chrome documents until `shell.ready` has been received. The `areas` list is used as a capability filter, so unsupported areas are omitted from the compiled snapshot.
+
+Chrome updates are sent as full snapshots:
+
+```json
+{
+  "nativite": 2,
+  "type": "chrome.snapshot",
+  "docId": "main",
+  "revision": 1,
+  "root": "root",
+  "nodes": {
+    "root": { "id": "root", "kind": "window", "children": ["titleBar"] },
+    "titleBar": { "id": "titleBar", "kind": "titleBar", "children": ["titleBar:title"] },
+    "titleBar:title": { "id": "titleBar:title", "kind": "title", "label": "Inbox" }
+  },
+  "state": {
+    "selected": {},
+    "disabled": {},
+    "hidden": {},
+    "badges": {},
+    "values": {}
+  }
+}
+```
+
+Snapshots use monotonically increasing revisions and stable node IDs following `NCLP.md`.
 
 ## Event System
 
@@ -68,6 +112,8 @@ chrome.on((event) => {
 ```
 
 Both return an unsubscribe function.
+
+Native hosts send interaction events as NCLP `chrome.event` envelopes. The runtime maps generic events such as `activate`, `select`, `back`, and `input` back to the existing `ChromeEvent` union, so no public JavaScript event names changed.
 
 ### Event Types
 
