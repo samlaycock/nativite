@@ -535,11 +535,11 @@ A split-view container. Implementors may restrict valid child counts.
 
 #### `tab`
 
-A selectable tab item. Must not declare children.
+A selectable tab item. Usually leaf. May declare a single `search` child when the tab represents a search-role navigation item.
 
 #### `action`
 
-An actionable control: a button, toolbar item, or menu command. Must not declare children.
+An actionable control: a button, toolbar item, or menu command. Usually leaf. May declare a single `menu` child when the action presents a submenu.
 
 #### `item`
 
@@ -581,6 +581,8 @@ Hosts should enforce minimal kind constraints:
 - `toolbar.children` should contain `action`, `search`, `spacer`, `separator`, or `group`.
 - `titleBar.children` should contain `title`, `action`, `search`, `spacer`, or `separator`.
 - `keyboard.children` should contain `action`, `spacer`, or `separator`.
+- `tab.children`, when present, should contain `search` nodes.
+- `action.children`, when present, should contain `menu` nodes.
 - Leaf kinds must not declare `children`.
 
 Hosts may warn on semantically unusual structures but should still accept them where safe.
@@ -657,7 +659,7 @@ A valid NCLP snapshot must satisfy:
 7. Node IDs are unique within the document.
 8. Every ID in a node's `children` references an existing node.
 9. The node graph is acyclic.
-10. Leaf kinds do not declare `children`.
+10. Strict leaf kinds do not declare `children`. `tab` and `action` may declare the constrained child relationships documented in kind constraints.
 11. Container kinds declare `children`, even if empty.
 
 Hosts should reject malformed snapshots rather than partially applying them.

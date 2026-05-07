@@ -55,7 +55,13 @@ describe("NativiteBridge.swift", () => {
     expect(swift).toContain('snapshot["type"] as? String == "chrome.snapshot"');
     expect(swift).toContain("revision <= lastRevision");
     expect(swift).toContain('state["selected"] is [String: Any]');
-    expect(swift).toContain("nodes[child] == nil");
+    expect(swift).toContain("nodes.count <= Self.maxChromeSnapshotNodes");
+    expect(swift).toContain("children.count > Self.maxChromeSnapshotChildren");
+    expect(swift).toContain("Self.nclpLeafKinds.contains(kind)");
+    expect(swift).toContain("isReachableAcyclicGraph(rootId: rootId, nodes: nodes)");
+    expect(swift).toContain("visited.count == nodes.count");
+    expect(swift).toContain('case "action":');
+    expect(swift).toContain('return childKind == "menu"');
   });
 
   it("preserves NCLP node identity through the legacy chrome adapter", () => {

@@ -47,7 +47,12 @@ describe("NativiteBridge.kt", () => {
     expect(kt).toContain('if (snapshot.optString("type") != "chrome.snapshot") return false');
     expect(kt).toContain("revision <= lastRevision");
     expect(kt).toContain("state.optJSONObject(bucket) == null");
-    expect(kt).toContain("nodes.optJSONObject(children.optString(i)) == null");
+    expect(kt).toContain("nodes.length() > MAX_CHROME_SNAPSHOT_NODES");
+    expect(kt).toContain("children.length() > MAX_CHROME_SNAPSHOT_CHILDREN");
+    expect(kt).toContain("nclpLeafKinds.contains(kind)");
+    expect(kt).toContain("isReachableAcyclicGraph(rootId, nodes)");
+    expect(kt).toContain("visited.size == nodes.length()");
+    expect(kt).toContain('"action" -> childKind == "menu"');
   });
 
   it("preserves NCLP node identity through the legacy chrome adapter", () => {

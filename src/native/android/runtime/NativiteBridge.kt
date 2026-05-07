@@ -24,6 +24,7 @@ class NativiteBridge {
     private val lastChromeRevisionByDocId = mutableMapOf<String, Int>()
     private val childWebViews = mutableMapOf<String, WebView>()
     private val childPorts = mutableMapOf<String, WebMessagePortCompat>()
+    private val nclpLeafKinds = setOf("item", "title", "search", "separator", "spacer", "statusBar", "homeIndicator")
     private data class ChromeGeometry(
         val navHeightPx: Int = 0,
         val navVisible: Boolean = false,
@@ -199,6 +200,7 @@ class NativiteBridge {
         val rootId = snapshot.optString("root")
         if (rootId.isEmpty()) return false
         val nodes = snapshot.optJSONObject("nodes") ?: return false
+        if (nodes.length() > MAX_CHROME_SNAPSHOT_NODES) return false
         val state = snapshot.optJSONObject("state") ?: return false
         for (bucket in listOf("selected", "disabled", "hidden", "badges", "values")) {
             if (state.optJSONObject(bucket) == null) return false
@@ -211,17 +213,66 @@ class NativiteBridge {
         while (keys.hasNext()) {
             val key = keys.next()
             val node = nodes.optJSONObject(key) ?: return false
+            val kind = node.optString("kind")
+            if (key.isEmpty()) return false
             if (node.optString("id") != key) return false
-            if (node.optString("kind").isEmpty()) return false
+            if (kind.isEmpty()) return false
+            val children = node.optJSONArray("children")
+            if (children != null) {
+                if (children.length() > MAX_CHROME_SNAPSHOT_CHILDREN) return false
+                if (nclpLeafKinds.contains(kind)) return false
+                for (i in 0 until children.length()) {
+                    val child = nodes.optJSONObject(children.optString(i)) ?: return false
+                    if (!allowsChildKind(kind, child.optString("kind"))) return false
+                }
+            } else if (requiresChildren(kind)) {
+                return false
+            }
+        }
+        if (!isReachableAcyclicGraph(rootId, nodes)) return false
+        lastChromeRevisionByDocId[docId] = revision
+        return true
+    }
+
+    private fun requiresChildren(kind: String): Boolean {
+        return setOf("window", "titleBar", "toolbar", "tabs", "sidebar", "menuBar", "menu", "section", "group", "keyboard", "stack", "split").contains(kind)
+    }
+
+    private fun allowsChildKind(parentKind: String, childKind: String): Boolean {
+        return when (parentKind) {
+            "tabs" -> childKind == "tab"
+            "tab" -> childKind == "search"
+            "action" -> childKind == "menu"
+            "menuBar" -> childKind == "menu"
+            "menu" -> setOf("action", "item", "separator", "section", "group").contains(childKind)
+            "toolbar" -> setOf("action", "search", "spacer", "separator", "group").contains(childKind)
+            "titleBar" -> setOf("title", "action", "search", "spacer", "separator").contains(childKind)
+            "keyboard" -> setOf("action", "spacer", "separator").contains(childKind)
+            else -> true
+        }
+    }
+
+    private fun isReachableAcyclicGraph(rootId: String, nodes: JSONObject): Boolean {
+        val visiting = mutableSetOf<String>()
+        val visited = mutableSetOf<String>()
+
+        fun visit(id: String): Boolean {
+            if (visiting.contains(id)) return false
+            if (visited.contains(id)) return true
+            val node = nodes.optJSONObject(id) ?: return false
+            visiting.add(id)
             val children = node.optJSONArray("children")
             if (children != null) {
                 for (i in 0 until children.length()) {
-                    if (nodes.optJSONObject(children.optString(i)) == null) return false
+                    if (!visit(children.optString(i))) return false
                 }
             }
+            visiting.remove(id)
+            visited.add(id)
+            return true
         }
-        lastChromeRevisionByDocId[docId] = revision
-        return true
+
+        return visit(rootId) && visited.size == nodes.length()
     }
 
     // ─── Event dispatch ─────────────────────────────────────────────────────
@@ -322,6 +373,9 @@ class NativiteBridge {
     }
 
     companion object {
+        private const val MAX_CHROME_SNAPSHOT_NODES = 500
+        private const val MAX_CHROME_SNAPSHOT_CHILDREN = 200
+
         private fun replyJson(id: String, result: Any?): String {
             val obj = JSONObject().apply {
                 put("id", id)

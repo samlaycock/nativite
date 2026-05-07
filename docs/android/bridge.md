@@ -101,7 +101,7 @@ Cleans up ports and references when a webview is destroyed.
 
 | Handler                                          | Description                                                                                                      |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `chrome.snapshot`                                | Validates and revision-gates an NCLP v2 snapshot, then converts it to the current native chrome state model      |
+| `chrome.snapshot`                                | Validates, graph-checks, and revision-gates an NCLP v2 snapshot, then converts it to the current native model    |
 | `__chrome__.__chrome_splash_hide__`              | Sets `splashKeepOnScreen = false` to dismiss the splash. See [Splash Screen Control](../shared/splash-screen.md) |
 | `__chrome__.__chrome_messaging_post_to_parent__` | Routes message from child to main webview                                                                        |
 | `__chrome__.__chrome_messaging_post_to_child__`  | Routes message from main to named child                                                                          |
