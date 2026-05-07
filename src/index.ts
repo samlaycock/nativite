@@ -70,6 +70,11 @@ export type NativitePlugin = {
 
 export type NativiteDevTarget = "simulator" | "device";
 
+export const DEFAULT_IOS_MINIMUM_VERSION = "17.0";
+export const DEFAULT_MACOS_MINIMUM_VERSION = "14.0";
+export const DEFAULT_ANDROID_MIN_SDK = 26;
+export const DEFAULT_ANDROID_TARGET_SDK = 35;
+
 export type NativiteRootConfigOverrides = {
   app?: Partial<{
     name: string;
@@ -216,36 +221,42 @@ export type NativitePlatformPlugin = {
  * Define iOS platform configuration in `nativite.config.ts`.
  *
  * @example
- * platforms: [ios({ minimumVersion: "17.0", target: "simulator", simulator: "iPhone 17 Pro", errorOverlay: false })]
+ * platforms: [ios()]
+ * platforms: [ios({ minimumVersion: "18.0", target: "simulator", simulator: "iPhone 17 Pro", errorOverlay: false })]
  */
 export function ios(
-  config: Omit<NativiteIOSPlatformConfig, "platform">,
+  config: Partial<Omit<NativiteIOSPlatformConfig, "platform" | "minimumVersion">> &
+    Pick<Partial<NativiteIOSPlatformConfig>, "minimumVersion"> = {},
 ): NativiteIOSPlatformConfig {
-  return { platform: "ios", ...config };
+  return { platform: "ios", minimumVersion: DEFAULT_IOS_MINIMUM_VERSION, ...config };
 }
 
 /**
  * Define macOS platform configuration in `nativite.config.ts`.
  *
  * @example
- * platforms: [macos({ minimumVersion: "14.0" })]
+ * platforms: [macos()]
+ * platforms: [macos({ minimumVersion: "15.0" })]
  */
 export function macos(
-  config: Omit<NativiteMacOSPlatformConfig, "platform">,
+  config: Partial<Omit<NativiteMacOSPlatformConfig, "platform" | "minimumVersion">> &
+    Pick<Partial<NativiteMacOSPlatformConfig>, "minimumVersion"> = {},
 ): NativiteMacOSPlatformConfig {
-  return { platform: "macos", ...config };
+  return { platform: "macos", minimumVersion: DEFAULT_MACOS_MINIMUM_VERSION, ...config };
 }
 
 /**
  * Define Android platform configuration in `nativite.config.ts`.
  *
  * @example
- * platforms: [android({ minSdk: 26 })]
+ * platforms: [android()]
+ * platforms: [android({ minSdk: 28 })]
  */
 export function android(
-  config: Omit<NativiteAndroidPlatformConfig, "platform">,
+  config: Partial<Omit<NativiteAndroidPlatformConfig, "platform" | "minSdk">> &
+    Pick<Partial<NativiteAndroidPlatformConfig>, "minSdk"> = {},
 ): NativiteAndroidPlatformConfig {
-  return { platform: "android", ...config };
+  return { platform: "android", minSdk: DEFAULT_ANDROID_MIN_SDK, ...config };
 }
 
 /**
@@ -545,21 +556,27 @@ export const NativiteConfigSchema = z
 
     for (const entry of config.platforms ?? []) {
       if (entry.platform === "ios" || entry.platform === "macos") {
-        if (typeof entry["minimumVersion"] !== "string" || entry["minimumVersion"].length === 0) {
+        if (
+          entry["minimumVersion"] !== undefined &&
+          (typeof entry["minimumVersion"] !== "string" || entry["minimumVersion"].length === 0)
+        ) {
           ctx.addIssue({
             code: "custom",
             path: ["platforms"],
-            message: `Built-in platform "${entry.platform}" requires a string minimumVersion.`,
+            message: `Built-in platform "${entry.platform}" minimumVersion must be a non-empty string when provided.`,
           });
         }
       }
 
       if (entry.platform === "android") {
-        if (typeof entry["minSdk"] !== "number" || !Number.isInteger(entry["minSdk"])) {
+        if (
+          entry["minSdk"] !== undefined &&
+          (typeof entry["minSdk"] !== "number" || !Number.isInteger(entry["minSdk"]))
+        ) {
           ctx.addIssue({
             code: "custom",
             path: ["platforms"],
-            message: 'Built-in platform "android" requires an integer minSdk.',
+            message: 'Built-in platform "android" minSdk must be an integer when provided.',
           });
         }
         if (entry["targetSdk"] !== undefined && !Number.isInteger(entry["targetSdk"])) {
@@ -601,7 +618,28 @@ export const NativiteConfigSchema = z
     }
   })
   .transform<NormalizedNativiteConfig>((config) => {
-    const normalizedPlatformEntries = [...(config.platforms ?? [])] as NativitePlatformConfig[];
+    const normalizedPlatformEntries = (config.platforms ?? []).map((entry) => {
+      if (entry.platform === "ios") {
+        return {
+          ...entry,
+          minimumVersion: entry["minimumVersion"] ?? DEFAULT_IOS_MINIMUM_VERSION,
+        } as NativiteIOSPlatformConfig;
+      }
+      if (entry.platform === "macos") {
+        return {
+          ...entry,
+          minimumVersion: entry["minimumVersion"] ?? DEFAULT_MACOS_MINIMUM_VERSION,
+        } as NativiteMacOSPlatformConfig;
+      }
+      if (entry.platform === "android") {
+        return {
+          ...entry,
+          minSdk: entry["minSdk"] ?? DEFAULT_ANDROID_MIN_SDK,
+          targetSdk: entry["targetSdk"] ?? DEFAULT_ANDROID_TARGET_SDK,
+        } as NativiteAndroidPlatformConfig;
+      }
+      return entry as NativitePlatformConfig;
+    });
     const iosPlatformConfig = normalizedPlatformEntries.find(
       (entry): entry is NativiteIOSPlatformConfig => entry.platform === "ios",
     );

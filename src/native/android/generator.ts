@@ -3,9 +3,10 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { NativiteConfig } from "../../index.ts";
 import type { NativitePluginMode } from "../../index.ts";
+import type { NativiteConfig } from "../../index.ts";
 
+import { DEFAULT_ANDROID_MIN_SDK, DEFAULT_ANDROID_TARGET_SDK } from "../../index.ts";
 import { resolveConfigForPlatform } from "../../platforms/registry.ts";
 import { resolveNativitePlugins } from "../../plugins/resolve.ts";
 import { androidManifestTemplate } from "./android-manifest.ts";
@@ -80,8 +81,11 @@ export async function generateProject(
   }
 
   const androidPlatform = (config.platforms ?? []).find((p) => p.platform === "android");
-  const minSdk = (androidPlatform as { minSdk?: number } | undefined)?.minSdk ?? 26;
-  const targetSdk = (androidPlatform as { targetSdk?: number } | undefined)?.targetSdk ?? 35;
+  const minSdk =
+    (androidPlatform as { minSdk?: number } | undefined)?.minSdk ?? DEFAULT_ANDROID_MIN_SDK;
+  const targetSdk =
+    (androidPlatform as { targetSdk?: number } | undefined)?.targetSdk ??
+    DEFAULT_ANDROID_TARGET_SDK;
 
   const packagePath = androidConfig.app.bundleId.split(".");
   const appDir = join(projectRoot, "app");

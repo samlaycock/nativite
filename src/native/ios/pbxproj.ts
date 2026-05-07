@@ -8,6 +8,7 @@ import type {
   ResolvedNativitePlugins,
 } from "../../plugins/resolve.ts";
 
+import { DEFAULT_IOS_MINIMUM_VERSION, DEFAULT_MACOS_MINIMUM_VERSION } from "../../index.ts";
 import { resolveConfigForPlatform } from "../../platforms/registry.ts";
 
 function deterministicUuid(seed: string): string {
@@ -118,8 +119,8 @@ export function pbxprojTemplate(
   const isMacos = targetPlatform === "macos";
 
   const deploymentTarget = isMacos
-    ? (platformEntry?.minimumVersion ?? "14.0")
-    : (platformEntry?.minimumVersion ?? "17.0");
+    ? (platformEntry?.minimumVersion ?? DEFAULT_MACOS_MINIMUM_VERSION)
+    : (platformEntry?.minimumVersion ?? DEFAULT_IOS_MINIMUM_VERSION);
 
   const teamId = isMacos
     ? (platformConfig.signing?.macos?.teamId ?? platformConfig.signing?.ios?.teamId)

@@ -121,11 +121,7 @@ function createNativiteConfig(projectInfo: ProjectInfo): string {
     '    version: "1.0.0",',
     "    buildNumber: 1,",
     "  },",
-    "  platforms: [",
-    '    ios({ minimumVersion: "17.0" }),',
-    '    macos({ minimumVersion: "14.0" }),',
-    "    android({ minSdk: 26 }),",
-    "  ],",
+    "  platforms: [ios(), macos(), android()],",
     "});",
     "",
   ].join("\n");

@@ -57,7 +57,7 @@ describe("runInitCommand", () => {
     expect(exitCode).toBe(0);
     expect(nativiteConfig).toContain('name: "MyViteApp"');
     expect(nativiteConfig).toContain('bundleId: "com.example.myviteapp"');
-    expect(nativiteConfig).toContain('ios({ minimumVersion: "17.0" })');
+    expect(nativiteConfig).toContain("platforms: [ios(), macos(), android()]");
     expect(viteConfig).toContain('import { nativite } from "nativite/vite";');
     expect(viteConfig).toContain("plugins: [nativite()]");
   });
