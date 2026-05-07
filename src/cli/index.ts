@@ -2,6 +2,8 @@
 
 import { Command } from "commander";
 import { createRequire } from "node:module";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { runBuildCommand } from "./build-command.ts";
 import { runInitCommand } from "./init-command.ts";
@@ -40,4 +42,12 @@ program
     if (exitCode !== 0) process.exit(exitCode);
   });
 
-program.parse(process.argv);
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return resolve(entry) === fileURLToPath(import.meta.url);
+}
+
+if (isMainModule()) {
+  program.parse(process.argv);
+}
