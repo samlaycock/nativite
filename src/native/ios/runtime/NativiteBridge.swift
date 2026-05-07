@@ -17,6 +17,9 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
   // Keyed as "namespace.method" for O(1) dispatch
   private var handlers: [String: NativiteHandler] = [:]
   private var lastChromeRevisionByDocId: [String: Int] = [:]
+  private static let maxChromeSnapshotNodes = 500
+  private static let maxChromeSnapshotChildren = 200
+  private static let nclpLeafKinds: Set<String> = ["item", "title", "search", "separator", "spacer", "statusBar", "homeIndicator"]
 
   // Chrome handler — lazily wired to viewController after init
   lazy var chrome: NativiteChrome = {
@@ -188,21 +191,88 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
     else {
       return false
     }
+    guard nodes.count <= Self.maxChromeSnapshotNodes else { return false }
     if let lastRevision = lastChromeRevisionByDocId[docId], revision <= lastRevision {
       return false
     }
     for (id, node) in nodes {
-      guard (node["id"] as? String) == id, node["kind"] is String else {
+      guard
+        !id.isEmpty,
+        (node["id"] as? String) == id,
+        let kind = node["kind"] as? String,
+        !kind.isEmpty
+      else {
         return false
       }
       if let children = node["children"] as? [String] {
-        for child in children where nodes[child] == nil {
-          return false
+        if children.count > Self.maxChromeSnapshotChildren { return false }
+        if Self.nclpLeafKinds.contains(kind) { return false }
+        for child in children {
+          guard let childNode = nodes[child],
+                let childKind = childNode["kind"] as? String,
+                Self.allowsChildKind(parentKind: kind, childKind: childKind) else {
+            return false
+          }
         }
+      } else if Self.requiresChildren(kind: kind) {
+        return false
       }
+    }
+    guard Self.isReachableAcyclicGraph(rootId: rootId, nodes: nodes) else {
+      return false
     }
     lastChromeRevisionByDocId[docId] = revision
     return true
+  }
+
+  private static func requiresChildren(kind: String) -> Bool {
+    ["window", "titleBar", "toolbar", "tabs", "sidebar", "menuBar", "menu", "section", "group", "keyboard", "stack", "split"].contains(kind)
+  }
+
+  private static func allowsChildKind(parentKind: String, childKind: String) -> Bool {
+    switch parentKind {
+    case "tabs":
+      return childKind == "tab"
+    case "tab":
+      return childKind == "search"
+    case "action":
+      return childKind == "menu"
+    case "menuBar":
+      return childKind == "menu"
+    case "menu":
+      return ["action", "item", "separator", "section", "group"].contains(childKind)
+    case "toolbar":
+      return ["action", "search", "spacer", "separator", "group"].contains(childKind)
+    case "titleBar":
+      return ["title", "action", "search", "spacer", "separator"].contains(childKind)
+    case "keyboard":
+      return ["action", "spacer", "separator"].contains(childKind)
+    default:
+      return true
+    }
+  }
+
+  private static func isReachableAcyclicGraph(rootId: String, nodes: [String: [String: Any]]) -> Bool {
+    var visiting = Set<String>()
+    var visited = Set<String>()
+
+    func visit(_ id: String) -> Bool {
+      if visiting.contains(id) { return false }
+      if visited.contains(id) { return true }
+      guard let node = nodes[id] else { return false }
+      visiting.insert(id)
+      let children = node["children"] as? [String] ?? []
+      for child in children {
+        if !visit(child) {
+          return false
+        }
+      }
+      visiting.remove(id)
+      visited.insert(id)
+      return true
+    }
+
+    return visit(rootId) && visited.count == nodes.count
   }
 
   // ── Native-push events ──────────────────────────────────────────────────────

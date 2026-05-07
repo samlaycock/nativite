@@ -298,7 +298,7 @@ function compileSidebarItems(
     const id = `${scope}:${item.id}`;
     addNode(nodes, {
       id,
-      kind: "item",
+      kind: item.children ? "section" : "item",
       label: item.label,
       icon: item.icon,
       children: item.children ? compileSidebarItems(nodes, state, id, item.children) : undefined,
@@ -519,6 +519,7 @@ function compileChromeState(
     addNode(nodes, {
       id: "tabBottomAccessory",
       kind: "window",
+      children: [],
       meta: windowMeta(config),
     });
     if (config.presented === false) state.hidden["tabBottomAccessory"] = true;
@@ -537,7 +538,7 @@ function compileChromeState(
     for (const [name, config] of Object.entries(collection)) {
       const id = `${area}:${name}`;
       const { presented: _presented, ...meta } = config;
-      addNode(nodes, { id, kind: "window", meta });
+      addNode(nodes, { id, kind: "window", children: [], meta });
       if (config.presented === false) state.hidden[id] = true;
     }
     rootChildren.push(area);
