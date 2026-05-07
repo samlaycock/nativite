@@ -72,4 +72,40 @@ describe("built package exports", () => {
     },
     { timeout: 30_000 },
   );
+
+  it(
+    "imports the built cli subpath without parsing command-line arguments",
+    () => {
+      execFileSync("bun", ["run", "build"], { stdio: "pipe" });
+
+      const packageRoot = makeTempDir("nativite-cli-import-");
+      const nodeModulesDir = join(packageRoot, "node_modules");
+      mkdirSync(nodeModulesDir, { recursive: true });
+      cpSync(process.cwd(), join(nodeModulesDir, "nativite"), {
+        recursive: true,
+        filter: (source) => !source.includes(`${process.cwd()}/.git`),
+      });
+
+      const scriptPath = join(packageRoot, "import-cli.mjs");
+      writeFileSync(
+        scriptPath,
+        [
+          `const module = await import("nativite/cli");`,
+          `if (typeof module.createCliProgram !== "function") {`,
+          `  throw new Error("Expected nativite/cli to export createCliProgram");`,
+          `}`,
+          ``,
+        ].join("\n"),
+      );
+
+      const output = execFileSync(process.execPath, [scriptPath], {
+        cwd: packageRoot,
+        encoding: "utf8",
+        stdio: "pipe",
+      });
+
+      expect(output).toBe("");
+    },
+    { timeout: 30_000 },
+  );
 });
