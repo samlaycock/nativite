@@ -9,6 +9,7 @@ import packageJson from "../package.json";
 interface ConditionalPackageExport {
   readonly import?: string;
   readonly require?: string;
+  readonly types?: string;
 }
 
 function isConditionalPackageExport(value: unknown): value is ConditionalPackageExport {
@@ -32,7 +33,7 @@ describe("built package exports", () => {
   });
 
   it(
-    "imports and requires every advertised JavaScript subpath from dist",
+    "imports every advertised JavaScript subpath from dist",
     () => {
       execFileSync("bun", ["run", "build"], { stdio: "pipe" });
 
@@ -50,21 +51,15 @@ describe("built package exports", () => {
           if (!isConditionalPackageExport(value)) return [];
 
           const specifier = subpath === "." ? "nativite" : `nativite/${subpath.slice(2)}`;
-          return [
-            value.import ? { condition: "import", specifier } : undefined,
-            value.require ? { condition: "require", specifier } : undefined,
-          ];
+          return value.import ? [specifier] : [];
         })
         .filter((entry) => entry !== undefined);
 
       expect(subpaths).not.toHaveLength(0);
 
-      for (const { condition, specifier } of subpaths) {
-        const scriptPath = join(packageRoot, `${condition}-${specifier.replaceAll("/", "-")}.mjs`);
-        const source =
-          condition === "import"
-            ? `const module = await import(${JSON.stringify(specifier)});\nconsole.log(Object.keys(module).join(","));\n`
-            : `import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nconst module = require(${JSON.stringify(specifier)});\nconsole.log(Object.keys(module).join(","));\n`;
+      for (const specifier of subpaths) {
+        const scriptPath = join(packageRoot, `import-${specifier.replaceAll("/", "-")}.mjs`);
+        const source = `const module = await import(${JSON.stringify(specifier)});\nconsole.log(Object.keys(module).join(","));\n`;
 
         writeFileSync(scriptPath, source);
         execFileSync(process.execPath, [scriptPath], { cwd: packageRoot, stdio: "pipe" });
@@ -74,7 +69,7 @@ describe("built package exports", () => {
   );
 
   it(
-    "imports the built cli subpath without parsing command-line arguments",
+    "does not expose the cli as a package import",
     () => {
       execFileSync("bun", ["run", "build"], { stdio: "pipe" });
 
@@ -90,21 +85,17 @@ describe("built package exports", () => {
       writeFileSync(
         scriptPath,
         [
-          `const module = await import("nativite/cli");`,
-          `if (typeof module.createCliProgram !== "function") {`,
-          `  throw new Error("Expected nativite/cli to export createCliProgram");`,
+          `try {`,
+          `  await import("nativite/cli");`,
+          `} catch (error) {`,
+          `  process.exit(0);`,
           `}`,
+          `throw new Error("Expected nativite/cli to be private");`,
           ``,
         ].join("\n"),
       );
 
-      const output = execFileSync(process.execPath, [scriptPath], {
-        cwd: packageRoot,
-        encoding: "utf8",
-        stdio: "pipe",
-      });
-
-      expect(output).toBe("");
+      execFileSync(process.execPath, [scriptPath], { cwd: packageRoot, stdio: "pipe" });
     },
     { timeout: 30_000 },
   );
