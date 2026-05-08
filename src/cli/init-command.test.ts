@@ -255,6 +255,44 @@ describe("runInitCommand", () => {
     );
   });
 
+  it("formats inserted plugins property in mixed-format config objects", async () => {
+    await writeFile(
+      join(projectRoot, "package.json"),
+      JSON.stringify({ name: "mixed-format-app" }),
+    );
+    await writeFile(
+      join(projectRoot, "vite.config.ts"),
+      [
+        'import { defineConfig } from "vite";',
+        "",
+        "export default defineConfig({ server: {",
+        '    host: "0.0.0.0",',
+        "  }",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await runInitCommand(
+      {},
+      {
+        cwd: () => projectRoot,
+        createLogger: createMockLogger,
+      },
+    );
+    const viteConfig = await Bun.file(join(projectRoot, "vite.config.ts")).text();
+
+    expect(exitCode).toBe(0);
+    expect(viteConfig).toContain(
+      [
+        "export default defineConfig({",
+        "  plugins: [nativite()],",
+        "  server: {",
+        '    host: "0.0.0.0",',
+      ].join("\n"),
+    );
+  });
+
   it("ignores defineConfig and mergeConfig mentions in comments and strings", async () => {
     await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "comment-app" }));
     await writeFile(

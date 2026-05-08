@@ -404,8 +404,8 @@ function insertPluginsProperty(source: string, objectRange: Range): string {
     )}`;
   }
 
-  return `${source.slice(0, objectRange.start + 1)}\n${propertyIndent}plugins: [nativite()],${source.slice(
-    objectRange.start + 1,
+  return `${source.slice(0, objectRange.start + 1)}\n${propertyIndent}plugins: [nativite()],\n${propertyIndent}${content.trimStart()}${source.slice(
+    objectRange.end - 1,
   )}`;
 }
 
