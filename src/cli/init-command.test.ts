@@ -191,6 +191,102 @@ describe("runInitCommand", () => {
     );
   });
 
+  it("targets the exported config instead of intermediate mergeConfig calls", async () => {
+    await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "exported-app" }));
+    await writeFile(
+      join(projectRoot, "vite.config.ts"),
+      [
+        'import { defineConfig, mergeConfig } from "vite";',
+        "",
+        'const shared = mergeConfig({}, { resolve: { alias: { "@": "/src" } } });',
+        "",
+        "export default defineConfig({",
+        "  plugins: [],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await runInitCommand(
+      {},
+      {
+        cwd: () => projectRoot,
+        createLogger: createMockLogger,
+      },
+    );
+    const viteConfig = await Bun.file(join(projectRoot, "vite.config.ts")).text();
+
+    expect(exitCode).toBe(0);
+    expect(viteConfig).toContain(
+      'const shared = mergeConfig({}, { resolve: { alias: { "@": "/src" } } });',
+    );
+    expect(viteConfig).toContain("export default defineConfig({\n  plugins: [nativite()],");
+  });
+
+  it("formats inserted plugins property in single-line config objects", async () => {
+    await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "single-line-app" }));
+    await writeFile(
+      join(projectRoot, "vite.config.ts"),
+      [
+        'import { defineConfig } from "vite";',
+        "",
+        'export default defineConfig({ server: { host: "0.0.0.0" } });',
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await runInitCommand(
+      {},
+      {
+        cwd: () => projectRoot,
+        createLogger: createMockLogger,
+      },
+    );
+    const viteConfig = await Bun.file(join(projectRoot, "vite.config.ts")).text();
+
+    expect(exitCode).toBe(0);
+    expect(viteConfig).toContain(
+      [
+        "export default defineConfig({",
+        "  plugins: [nativite()],",
+        '  server: { host: "0.0.0.0" }',
+        "});",
+      ].join("\n"),
+    );
+  });
+
+  it("ignores defineConfig and mergeConfig mentions in comments and strings", async () => {
+    await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "comment-app" }));
+    await writeFile(
+      join(projectRoot, "vite.config.ts"),
+      [
+        'import { defineConfig } from "vite";',
+        "",
+        "/** @see defineConfig({ plugins }) */",
+        'const example = "mergeConfig({}, { plugins: [] })";',
+        "",
+        "export default defineConfig({",
+        "  plugins: [],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await runInitCommand(
+      {},
+      {
+        cwd: () => projectRoot,
+        createLogger: createMockLogger,
+      },
+    );
+    const viteConfig = await Bun.file(join(projectRoot, "vite.config.ts")).text();
+
+    expect(exitCode).toBe(0);
+    expect(viteConfig).toContain("/** @see defineConfig({ plugins }) */");
+    expect(viteConfig).toContain('"mergeConfig({}, { plugins: [] })"');
+    expect(viteConfig).toContain("export default defineConfig({\n  plugins: [nativite()],");
+  });
+
   it("preserves an existing nativite.config.ts unless force is enabled", async () => {
     await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "existing-app" }));
     await writeFile(

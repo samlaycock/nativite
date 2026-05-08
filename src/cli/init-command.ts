@@ -180,7 +180,7 @@ function createViteConfigEdit(source: string): SourceEdit | undefined {
 
   const pluginsProperty = findObjectProperty(source, configObject, "plugins");
   if (!pluginsProperty) {
-    return (withImport) => insertPluginsProperty(withImport, configObject.start);
+    return (withImport) => insertPluginsProperty(withImport, configObject);
   }
 
   if (!pluginsProperty.value) {
@@ -206,49 +206,70 @@ function createViteConfigEdit(source: string): SourceEdit | undefined {
 }
 
 function findViteConfigObject(source: string): Range | undefined {
-  return (
-    findCallObjectArgument(source, "mergeConfig") ?? findCallObjectArgument(source, "defineConfig")
-  );
-}
+  const exportDefaultStart = findExportDefaultExpressionStart(source);
+  if (exportDefaultStart === undefined) {
+    return undefined;
+  }
 
-function findCallObjectArgument(source: string, callName: string): Range | undefined {
-  let searchIndex = 0;
+  if (startsWithIdentifier(source, exportDefaultStart, "mergeConfig")) {
+    return findCallObjectArgumentAt(source, exportDefaultStart, "mergeConfig");
+  }
 
-  while (searchIndex < source.length) {
-    const nameIndex = findIdentifier(source, callName, searchIndex);
-    if (nameIndex === -1) {
-      return undefined;
-    }
-
-    const parenStart = skipTrivia(source, nameIndex + callName.length);
-    if (source[parenStart] !== "(") {
-      searchIndex = nameIndex + callName.length;
-      continue;
-    }
-
-    const parenEnd = findMatchingBracket(source, parenStart, "(", ")");
-    if (parenEnd === undefined) {
-      return undefined;
-    }
-
-    const args = findTopLevelArgumentRanges(source, parenStart + 1, parenEnd);
-    const objectArg =
-      callName === "mergeConfig"
-        ? findLastObjectArgument(source, args)
-        : args.find((arg) => source[skipTrivia(source, arg.start)] === "{");
-
-    if (objectArg) {
-      const objectStart = skipTrivia(source, objectArg.start);
-      const objectEnd = findMatchingBracket(source, objectStart, "{", "}");
-      if (objectEnd !== undefined) {
-        return { start: objectStart, end: objectEnd + 1 };
-      }
-    }
-
-    searchIndex = parenEnd + 1;
+  if (startsWithIdentifier(source, exportDefaultStart, "defineConfig")) {
+    return findCallObjectArgumentAt(source, exportDefaultStart, "defineConfig");
   }
 
   return undefined;
+}
+
+function findExportDefaultExpressionStart(source: string): number | undefined {
+  let searchIndex = 0;
+
+  while (searchIndex < source.length) {
+    const exportIndex = findIdentifier(source, "export", searchIndex);
+    if (exportIndex === -1) {
+      return undefined;
+    }
+
+    const defaultIndex = skipTrivia(source, exportIndex + "export".length);
+    if (startsWithIdentifier(source, defaultIndex, "default")) {
+      return skipTrivia(source, defaultIndex + "default".length);
+    }
+
+    searchIndex = exportIndex + "export".length;
+  }
+
+  return undefined;
+}
+
+function findCallObjectArgumentAt(
+  source: string,
+  callStart: number,
+  callName: string,
+): Range | undefined {
+  const parenStart = skipTrivia(source, callStart + callName.length);
+  if (source[parenStart] !== "(") {
+    return undefined;
+  }
+
+  const parenEnd = findMatchingBracket(source, parenStart, "(", ")");
+  if (parenEnd === undefined) {
+    return undefined;
+  }
+
+  const args = findTopLevelArgumentRanges(source, parenStart + 1, parenEnd);
+  const objectArg =
+    callName === "mergeConfig"
+      ? findLastObjectArgument(source, args)
+      : args.find((arg) => source[skipTrivia(source, arg.start)] === "{");
+
+  if (!objectArg) {
+    return undefined;
+  }
+
+  const objectStart = skipTrivia(source, objectArg.start);
+  const objectEnd = findMatchingBracket(source, objectStart, "{", "}");
+  return objectEnd === undefined ? undefined : { start: objectStart, end: objectEnd + 1 };
 }
 
 function findObjectProperty(
@@ -330,11 +351,25 @@ function insertArrayItem(source: string, arrayRange: Range): string {
   return `${source.slice(0, contentStart)}nativite(), ${source.slice(contentStart).trimStart()}`;
 }
 
-function insertPluginsProperty(source: string, objectStart: number): string {
-  const lineIndent = getLineIndent(source, objectStart);
+function insertPluginsProperty(source: string, objectRange: Range): string {
+  const lineIndent = getLineIndent(source, objectRange.start);
   const propertyIndent = `${lineIndent}  `;
-  return `${source.slice(0, objectStart + 1)}\n${propertyIndent}plugins: [nativite()],${source.slice(
-    objectStart + 1,
+  const content = source.slice(objectRange.start + 1, objectRange.end - 1);
+
+  if (!content.includes("\n")) {
+    const existing = content.trim();
+    const properties =
+      existing.length === 0
+        ? `${propertyIndent}plugins: [nativite()]`
+        : `${propertyIndent}plugins: [nativite()],\n${propertyIndent}${existing}`;
+
+    return `${source.slice(0, objectRange.start + 1)}\n${properties}\n${lineIndent}${source.slice(
+      objectRange.end - 1,
+    )}`;
+  }
+
+  return `${source.slice(0, objectRange.start + 1)}\n${propertyIndent}plugins: [nativite()],${source.slice(
+    objectRange.start + 1,
   )}`;
 }
 
@@ -476,20 +511,35 @@ function findMatchingBracket(
 }
 
 function findIdentifier(source: string, name: string, fromIndex: number): number {
-  let index = source.indexOf(name, fromIndex);
+  let index = fromIndex;
 
-  while (index !== -1) {
+  while (index < source.length) {
+    const skipped = skipNonCode(source, index);
+    if (skipped !== index) {
+      index = skipped;
+      continue;
+    }
+
     if (
+      source.startsWith(name, index) &&
       !isIdentifierChar(source[index - 1] ?? "") &&
       !isIdentifierChar(source[index + name.length] ?? "")
     ) {
       return index;
     }
 
-    index = source.indexOf(name, index + name.length);
+    index += 1;
   }
 
   return -1;
+}
+
+function startsWithIdentifier(source: string, index: number, name: string): boolean {
+  return (
+    source.startsWith(name, index) &&
+    !isIdentifierChar(source[index - 1] ?? "") &&
+    !isIdentifierChar(source[index + name.length] ?? "")
+  );
 }
 
 function skipTrivia(source: string, start: number): number {
