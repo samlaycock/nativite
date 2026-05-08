@@ -41,14 +41,21 @@ allows init to overwrite the generated Nativite config.
 ## Vite Config Updates
 
 Init looks for `vite.config.ts`, `vite.config.mts`, `vite.config.js`, or
-`vite.config.mjs`. When it finds a simple inline `plugins: []` array, it adds:
+`vite.config.mjs`. It uses syntax-aware edits that balance strings, comments,
+and brackets before changing the file. Supported config shapes include:
+
+- `defineConfig({ plugins: [...] })`
+- `defineConfig({ plugins })` when `plugins` is a top-level array variable
+- `defineConfig({ ... })` objects without a `plugins` property
+- `mergeConfig(baseConfig, { ... })` override objects
 
 ```ts
 import { nativite } from "nativite/vite";
 ```
 
-and inserts `nativite()` into the plugins array.
+and inserts `nativite()` at the start of the plugins array. When the config
+object has no `plugins` property, init adds `plugins: [nativite()]`.
 
-If the Vite config uses a variable, helper, or another ambiguous shape, init
-leaves it unchanged and prints exact manual instructions instead of attempting a
-risky edit.
+If the Vite config uses a computed plugin expression, helper return value, or
+another ambiguous shape, init leaves it unchanged and prints exact manual
+instructions instead of attempting a risky edit.
