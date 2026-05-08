@@ -35,38 +35,27 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": "./dist/index.mjs"
     },
     "./vite": {
       "types": "./dist/vite/index.d.ts",
-      "import": "./dist/vite/index.mjs",
-      "require": "./dist/vite/index.js"
+      "import": "./dist/vite/index.mjs"
     },
     "./client": {
       "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.mjs",
-      "require": "./dist/client/index.js"
+      "import": "./dist/client/index.mjs"
     },
     "./utils": {
       "types": "./dist/utils.d.ts",
-      "import": "./dist/utils.mjs",
-      "require": "./dist/utils.js"
-    },
-    "./cli": {
-      "types": "./dist/cli/index.d.ts",
-      "import": "./dist/cli/index.mjs",
-      "require": "./dist/cli/index.js"
+      "import": "./dist/utils.mjs"
     },
     "./chrome": {
       "types": "./dist/chrome/public.d.ts",
-      "import": "./dist/chrome/public.mjs",
-      "require": "./dist/chrome/public.js"
+      "import": "./dist/chrome/public.mjs"
     },
     "./css": {
       "types": "./dist/css-vars/index.d.ts",
-      "import": "./dist/css-vars/index.mjs",
-      "require": "./dist/css-vars/index.js"
+      "import": "./dist/css-vars/index.mjs"
     },
     "./globals": {
       "types": "./dist/globals.d.ts"

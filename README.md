@@ -333,7 +333,10 @@ to `true`.
 - `nativite/css`: `NVVars`, `NVVarName`
 - `nativite/utils`: platform utility helpers
 - `nativite/globals`: ambient globals types
-- `nativite/cli`: CLI entry point
+
+`package.json#exports` is the complete public module list. Deep imports are
+unsupported, and the CLI is exposed as the `nativite` binary rather than as an
+importable `nativite/cli` runtime module.
 
 ## Troubleshooting
 

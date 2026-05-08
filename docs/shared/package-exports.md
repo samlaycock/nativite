@@ -1,25 +1,39 @@
 # Package Exports
 
-Nativite publishes dual JavaScript entrypoints for its public API. Every export
-condition listed in `package.json` should resolve from a built package:
+Nativite treats `package.json#exports` as the complete public package boundary.
+Deep imports outside the listed exports are unsupported implementation details.
+
+## Public Entrypoints
 
 - `nativite`
 - `nativite/vite`
 - `nativite/client`
 - `nativite/utils`
-- `nativite/cli`
 - `nativite/chrome`
 - `nativite/css`
+- `nativite/globals`
 
-The `import` condition points at `.mjs` files in `dist`; the `require` condition
-points at CommonJS `.js` files in `dist`. The `nativite/globals` subpath is
-types-only and intentionally has no JavaScript runtime condition.
+`nativite` is the public configuration and extension-authoring entrypoint.
+`nativite/vite` exposes the Vite plugin. `nativite/client` exposes the
+low-level JS/native bridge. `nativite/chrome` exposes the declarative native
+chrome API. `nativite/css` exposes CSS variable helpers. `nativite/utils`
+exposes compile-time platform helpers. `nativite/globals` is types-only and has
+no JavaScript runtime condition.
+
+ESM is the primary package contract. JavaScript public entrypoints use the
+`import` condition and point at `.mjs` files in `dist`. CommonJS `require`
+conditions are not advertised unless a future subpath is covered by a
+built-package CommonJS smoke test.
 
 The package export smoke test builds `dist`, installs the repository into a
 temporary `node_modules/nativite` directory, then verifies every advertised
-JavaScript subpath with both `import()` and `require()`. This catches bundling
-cycles and entrypoint side effects before publish.
+JavaScript subpath with `import()`. This catches bundling cycles and import side
+effects before publish.
 
-The CLI entrypoint is importable because it is listed in package exports. It
-exports `createCliProgram()` for command composition, but only parses
-`process.argv` when invoked directly as the `nativite` executable.
+## Private Surface
+
+Native generators, runtime source files, platform registry internals, and test
+helpers are not public API unless intentionally exported from `package.json`.
+
+The CLI is exposed as the `nativite` binary from `package.json#bin`.
+`nativite/cli` is not a public runtime import.
