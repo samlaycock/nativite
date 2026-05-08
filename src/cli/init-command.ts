@@ -142,27 +142,468 @@ async function updateViteConfig(configPath: string): Promise<ViteUpdateResult> {
     return { updated: false, reason: `${basename(configPath)} already appears to use nativite().` };
   }
 
-  const pluginsArrayPattern = /plugins:\s*\[([^\]]*)\]/m;
-  const pluginsArrayMatch = pluginsArrayPattern.exec(source);
-  if (!pluginsArrayMatch) {
+  const edit = createViteConfigEdit(source);
+  if (!edit) {
     return {
       updated: false,
-      reason: `${basename(configPath)} does not contain an inline plugins array.`,
+      reason: `${basename(configPath)} does not contain a supported Vite config shape.`,
     };
   }
 
-  const withImport =
-    source.includes('"nativite/vite"') || source.includes("'nativite/vite'")
-      ? source
-      : addNativiteImport(source);
-  const updated = withImport.replace(pluginsArrayPattern, (_match, plugins: string) =>
-    plugins.trim().length === 0
-      ? "plugins: [nativite()]"
-      : `plugins: [nativite(), ${plugins.trim()}]`,
-  );
+  const withPlugin = edit(source);
+  const updated =
+    withPlugin.includes('"nativite/vite"') || withPlugin.includes("'nativite/vite'")
+      ? withPlugin
+      : addNativiteImport(withPlugin);
 
   await writeFile(configPath, updated);
   return { updated: true };
+}
+
+type SourceEdit = (source: string) => string;
+
+interface Range {
+  readonly end: number;
+  readonly start: number;
+}
+
+interface PropertyMatch extends Range {
+  readonly shorthand: boolean;
+  readonly value?: Range;
+}
+
+function createViteConfigEdit(source: string): SourceEdit | undefined {
+  const configObject = findViteConfigObject(source);
+  if (!configObject) {
+    return undefined;
+  }
+
+  const pluginsProperty = findObjectProperty(source, configObject, "plugins");
+  if (!pluginsProperty) {
+    return (withImport) => insertPluginsProperty(withImport, configObject.start);
+  }
+
+  if (!pluginsProperty.value) {
+    const pluginsArray = findVariableArray(source, "plugins");
+    return pluginsArray ? (withImport) => insertArrayItem(withImport, pluginsArray) : undefined;
+  }
+
+  const valueStart = skipTrivia(source, pluginsProperty.value.start);
+  if (source[valueStart] === "[") {
+    const arrayEnd = findMatchingBracket(source, valueStart, "[", "]");
+    return arrayEnd
+      ? (withImport) => insertArrayItem(withImport, { start: valueStart, end: arrayEnd + 1 })
+      : undefined;
+  }
+
+  const value = source.slice(valueStart, pluginsProperty.value.end).trim();
+  if (isIdentifier(value)) {
+    const pluginsArray = findVariableArray(source, value);
+    return pluginsArray ? (withImport) => insertArrayItem(withImport, pluginsArray) : undefined;
+  }
+
+  return undefined;
+}
+
+function findViteConfigObject(source: string): Range | undefined {
+  return (
+    findCallObjectArgument(source, "mergeConfig") ?? findCallObjectArgument(source, "defineConfig")
+  );
+}
+
+function findCallObjectArgument(source: string, callName: string): Range | undefined {
+  let searchIndex = 0;
+
+  while (searchIndex < source.length) {
+    const nameIndex = findIdentifier(source, callName, searchIndex);
+    if (nameIndex === -1) {
+      return undefined;
+    }
+
+    const parenStart = skipTrivia(source, nameIndex + callName.length);
+    if (source[parenStart] !== "(") {
+      searchIndex = nameIndex + callName.length;
+      continue;
+    }
+
+    const parenEnd = findMatchingBracket(source, parenStart, "(", ")");
+    if (parenEnd === undefined) {
+      return undefined;
+    }
+
+    const args = findTopLevelArgumentRanges(source, parenStart + 1, parenEnd);
+    const objectArg =
+      callName === "mergeConfig"
+        ? findLastObjectArgument(source, args)
+        : args.find((arg) => source[skipTrivia(source, arg.start)] === "{");
+
+    if (objectArg) {
+      const objectStart = skipTrivia(source, objectArg.start);
+      const objectEnd = findMatchingBracket(source, objectStart, "{", "}");
+      if (objectEnd !== undefined) {
+        return { start: objectStart, end: objectEnd + 1 };
+      }
+    }
+
+    searchIndex = parenEnd + 1;
+  }
+
+  return undefined;
+}
+
+function findObjectProperty(
+  source: string,
+  objectRange: Range,
+  name: string,
+): PropertyMatch | undefined {
+  let index = objectRange.start + 1;
+
+  while (index < objectRange.end - 1) {
+    index = skipTriviaAndCommas(source, index);
+    if (index >= objectRange.end - 1) {
+      break;
+    }
+
+    const propertyStart = index;
+    const propertyEnd = findPropertyEnd(source, index, objectRange.end - 1);
+    const colonIndex = findTopLevelColon(source, propertyStart, propertyEnd);
+    const propertyNameEnd = colonIndex ?? propertyEnd;
+    const propertyName = source.slice(propertyStart, propertyNameEnd).trim();
+
+    if (propertyName === name) {
+      return colonIndex === undefined
+        ? { start: propertyStart, end: propertyEnd, shorthand: true }
+        : {
+            start: propertyStart,
+            end: propertyEnd,
+            shorthand: false,
+            value: { start: colonIndex + 1, end: propertyEnd },
+          };
+    }
+
+    index = propertyEnd + 1;
+  }
+
+  return undefined;
+}
+
+function findVariableArray(source: string, name: string): Range | undefined {
+  const declarationPattern = new RegExp(`\\b(?:const|let|var)\\s+${escapeRegExp(name)}\\s*=`, "g");
+  const match = declarationPattern.exec(source);
+  if (!match) {
+    return undefined;
+  }
+
+  const arrayStart = skipTrivia(source, match.index + match[0].length);
+  if (source[arrayStart] !== "[") {
+    return undefined;
+  }
+
+  const arrayEnd = findMatchingBracket(source, arrayStart, "[", "]");
+  return arrayEnd === undefined ? undefined : { start: arrayStart, end: arrayEnd + 1 };
+}
+
+function findLastObjectArgument(source: string, args: readonly Range[]): Range | undefined {
+  for (let index = args.length - 1; index >= 0; index -= 1) {
+    const arg = args[index];
+    if (arg && source[skipTrivia(source, arg.start)] === "{") {
+      return arg;
+    }
+  }
+
+  return undefined;
+}
+
+function insertArrayItem(source: string, arrayRange: Range): string {
+  const contentStart = arrayRange.start + 1;
+  const contentEnd = arrayRange.end - 1;
+  const content = source.slice(contentStart, contentEnd);
+  if (content.trim().length === 0) {
+    return `${source.slice(0, contentStart)}nativite()${source.slice(contentEnd)}`;
+  }
+
+  if (content.includes("\n")) {
+    const itemIndent = detectArrayItemIndent(source, arrayRange.start);
+    return `${source.slice(0, contentStart)}\n${itemIndent}nativite(),${source.slice(contentStart)}`;
+  }
+
+  return `${source.slice(0, contentStart)}nativite(), ${source.slice(contentStart).trimStart()}`;
+}
+
+function insertPluginsProperty(source: string, objectStart: number): string {
+  const lineIndent = getLineIndent(source, objectStart);
+  const propertyIndent = `${lineIndent}  `;
+  return `${source.slice(0, objectStart + 1)}\n${propertyIndent}plugins: [nativite()],${source.slice(
+    objectStart + 1,
+  )}`;
+}
+
+function findTopLevelArgumentRanges(source: string, start: number, end: number): Range[] {
+  const ranges: Range[] = [];
+  let argumentStart = start;
+  let index = start;
+
+  while (index < end) {
+    const skipped = skipNonCode(source, index);
+    if (skipped !== index) {
+      index = skipped;
+      continue;
+    }
+
+    const char = source[index];
+    if (char === undefined) {
+      break;
+    }
+    const matching = matchingCloseBracket(char);
+    if (matching) {
+      const closeIndex = findMatchingBracket(source, index, char, matching);
+      if (closeIndex === undefined) {
+        break;
+      }
+      index = closeIndex + 1;
+      continue;
+    }
+
+    if (char === ",") {
+      ranges.push({ start: argumentStart, end: index });
+      argumentStart = index + 1;
+    }
+
+    index += 1;
+  }
+
+  ranges.push({ start: argumentStart, end });
+  return ranges.filter((range) => source.slice(range.start, range.end).trim().length > 0);
+}
+
+function findPropertyEnd(source: string, start: number, end: number): number {
+  let index = start;
+
+  while (index < end) {
+    const skipped = skipNonCode(source, index);
+    if (skipped !== index) {
+      index = skipped;
+      continue;
+    }
+
+    const char = source[index];
+    if (char === undefined) {
+      break;
+    }
+    const matching = matchingCloseBracket(char);
+    if (matching) {
+      const closeIndex = findMatchingBracket(source, index, char, matching);
+      if (closeIndex === undefined) {
+        return end;
+      }
+      index = closeIndex + 1;
+      continue;
+    }
+
+    if (char === ",") {
+      return index;
+    }
+
+    index += 1;
+  }
+
+  return end;
+}
+
+function findTopLevelColon(source: string, start: number, end: number): number | undefined {
+  let index = start;
+
+  while (index < end) {
+    const skipped = skipNonCode(source, index);
+    if (skipped !== index) {
+      index = skipped;
+      continue;
+    }
+
+    const char = source[index];
+    if (char === undefined) {
+      break;
+    }
+    const matching = matchingCloseBracket(char);
+    if (matching) {
+      const closeIndex = findMatchingBracket(source, index, char, matching);
+      if (closeIndex === undefined) {
+        return undefined;
+      }
+      index = closeIndex + 1;
+      continue;
+    }
+
+    if (char === ":") {
+      return index;
+    }
+
+    index += 1;
+  }
+
+  return undefined;
+}
+
+function findMatchingBracket(
+  source: string,
+  start: number,
+  openBracket: string,
+  closeBracket: string,
+): number | undefined {
+  let depth = 0;
+  let index = start;
+
+  while (index < source.length) {
+    const skipped = skipNonCode(source, index);
+    if (skipped !== index) {
+      index = skipped;
+      continue;
+    }
+
+    if (source[index] === openBracket) {
+      depth += 1;
+    } else if (source[index] === closeBracket) {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+
+    index += 1;
+  }
+
+  return undefined;
+}
+
+function findIdentifier(source: string, name: string, fromIndex: number): number {
+  let index = source.indexOf(name, fromIndex);
+
+  while (index !== -1) {
+    if (
+      !isIdentifierChar(source[index - 1] ?? "") &&
+      !isIdentifierChar(source[index + name.length] ?? "")
+    ) {
+      return index;
+    }
+
+    index = source.indexOf(name, index + name.length);
+  }
+
+  return -1;
+}
+
+function skipTrivia(source: string, start: number): number {
+  let index = start;
+
+  while (index < source.length) {
+    const char = source[index];
+    if (char === " " || char === "\t" || char === "\n" || char === "\r") {
+      index += 1;
+      continue;
+    }
+
+    const skipped = skipComment(source, index);
+    if (skipped !== index) {
+      index = skipped;
+      continue;
+    }
+
+    return index;
+  }
+
+  return index;
+}
+
+function skipTriviaAndCommas(source: string, start: number): number {
+  let index = skipTrivia(source, start);
+  while (source[index] === ",") {
+    index = skipTrivia(source, index + 1);
+  }
+  return index;
+}
+
+function skipNonCode(source: string, start: number): number {
+  const commentEnd = skipComment(source, start);
+  if (commentEnd !== start) {
+    return commentEnd;
+  }
+
+  return skipString(source, start);
+}
+
+function skipComment(source: string, start: number): number {
+  if (source.startsWith("//", start)) {
+    const lineEnd = source.indexOf("\n", start + 2);
+    return lineEnd === -1 ? source.length : lineEnd;
+  }
+
+  if (source.startsWith("/*", start)) {
+    const commentEnd = source.indexOf("*/", start + 2);
+    return commentEnd === -1 ? source.length : commentEnd + 2;
+  }
+
+  return start;
+}
+
+function skipString(source: string, start: number): number {
+  const quote = source[start];
+  if (quote !== '"' && quote !== "'" && quote !== "`") {
+    return start;
+  }
+
+  let index = start + 1;
+  while (index < source.length) {
+    if (source[index] === "\\") {
+      index += 2;
+      continue;
+    }
+
+    if (source[index] === quote) {
+      return index + 1;
+    }
+
+    index += 1;
+  }
+
+  return source.length;
+}
+
+function detectArrayItemIndent(source: string, arrayStart: number): string {
+  const arrayLineIndent = getLineIndent(source, arrayStart);
+  const afterArrayStart = source.slice(arrayStart + 1);
+  const itemIndentMatch = /\n([ \t]*)\S/.exec(afterArrayStart);
+  return itemIndentMatch?.[1] ?? `${arrayLineIndent}  `;
+}
+
+function getLineIndent(source: string, index: number): string {
+  const lineStart = source.lastIndexOf("\n", index) + 1;
+  const indentMatch = /^[ \t]*/.exec(source.slice(lineStart, index));
+  return indentMatch?.[0] ?? "";
+}
+
+function matchingCloseBracket(char: string): string | undefined {
+  if (char === "(") {
+    return ")";
+  }
+  if (char === "[") {
+    return "]";
+  }
+  if (char === "{") {
+    return "}";
+  }
+  return undefined;
+}
+
+function isIdentifier(value: string): boolean {
+  return /^[A-Za-z_$][\w$]*$/.test(value);
+}
+
+function isIdentifierChar(value: string): boolean {
+  return /^[A-Za-z0-9_$]$/.test(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function addNativiteImport(source: string): string {
