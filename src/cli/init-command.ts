@@ -309,19 +309,55 @@ function findObjectProperty(
 }
 
 function findVariableArray(source: string, name: string): Range | undefined {
-  const declarationPattern = new RegExp(`\\b(?:const|let|var)\\s+${escapeRegExp(name)}\\s*=`, "g");
-  const match = declarationPattern.exec(source);
-  if (!match) {
+  let searchIndex = 0;
+
+  while (searchIndex < source.length) {
+    const declaration = findVariableDeclaration(source, name, searchIndex);
+    if (!declaration) {
+      return undefined;
+    }
+
+    const arrayStart = skipTrivia(source, declaration.end);
+    if (source[arrayStart] === "[") {
+      const arrayEnd = findMatchingBracket(source, arrayStart, "[", "]");
+      return arrayEnd === undefined ? undefined : { start: arrayStart, end: arrayEnd + 1 };
+    }
+
+    searchIndex = declaration.end;
+  }
+
+  return undefined;
+}
+
+function findVariableDeclaration(
+  source: string,
+  name: string,
+  fromIndex: number,
+): Range | undefined {
+  const declarationKinds = ["const", "let", "var"] as const;
+  const matches = declarationKinds
+    .map((kind) => {
+      const start = findIdentifier(source, kind, fromIndex);
+      return start === -1 ? undefined : { start, kind };
+    })
+    .filter((match) => match !== undefined)
+    .sort((left, right) => left.start - right.start);
+  const earliestMatch = matches[0];
+  if (!earliestMatch) {
     return undefined;
   }
 
-  const arrayStart = skipTrivia(source, match.index + match[0].length);
-  if (source[arrayStart] !== "[") {
-    return undefined;
+  const nameStart = skipWhitespace(source, earliestMatch.start + earliestMatch.kind.length);
+  if (!startsWithIdentifier(source, nameStart, name)) {
+    return findVariableDeclaration(source, name, earliestMatch.start + earliestMatch.kind.length);
   }
 
-  const arrayEnd = findMatchingBracket(source, arrayStart, "[", "]");
-  return arrayEnd === undefined ? undefined : { start: arrayStart, end: arrayEnd + 1 };
+  const equalsStart = skipWhitespace(source, nameStart + name.length);
+  if (source[equalsStart] !== "=") {
+    return findVariableDeclaration(source, name, earliestMatch.start + earliestMatch.kind.length);
+  }
+
+  return { start: earliestMatch.start, end: equalsStart + 1 };
 }
 
 function findLastObjectArgument(source: string, args: readonly Range[]): Range | undefined {
@@ -564,6 +600,19 @@ function skipTrivia(source: string, start: number): number {
   return index;
 }
 
+function skipWhitespace(source: string, start: number): number {
+  let index = start;
+  while (
+    source[index] === " " ||
+    source[index] === "\t" ||
+    source[index] === "\n" ||
+    source[index] === "\r"
+  ) {
+    index += 1;
+  }
+  return index;
+}
+
 function skipTriviaAndCommas(source: string, start: number): number {
   let index = skipTrivia(source, start);
   while (source[index] === ",") {
@@ -650,10 +699,6 @@ function isIdentifier(value: string): boolean {
 
 function isIdentifierChar(value: string): boolean {
   return /^[A-Za-z0-9_$]$/.test(value);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function addNativiteImport(source: string): string {

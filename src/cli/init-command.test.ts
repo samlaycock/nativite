@@ -287,6 +287,76 @@ describe("runInitCommand", () => {
     expect(viteConfig).toContain("export default defineConfig({\n  plugins: [nativite()],");
   });
 
+  it("ignores commented-out plugin variable declarations", async () => {
+    await writeFile(
+      join(projectRoot, "package.json"),
+      JSON.stringify({ name: "commented-variable-app" }),
+    );
+    await writeFile(
+      join(projectRoot, "vite.config.ts"),
+      [
+        'import react from "@vitejs/plugin-react";',
+        'import { defineConfig } from "vite";',
+        "",
+        "// const plugins = [oldPlugin()];",
+        "const plugins = [react()];",
+        "",
+        "export default defineConfig({",
+        "  plugins,",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await runInitCommand(
+      {},
+      {
+        cwd: () => projectRoot,
+        createLogger: createMockLogger,
+      },
+    );
+    const viteConfig = await Bun.file(join(projectRoot, "vite.config.ts")).text();
+
+    expect(exitCode).toBe(0);
+    expect(viteConfig).toContain("// const plugins = [oldPlugin()];");
+    expect(viteConfig).toContain("const plugins = [nativite(), react()];");
+  });
+
+  it("ignores commented-out declarations for explicit plugin array identifiers", async () => {
+    await writeFile(
+      join(projectRoot, "package.json"),
+      JSON.stringify({ name: "named-variable-app" }),
+    );
+    await writeFile(
+      join(projectRoot, "vite.config.ts"),
+      [
+        'import react from "@vitejs/plugin-react";',
+        'import { defineConfig } from "vite";',
+        "",
+        "// const appPlugins = [oldPlugin()];",
+        "const appPlugins = [react()];",
+        "",
+        "export default defineConfig({",
+        "  plugins: appPlugins,",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await runInitCommand(
+      {},
+      {
+        cwd: () => projectRoot,
+        createLogger: createMockLogger,
+      },
+    );
+    const viteConfig = await Bun.file(join(projectRoot, "vite.config.ts")).text();
+
+    expect(exitCode).toBe(0);
+    expect(viteConfig).toContain("// const appPlugins = [oldPlugin()];");
+    expect(viteConfig).toContain("const appPlugins = [nativite(), react()];");
+  });
+
   it("preserves an existing nativite.config.ts unless force is enabled", async () => {
     await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "existing-app" }));
     await writeFile(
