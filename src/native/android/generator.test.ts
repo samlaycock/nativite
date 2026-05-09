@@ -10,6 +10,7 @@ import { generateProject } from "./generator.ts";
 
 describe("generateProject", () => {
   const tempDirs: string[] = [];
+  const originalFetch = globalThis.fetch;
 
   function makeTempDir(): string {
     const dir = mkdtempSync(join(tmpdir(), "nativite-android-test-"));
@@ -18,6 +19,8 @@ describe("generateProject", () => {
   }
 
   afterEach(() => {
+    globalThis.fetch = originalFetch;
+
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -77,9 +80,18 @@ describe("generateProject", () => {
     );
   });
 
-  it.skip(
+  function mockGradleWrapperDownload(): void {
+    globalThis.fetch = (async () =>
+      new Response(
+        new Uint8Array(Array.from({ length: 1024 }, (_, index) => index % 255)),
+      )) as unknown as typeof fetch;
+  }
+
+  it(
     "generates gradlew with execute permissions",
     async () => {
+      mockGradleWrapperDownload();
+
       const cwd = makeTempDir();
       const result = await generateProject(androidConfig, cwd);
       const gradlewPath = join(result.projectPath, "gradlew");
@@ -93,9 +105,11 @@ describe("generateProject", () => {
     { timeout: 60_000 },
   );
 
-  it.skip(
+  it(
     "generates gradlew.bat",
     async () => {
+      mockGradleWrapperDownload();
+
       const cwd = makeTempDir();
       const result = await generateProject(androidConfig, cwd);
       const gradlewBatPath = join(result.projectPath, "gradlew.bat");
@@ -105,9 +119,11 @@ describe("generateProject", () => {
     { timeout: 60_000 },
   );
 
-  it.skip(
+  it(
     "generates gradle-wrapper.jar",
     async () => {
+      mockGradleWrapperDownload();
+
       const cwd = makeTempDir();
       const result = await generateProject(androidConfig, cwd);
       const jarPath = join(result.projectPath, "gradle", "wrapper", "gradle-wrapper.jar");
@@ -121,9 +137,11 @@ describe("generateProject", () => {
     { timeout: 60_000 },
   );
 
-  it.skip(
+  it(
     "removes stale assets/dev.json in build mode (including skipped regeneration)",
     async () => {
+      mockGradleWrapperDownload();
+
       const cwd = makeTempDir();
       const first = await generateProject(androidConfig, cwd, false, "build");
 

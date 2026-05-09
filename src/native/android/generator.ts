@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,7 +14,7 @@ import { buildGradleAppTemplate } from "./build-gradle-app.ts";
 import { buildGradleRootTemplate } from "./build-gradle-root.ts";
 import { syncAndroidDevMetadata } from "./dev-metadata.ts";
 import { gradlePropertiesTemplate } from "./gradle-properties.ts";
-import { gradleWrapperPropertiesTemplate } from "./gradle-wrapper-properties.ts";
+import { writeGradleWrapper } from "./gradle-wrapper.ts";
 import { hashConfigForGeneration } from "./hash.ts";
 import { mainActivityTemplate } from "./main-activity.ts";
 import { stringsXmlTemplate, colorsXmlTemplate, themesXmlTemplate } from "./resources.ts";
@@ -111,26 +110,15 @@ export async function generateProject(
     mkdirSync(dir, { recursive: true });
   }
 
-  // Generate Gradle wrapper (gradlew, gradlew.bat, gradle-wrapper.jar) before
-  // writing build files — Gradle evaluates build scripts during configuration,
-  // so build.gradle.kts must not exist yet.
   writeFileSync(
     join(projectRoot, "settings.gradle.kts"),
     settingsGradleTemplate(androidConfig.app.name),
   );
-  execSync("gradle wrapper --gradle-version 8.11.1 --no-daemon", {
-    cwd: projectRoot,
-    stdio: "pipe",
-    timeout: 60_000,
-  });
+  await writeGradleWrapper(projectRoot);
 
   // Root build files
   writeFileSync(join(projectRoot, "build.gradle.kts"), buildGradleRootTemplate());
   writeFileSync(join(projectRoot, "gradle.properties"), gradlePropertiesTemplate());
-  writeFileSync(
-    join(gradleWrapperDir, "gradle-wrapper.properties"),
-    gradleWrapperPropertiesTemplate(),
-  );
 
   // Version catalog
   const gradleDir = join(projectRoot, "gradle");

@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -41,6 +41,7 @@ type RegistryChunk = {
 
 describe("published runtime template paths", () => {
   const tempDirs: string[] = [];
+  const originalFetch = globalThis.fetch;
 
   function makeTempDir(prefix: string): string {
     const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -49,6 +50,8 @@ describe("published runtime template paths", () => {
   }
 
   afterEach(() => {
+    globalThis.fetch = originalFetch;
+
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -63,21 +66,8 @@ describe("published runtime template paths", () => {
       const registryChunk = Array.from(new Bun.Glob("dist/registry-*.mjs").scanSync()).at(0);
       expect(registryChunk).toBeDefined();
 
-      void mock.module("node:child_process", () => ({
-        execSync(command: string, options?: { cwd?: string }) {
-          if (!command.startsWith("gradle wrapper ")) {
-            throw new Error(`Unexpected command: ${command}`);
-          }
-
-          const cwd = options?.cwd ?? process.cwd();
-          const gradleWrapperDir = join(cwd, "gradle", "wrapper");
-          mkdirSync(gradleWrapperDir, { recursive: true });
-          writeFileSync(join(cwd, "gradlew"), "#!/usr/bin/env sh\n");
-          writeFileSync(join(cwd, "gradlew.bat"), "");
-          writeFileSync(join(gradleWrapperDir, "gradle-wrapper.jar"), "fake jar");
-          return "";
-        },
-      }));
+      globalThis.fetch = (async () =>
+        new Response(new Uint8Array([1, 2, 3]))) as unknown as typeof fetch;
 
       const registry = (await import(
         `${pathToFileURL(join(process.cwd(), registryChunk!)).href}?runtime-paths`
