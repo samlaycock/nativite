@@ -36,5 +36,6 @@ describe("OTAUpdater.swift", () => {
     expect(swift).toContain("let assets: [OTAAsset]");
     expect(swift).toContain("guard data.count == asset.size else");
     expect(swift).toContain("guard sha256Hex(data) == asset.hash else");
+    expect(swift).toContain("try? fileManager.removeItem(at: tempURL)");
   });
 });
