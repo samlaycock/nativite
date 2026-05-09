@@ -29,7 +29,9 @@ This:
    - Fallback path: `<updates.url>/<platform>/manifest.json`
 2. Compares the remote version/hash against the currently active bundle.
 3. If a newer version is available, downloads the bundle asynchronously.
-4. Stages the downloaded bundle separately from the active bundle.
+4. Validates each downloaded asset's byte count and SHA-256 hash against the
+   manifest before moving it into the staged bundle.
+5. Stages the downloaded bundle separately from the active bundle.
 
 ### Apply Pending Updates
 
@@ -56,6 +58,8 @@ Network errors during update checks or downloads are handled gracefully:
 - The app continues to use the current bundle.
 - Errors are logged but do not interrupt the user experience.
 - A failed download does not affect the staged or active bundles.
+- A downloaded asset with a mismatched size or hash fails the update before it
+  can be staged.
 
 ## Bridge Integration
 

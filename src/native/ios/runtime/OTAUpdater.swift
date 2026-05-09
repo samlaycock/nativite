@@ -1,10 +1,17 @@
+import CryptoKit
 import Foundation
+
+struct OTAAsset: Decodable {
+  let path: String
+  let hash: String
+  let size: Int
+}
 
 struct OTAManifest: Decodable {
   let platform: String
   let version: String
   let hash: String
-  let assets: [String]
+  let assets: [OTAAsset]
   let builtAt: String
 }
 
@@ -173,8 +180,8 @@ class OTAUpdater {
     try fileManager.createDirectory(at: stagedBundleURL, withIntermediateDirectories: true)
 
     for asset in manifest.assets {
-      let assetURL = bundleBaseURL.appendingPathComponent(asset)
-      let destination = stagedBundleURL.appendingPathComponent(asset)
+      let assetURL = bundleBaseURL.appendingPathComponent(asset.path)
+      let destination = stagedBundleURL.appendingPathComponent(asset.path)
 
       try fileManager.createDirectory(
         at: destination.deletingLastPathComponent(),
@@ -182,6 +189,13 @@ class OTAUpdater {
       )
 
       let (tempURL, _) = try await URLSession.shared.download(from: assetURL)
+      let data = try Data(contentsOf: tempURL)
+      guard data.count == asset.size else {
+        throw OTAUpdaterError.assetSizeMismatch(path: asset.path)
+      }
+      guard sha256Hex(data) == asset.hash else {
+        throw OTAUpdaterError.assetHashMismatch(path: asset.path)
+      }
       try fileManager.moveItem(at: tempURL, to: destination)
     }
 
@@ -198,4 +212,13 @@ class OTAUpdater {
 
     print("[OTAUpdater] Bundle staged successfully. Will apply on next launch.")
   }
+
+  private func sha256Hex(_ data: Data) -> String {
+    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  }
+}
+
+enum OTAUpdaterError: Error {
+  case assetSizeMismatch(path: String)
+  case assetHashMismatch(path: String)
 }

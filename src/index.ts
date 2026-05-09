@@ -171,7 +171,11 @@ export type NativitePlatformBuildContext = NativitePlatformHookContext & {
     platform: BundlePlatform;
     version: string;
     hash: string;
-    assets: string[];
+    assets: {
+      path: string;
+      hash: string;
+      size: number;
+    }[];
     builtAt: string;
   };
 };

@@ -192,18 +192,34 @@ active build output directory (for example `dist-ios/manifest.json`):
 
 ```json
 {
-    "platform": "ios",
-    "version": "1.0.0",
-    "hash": "sha256-of-asset-list",
-    "assets": ["index.html", "assets/index-abc123.js", ...],
-    "builtAt": "2024-01-15T12:00:00.000Z"
+  "platform": "ios",
+  "version": "1.0.0",
+  "hash": "sha256-of-asset-paths-content-hashes-and-sizes",
+  "assets": [
+    {
+      "path": "index.html",
+      "hash": "sha256-of-index-html-bytes",
+      "size": 1234
+    },
+    {
+      "path": "assets/index-abc123.js",
+      "hash": "sha256-of-javascript-bytes",
+      "size": 5678
+    }
+  ],
+  "builtAt": "2024-01-15T12:00:00.000Z"
 }
 ```
+
+The top-level `hash` is derived from the sorted per-asset path, content hash,
+and byte size tuples. This means changing a file's contents changes the bundle
+hash even if the output filename stays the same.
 
 This manifest is used by:
 
 - The native view controller for platform validation.
-- The OTA update system for version comparison.
+- The OTA update system for version comparison and downloaded asset integrity
+  validation.
 
 ### Platform Plugin Build Hook
 

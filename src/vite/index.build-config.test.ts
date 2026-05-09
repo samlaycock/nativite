@@ -1,7 +1,8 @@
 import type { UserConfig } from "vite";
+import type { Plugin, ResolvedConfig } from "vite";
 
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,6 +14,53 @@ function getCorePlugin() {
     throw new Error("nativite core plugin config hook is missing");
   }
   return plugin;
+}
+
+async function runCloseBundle(plugin: Plugin, root: string, outDir: string) {
+  const configResolved = plugin.configResolved;
+  const closeBundle = plugin.closeBundle;
+  if (!configResolved || !closeBundle) {
+    throw new Error("nativite core plugin lifecycle hooks are missing");
+  }
+
+  const configResolvedHandler =
+    typeof configResolved === "function" ? configResolved : configResolved.handler;
+  await configResolvedHandler.call(
+    {} as never,
+    {
+      root,
+      build: { outDir },
+      logger: {
+        error() {},
+      },
+    } as unknown as ResolvedConfig,
+  );
+
+  const handler = typeof closeBundle === "function" ? closeBundle : closeBundle.handler;
+  await handler.call({ environment: { name: "ios" } } as never);
+}
+
+function writeNativiteConfig(projectRoot: string) {
+  writeFileSync(
+    join(projectRoot, "nativite.config.ts"),
+    `export default {
+  app: {
+    name: "ManifestApp",
+    bundleId: "com.example.manifestapp",
+    version: "1.0.0",
+    buildNumber: 1,
+  },
+  platforms: [{ platform: "ios", minimumVersion: "17.0" }],
+};
+`,
+  );
+}
+
+function readManifestHash(outDir: string): string {
+  const manifest = JSON.parse(readFileSync(join(outDir, "manifest.json"), "utf8")) as {
+    hash: string;
+  };
+  return manifest.hash;
 }
 
 async function runConfigHook(
@@ -146,6 +194,55 @@ describe("nativite core build config", () => {
       expect(config.server).toBeObject();
       expect(hmr).toBeObject();
       expect(hmr?.overlay).toBe(false);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("nativite core build manifest", () => {
+  it("changes the bundle hash when an asset's contents change without renaming it", async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "nativite-vite-manifest-"));
+    try {
+      writeNativiteConfig(projectRoot);
+      const outDir = join(projectRoot, "dist-ios");
+      mkdirSync(join(outDir, "assets"), { recursive: true });
+      writeFileSync(join(outDir, "index.html"), "<html><body></body></html>");
+      writeFileSync(join(outDir, "assets", "index.js"), "console.log('first');");
+
+      await runCloseBundle(getCorePlugin(), projectRoot, outDir);
+      const firstHash = readManifestHash(outDir);
+
+      writeFileSync(join(outDir, "assets", "index.js"), "console.log('second');");
+
+      await runCloseBundle(getCorePlugin(), projectRoot, outDir);
+      const secondHash = readManifestHash(outDir);
+
+      expect(secondHash).not.toBe(firstHash);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("writes per-asset hashes and sizes for OTA integrity checks", async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "nativite-vite-manifest-assets-"));
+    try {
+      writeNativiteConfig(projectRoot);
+      const outDir = join(projectRoot, "dist-ios");
+      mkdirSync(join(outDir, "assets"), { recursive: true });
+      writeFileSync(join(outDir, "index.html"), "<html><body></body></html>");
+      writeFileSync(join(outDir, "assets", "index.js"), "console.log('asset');");
+
+      await runCloseBundle(getCorePlugin(), projectRoot, outDir);
+      const manifest = JSON.parse(readFileSync(join(outDir, "manifest.json"), "utf8")) as {
+        assets: { path: string; hash: string; size: number }[];
+      };
+      const asset = manifest.assets.find((entry) => entry.path === "assets/index.js");
+
+      expect(asset).toBeDefined();
+      expect(asset?.hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(asset?.size).toBe("console.log('asset');".length);
+      expect(manifest.assets.some((entry) => entry.path === "manifest.json")).toBe(false);
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }

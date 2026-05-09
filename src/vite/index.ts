@@ -8,7 +8,15 @@ import type {
 } from "vite";
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, statSync, watchFile, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  watchFile,
+  writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 
 import {
@@ -66,13 +74,42 @@ type PlatformRuntimeMetadata = {
   desktop: boolean;
 };
 
+interface BuildManifestAsset {
+  path: string;
+  hash: string;
+  size: number;
+}
+
 type BuildManifest = {
   platform: BundlePlatform;
   version: string;
   hash: string;
-  assets: string[];
+  assets: BuildManifestAsset[];
   builtAt: string;
 };
+
+function hashAssetContent(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function createBuildManifestAssets(distDir: string): BuildManifestAsset[] {
+  return collectAssets(distDir, distDir)
+    .filter((path) => path !== "manifest.json")
+    .sort()
+    .map((path) => {
+      const fullPath = join(distDir, path);
+      return {
+        path,
+        hash: hashAssetContent(fullPath),
+        size: statSync(fullPath).size,
+      };
+    });
+}
+
+function hashBuildManifestAssets(assets: readonly BuildManifestAsset[]): string {
+  const content = assets.map((asset) => `${asset.path}\0${asset.hash}\0${asset.size}`).join("\n");
+  return createHash("sha256").update(content).digest("hex");
+}
 
 function runtimeMetadataFromEnv(): Record<string, PlatformRuntimeMetadata> {
   return deserializePlatformRuntimeMetadata(process.env["NATIVITE_PLATFORM_METADATA"]);
@@ -688,8 +725,8 @@ function nativiteCorePlugin(): Plugin {
       const distDir = viteConfig.build.outDir;
       if (!existsSync(distDir)) return;
 
-      const assets = collectAssets(distDir, distDir).sort();
-      const hash = createHash("sha256").update(assets.join("\n")).digest("hex");
+      const assets = createBuildManifestAssets(distDir);
+      const hash = hashBuildManifestAssets(assets);
       const manifestPlatform =
         buildPlatform ?? toBundlePlatform(this.environment?.name, platformMetadata);
       if (!manifestPlatform) return;

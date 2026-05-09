@@ -29,4 +29,12 @@ describe("OTAUpdater.swift", () => {
     expect(swift).toContain('return ["available": false]');
     expect(swift).toContain('return ["available": true, "version": manifest.version]');
   });
+
+  it("validates downloaded asset contents against the manifest", () => {
+    expect(swift).toContain("import CryptoKit");
+    expect(swift).toContain("struct OTAAsset: Decodable");
+    expect(swift).toContain("let assets: [OTAAsset]");
+    expect(swift).toContain("guard data.count == asset.size else");
+    expect(swift).toContain("guard sha256Hex(data) == asset.hash else");
+  });
 });
