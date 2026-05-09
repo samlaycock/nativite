@@ -5,6 +5,20 @@
 
 The generator creates a complete Xcode project from the user's configuration. It supports both iOS and macOS targets via the `AppleTargetPlatform` parameter.
 
+## Toolchain Boundary
+
+Project generation writes Xcode project files, Swift sources, manifests, and
+asset catalog metadata. Nativite intentionally does not install, download,
+vendor, or bootstrap Apple toolchain dependencies. Xcode, Xcode command line
+tools, SDKs, simulators/devices, signing identities, and provisioning profiles
+are machine-level prerequisites that should be installed by the developer or CI
+image.
+
+If project generation or native builds fail because Apple tooling is missing,
+install/configure Xcode and rerun the Nativite build command. The generated
+project is then built and launched through normal Xcode or `xcodebuild`
+workflows.
+
 ## Generated Directory Structure
 
 ```

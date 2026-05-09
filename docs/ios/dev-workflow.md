@@ -5,6 +5,21 @@
 The iOS platform plugin generates an Xcode project that developers run with
 normal Xcode simulator, device, signing, and archive workflows.
 
+## Toolchain Ownership
+
+Nativite does not install, download, vendor, or bootstrap Apple toolchain
+dependencies. Before generating, building, or launching iOS projects, the
+developer or CI image must provide:
+
+- macOS with Xcode installed
+- Xcode command line tools selected and available on `PATH`
+- An available iOS simulator or connected device for launch/testing
+- Signing configuration for device builds, archives, and distribution
+
+Xcode owns native dependency resolution, simulator/device selection, signing,
+archiving, and App Store distribution. Nativite's responsibility is to generate
+the project structure and web bundle handoff files.
+
 ## Primary Flow
 
 When running `nativite build` for iOS:
@@ -19,6 +34,11 @@ The Vite plugin writes the iOS web bundle to `dist-ios/` and emits
 
 The iOS platform build hook calls `generateProject(config, cwd, false, "build", "ios")`
 to create or update the Xcode project in `.nativite/ios/`.
+
+Project generation writes an `.xcodeproj` and Swift source files only. It does
+not install Xcode, select simulators, create signing identities, or provision
+devices. If Xcode tooling is unavailable, configure the Apple toolchain and
+rerun the Nativite build command.
 
 ### 3. Open and run in Xcode
 

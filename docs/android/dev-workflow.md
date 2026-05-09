@@ -5,6 +5,21 @@
 The Android platform plugin generates a Gradle project that developers run with
 normal Android Studio emulator, device, signing, and packaging workflows.
 
+## Toolchain Ownership
+
+Nativite does not install, download, vendor, or bootstrap Android toolchain
+dependencies. Before generating or building Android projects, the developer or
+CI image must provide:
+
+- Android Studio or equivalent Android SDK tooling
+- A configured Android SDK and emulator or device
+- A JDK compatible with the generated Android Gradle project
+- A `gradle` command on `PATH` for bootstrapping the generated Gradle wrapper
+
+Android Studio and Gradle own native dependency resolution, emulator/device
+selection, signing, APK/AAB generation, and Play Store packaging. Nativite's
+responsibility is to generate the project structure and web bundle handoff files.
+
 ## Primary Flow
 
 When running `nativite build` for Android:
@@ -19,6 +34,12 @@ The Vite plugin writes the Android web bundle to `dist-android/` and emits
 
 The Android platform build hook calls `generateAndroidProject(config, cwd, false, "build")`
 to create or update the Gradle project in `.nativite/android/`.
+
+Project generation invokes `gradle wrapper --gradle-version 8.11.1 --no-daemon`
+inside `.nativite/android/`. This is intentional: Nativite relies on an
+already-configured Gradle installation instead of managing executable Gradle
+artifacts itself. If `gradle` is unavailable, install/configure Gradle and rerun
+the Nativite build command.
 
 Build and generate modes remove any stale debug `assets/dev.json` so release
 runtime code does not read a dev server URL.

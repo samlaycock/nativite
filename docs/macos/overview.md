@@ -2,6 +2,20 @@
 
 macOS shares the same codebase as iOS via Apple's unified Swift/SwiftUI framework with conditional compilation (`#if os(macOS)` / `#if os(iOS)`). All generated Swift files are shared between iOS and macOS with platform-specific branches.
 
+## Toolchain Ownership
+
+Nativite does not install, download, vendor, or bootstrap Apple toolchain
+dependencies. Before generating, building, or launching macOS projects, the
+developer or CI image must provide:
+
+- macOS with Xcode installed
+- Xcode command line tools selected and available on `PATH`
+- Signing/notarization configuration when required for distribution
+
+Xcode owns native dependency resolution, signing, notarization, archiving, and
+distribution. Nativite's responsibility is to generate the project structure and
+web bundle handoff files.
+
 ## Shared Files with iOS
 
 The macOS project is generated from the same templates as iOS:
@@ -182,6 +196,10 @@ Uses `NSViewController` instead of `UIViewController`:
 3. Kills any existing app instance
 4. Launches the built binary directly (no simulator needed)
 5. Dev URL passed via `NATIVITE_DEV_URL` environment variable
+
+The `xcodebuild` step requires Xcode command line tools. Nativite does not
+install Xcode, select signing identities, or manage notarization credentials; set
+those up in Xcode or the CI image before running macOS builds.
 
 ### File Extension Resolution
 

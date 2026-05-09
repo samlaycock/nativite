@@ -60,6 +60,18 @@ The generator creates a complete Android Gradle project from the user's configur
 10. Writes `.hash-android` for dirty-check optimization.
 11. In non-dev generation modes, removes stale `assets/dev.json` so production builds do not carry dev server configuration.
 
+## Toolchain Boundary
+
+The `gradle wrapper` step requires a `gradle` command on `PATH`. Nativite
+intentionally does not download, vendor, or bootstrap Gradle binaries or wrapper
+JARs. Gradle, Java, Android Studio, and the Android SDK are machine-level
+toolchain prerequisites that should be installed by the developer or CI image.
+
+If project generation fails because `gradle` is missing, install/configure Gradle
+and rerun `bunx nativite build --platform android`. The generated wrapper then
+uses the pinned Gradle distribution URL in `gradle-wrapper.properties` for normal
+Gradle wrapper operation.
+
 ## Dirty-Check Optimization
 
 Same as iOS: SHA256 hash of normalised config (including plugin fingerprints). Skips regeneration if hash matches the stored `.hash-android` file.

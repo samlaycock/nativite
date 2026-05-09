@@ -34,9 +34,15 @@ Peer dependencies:
 
 ## Requirements
 
-- macOS + Xcode (for iOS/macOS generation and launch)
-- Android SDK + emulator/device (for Android)
+- macOS, Xcode, Xcode command line tools, and available simulators/devices (for iOS/macOS)
+- Android Studio, Android SDK, a JDK, and a `gradle` command on `PATH` (for Android)
 - Bun 1.x or Node 18+
+
+Nativite does not install, download, vendor, or bootstrap native toolchain
+dependencies. Xcode, Xcode command line tools, simulators, Android Studio, the
+Android SDK, Java, and Gradle are machine prerequisites that should be installed
+and managed by the developer or their CI image. Nativite generates native project
+files and prints clear errors when required tooling is unavailable.
 
 ## Quick Start
 
@@ -352,6 +358,10 @@ importable `nativite/cli` runtime module.
 
 - iOS/macOS build/launch issues
   - Ensure Xcode command line tools are installed and simulators exist.
+
+- Android project generation fails with `gradle: command not found`
+  - Install Gradle or expose Android Studio's Gradle-compatible tooling on
+    `PATH`, then rerun `bunx nativite build --platform android`.
 
 ## Documentation Map
 
