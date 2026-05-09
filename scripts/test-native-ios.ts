@@ -86,6 +86,9 @@ function writeGeneratedConfig(packageDir: string): void {
     static let otaEnabled: Bool = false
     static let otaServerURL: String = ""
     static let otaChannel: String = ""
+    static let otaSigningPublicKey: String = ""
+    static let otaAllowInsecureHTTP: Bool = false
+    static let appVersion: String = "1.0.0"
     static let defaultChromeStateJSON: String? = nil
 }
 `,

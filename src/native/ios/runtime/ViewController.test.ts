@@ -116,8 +116,10 @@ describe("ViewController.swift", () => {
 
   it("guards OTA calls behind NativiteConfig.otaEnabled", () => {
     expect(swift).toContain("if NativiteConfig.otaEnabled {");
+    expect(swift).toContain("otaUpdater.rollbackPendingLaunchIfNeeded()");
     expect(swift).toContain("otaUpdater.applyPendingUpdateIfAvailable()");
     expect(swift).toContain("Task { await otaUpdater.checkForUpdate() }");
+    expect(swift).toContain("otaUpdater.markLaunchSucceeded()");
   });
 
   it("guards OTA bundle check in loadContent with NativiteConfig.otaEnabled", () => {
