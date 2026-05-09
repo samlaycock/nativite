@@ -51,6 +51,7 @@ function createRuntime(id: string): ResolvedNativitePlatformRuntime {
     id,
     config: { platform: id } as ResolvedNativitePlatformRuntime["config"],
     plugin: { name: `${id}-plugin`, platform: id },
+    rootDir: "/mock/project",
     extensions: [`.${id}`, ".native"],
     environments: [id],
     bundlePlatform: id,

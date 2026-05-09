@@ -522,7 +522,7 @@ function nativiteCorePlugin(): Plugin {
       nativiteDir = join(viteConfig.root, ".nativite");
       // Load nativite.config.ts now that we know the project root.
       config = await loadNativiteConfigFromDir(viteConfig.root);
-      configuredPlatformRuntimes = resolveConfiguredPlatformRuntimes(config);
+      configuredPlatformRuntimes = resolveConfiguredPlatformRuntimes(config, viteConfig.root);
       configuredNativeEnvironmentNames = new Set(
         configuredPlatformRuntimes
           .filter((runtime) => runtime.native)
@@ -629,7 +629,10 @@ function nativiteCorePlugin(): Plugin {
             // Reload from disk — `config` holds the startup value and would
             // always match the stored hash, so changes would never be detected.
             const freshConfig = await loadNativiteConfigFromDir(viteConfig.root);
-            configuredPlatformRuntimes = resolveConfiguredPlatformRuntimes(freshConfig);
+            configuredPlatformRuntimes = resolveConfiguredPlatformRuntimes(
+              freshConfig,
+              viteConfig.root,
+            );
             configuredNativeEnvironmentNames = new Set(
               configuredPlatformRuntimes
                 .filter((runtime) => runtime.native)
@@ -646,6 +649,7 @@ function nativiteCorePlugin(): Plugin {
                 rootConfig: freshConfig,
                 config: runtimeConfig,
                 projectRoot: viteConfig.root,
+                rootDir: runtime.rootDir,
                 platform: runtime.config,
                 logger: viteConfig.logger,
                 force: false,
@@ -753,6 +757,7 @@ function nativiteCorePlugin(): Plugin {
           rootConfig: config,
           config: runtimeConfig,
           projectRoot: viteConfig.root,
+          rootDir: targetRuntime.rootDir,
           platform: targetRuntime.config,
           logger: viteConfig.logger,
           outDir: distDir,
