@@ -6,13 +6,14 @@ The platform registry is the core orchestration system that maps configured plat
 
 ## Key Functions
 
-### `resolveConfiguredPlatformRuntimes(config)`
+### `resolveConfiguredPlatformRuntimes(config, projectRoot?)`
 
 The main function that:
 
 1. Loads all first-party platform plugins (iOS, macOS, Android).
 2. Merges any custom platform plugins from the user's config.
-3. Returns resolved runtime objects for each configured platform.
+3. Resolves each platform plugin root directory.
+4. Returns resolved runtime objects for each configured platform.
 
 ### `resolveConfigForPlatform(config, platformId)`
 
@@ -39,6 +40,7 @@ type ResolvedNativitePlatformRuntime = {
   id: string; // "ios", "android", "macos"
   config: NativitePlatformConfig; // Platform-specific config
   plugin: NativitePlatformPlugin; // Plugin with generate/build hooks
+  rootDir: string; // Platform plugin root directory
   extensions: string[]; // [".ios", ".mobile", ".native"]
   environments: string[]; // ["ios", "ipad"]
   bundlePlatform: string; // Platform name for bundle manifest
@@ -63,6 +65,51 @@ For custom platform plugins, omitted traits default to:
 - `native: true`
 - `mobile: false`
 - `desktop: false`
+
+Custom platform plugins are explicit config entries. They can be imported from a
+local file in the app repository or from an installed package:
+
+```ts
+// platforms/electron/platform.ts
+import { definePlatformPlugin } from "nativite";
+
+export const electronPlatform = definePlatformPlugin(
+  {
+    name: "electron-platform",
+    platform: "electron",
+    native: true,
+    desktop: true,
+    extensions: [".electron", ".desktop", ".native"],
+    environments: ["electron"],
+    async generate(ctx) {
+      // ctx.rootDir is this module's directory when import.meta.url is passed.
+    },
+    async build(ctx) {},
+  },
+  import.meta.url,
+);
+```
+
+```ts
+// nativite.config.ts
+import { defineConfig, platform } from "nativite";
+import { electronPlatform } from "./platforms/electron/platform";
+
+export default defineConfig({
+  app: {
+    name: "MyApp",
+    bundleId: "com.example.myapp",
+    version: "1.0.0",
+    buildNumber: 1,
+  },
+  platforms: [platform("electron", { appId: "com.example.myapp" })],
+  platformPlugins: [electronPlatform],
+});
+```
+
+Passing `import.meta.url` to `definePlatformPlugin` makes `ctx.rootDir` resolve
+to the platform plugin module directory. String `rootDir` values are resolved
+from the app project root; `URL` values are resolved as file-system paths.
 
 ### Plugin Hooks
 

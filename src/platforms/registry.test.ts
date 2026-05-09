@@ -1,4 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { NativiteConfigSchema, definePlatformPlugin, ios, macos, platform } from "../index.ts";
 import {
@@ -60,6 +64,38 @@ describe("platform registry", () => {
     expect(runtimes[0]?.native).toBe(true);
     expect(runtimes[0]?.mobile).toBe(true);
     expect(runtimes[0]?.desktop).toBe(false);
+  });
+
+  it("resolves custom platform plugin roots from definePlatformPlugin import metadata", () => {
+    const root = mkdtempSync(join(tmpdir(), "nativite-platform-import-meta-"));
+    try {
+      const pluginModulePath = join(root, "platform.ts");
+      writeFileSync(pluginModulePath, "export {}\n");
+
+      const config = NativiteConfigSchema.parse({
+        app: {
+          name: "TestApp",
+          bundleId: "com.example.testapp",
+          version: "1.0.0",
+          buildNumber: 1,
+        },
+        platforms: [platform("console", { deviceFamily: "tv" })],
+        platformPlugins: [
+          definePlatformPlugin(
+            {
+              name: "console-platform",
+              platform: "console",
+            },
+            pathToFileURL(pluginModulePath),
+          ),
+        ],
+      });
+
+      const runtimes = resolveConfiguredPlatformRuntimes(config);
+      expect(runtimes[0]?.rootDir).toBe(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("defaults platform traits to native=true mobile=false desktop=false when omitted", () => {

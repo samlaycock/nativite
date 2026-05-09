@@ -23,6 +23,7 @@ export interface BuildCommandDependencies {
   readonly loadConfig: (cwd: string) => Promise<NativiteConfig>;
   readonly resolveConfiguredPlatformRuntimes: (
     config: NativiteConfig,
+    projectRoot?: string,
   ) => ResolvedNativitePlatformRuntime[];
   readonly serializePlatformRuntimeMetadata: (
     runtimes: ResolvedNativitePlatformRuntime[],
@@ -123,7 +124,7 @@ export async function runBuildCommand(
 
   let runtimes: ResolvedNativitePlatformRuntime[];
   try {
-    runtimes = deps.resolveConfiguredPlatformRuntimes(config);
+    runtimes = deps.resolveConfiguredPlatformRuntimes(config, deps.cwd());
   } catch (err) {
     logger.error(toErrorMessage(err));
     return 1;

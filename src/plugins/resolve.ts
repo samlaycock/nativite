@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type {
   NativiteApplePlatformContribution,
@@ -11,6 +12,7 @@ import type {
   NativitePluginFile,
   NativitePluginMode,
   NativitePluginRegistrar,
+  NativitePluginRoot,
 } from "../index.ts";
 
 export type ResolvedNativitePluginFile = {
@@ -95,6 +97,18 @@ function emptyPlatformContribution(): ResolvedNativitePlatformContribution {
     registrars: [],
     dependencies: [],
   };
+}
+
+function resolvePluginRootDir(
+  projectRoot: string,
+  rootDir: NativitePluginRoot | undefined,
+): string {
+  if (rootDir instanceof URL) {
+    const path = fileURLToPath(rootDir);
+    return resolve(rootDir.href.endsWith("/") ? path : dirname(path));
+  }
+
+  return resolve(projectRoot, typeof rootDir === "string" && rootDir.length > 0 ? rootDir : ".");
 }
 
 function mergeContributions(
@@ -406,10 +420,7 @@ export async function resolveNativitePlugins(
   const androidEnabled = configuredPlatforms.has("android");
 
   for (const plugin of plugins) {
-    const rootDir = resolve(
-      projectRoot,
-      typeof plugin.rootDir === "string" && plugin.rootDir.length > 0 ? plugin.rootDir : ".",
-    );
+    const rootDir = resolvePluginRootDir(projectRoot, plugin.rootDir);
 
     const staticContribution = getStaticContribution(plugin);
     const dynamicContribution =

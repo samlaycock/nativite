@@ -6,6 +6,8 @@ import type { ChromeState } from "./chrome/types.ts";
 
 export type NativitePluginMode = "generate" | "dev" | "build";
 
+export type NativitePluginRoot = string | URL;
+
 export type NativitePluginFile = string | { path: string };
 
 export type NativitePluginRegistrar = string | { symbol: string };
@@ -55,7 +57,7 @@ export type NativitePlugin = {
    * Base directory for resolving relative plugin paths.
    * Defaults to the app project root when omitted.
    */
-  rootDir?: string;
+  rootDir?: NativitePluginRoot;
   /**
    * Optional manual cache key used by generation dirty-checking.
    * Useful when plugin contributions are dynamic.
@@ -158,6 +160,7 @@ export type NativitePlatformHookContext = {
   rootConfig: NativiteConfig;
   config: NativiteConfig;
   projectRoot: string;
+  rootDir: string;
   platform: NativitePlatformConfig;
   logger: NativitePlatformLogger;
 };
@@ -185,6 +188,11 @@ export type NativitePlatformBuildContext = NativitePlatformHookContext & {
 export type NativitePlatformPlugin = {
   name: string;
   platform: string;
+  /**
+   * Base directory for platform-plugin-owned files.
+   * Defaults to the app project root when omitted.
+   */
+  rootDir?: NativitePluginRoot;
   /**
    * Whether this platform runs in a native shell/runtime.
    * Defaults to true when omitted.
@@ -272,28 +280,55 @@ export function platform<T extends Record<string, unknown>>(
   return { platform: name, ...(config ?? ({} as T)) };
 }
 
+function rootDirFromImportMeta(importMetaUrl: string | URL): URL {
+  return new URL(".", importMetaUrl);
+}
+
 /**
  * Identity helper for platform plugin authoring.
+ *
+ * Pass `import.meta.url` as the second argument when the platform plugin owns
+ * local files. This makes relative paths stable for in-repo files and published
+ * packages without requiring package-name conventions.
+ *
+ * @example
+ * export default definePlatformPlugin({ name: "my-platform", platform: "myos" }, import.meta.url)
  */
-export function definePlatformPlugin(plugin: NativitePlatformPlugin): NativitePlatformPlugin {
-  return plugin;
+export function definePlatformPlugin(
+  plugin: NativitePlatformPlugin,
+  importMetaUrl?: string | URL,
+): NativitePlatformPlugin {
+  if (!importMetaUrl || plugin.rootDir !== undefined) return plugin;
+  return { ...plugin, rootDir: rootDirFromImportMeta(importMetaUrl) };
 }
 
 /**
  * Identity helper for plugin authoring.
  *
+ * Pass `import.meta.url` as the second argument when the plugin owns native
+ * files. This makes relative paths stable for in-repo files and published
+ * packages without requiring package-name conventions.
+ *
  * @example
  * import { definePlugin } from "nativite"
- * export const myPlugin = definePlugin({ name: "my-plugin", ... })
+ * export const myPlugin = definePlugin({ name: "my-plugin", ... }, import.meta.url)
  */
-export function definePlugin(plugin: NativitePlugin): NativitePlugin {
-  return plugin;
+export function definePlugin(plugin: NativitePlugin, importMetaUrl?: string | URL): NativitePlugin {
+  if (!importMetaUrl || plugin.rootDir !== undefined) return plugin;
+  return { ...plugin, rootDir: rootDirFromImportMeta(importMetaUrl) };
 }
 
 function isPluginConfig(value: unknown): value is NativitePlugin {
   if (typeof value !== "object" || value === null) return false;
-  const candidate = value as { name?: unknown; resolve?: unknown };
+  const candidate = value as { name?: unknown; rootDir?: unknown; resolve?: unknown };
   if (typeof candidate.name !== "string" || candidate.name.length === 0) return false;
+  if (
+    candidate.rootDir !== undefined &&
+    typeof candidate.rootDir !== "string" &&
+    !(candidate.rootDir instanceof URL)
+  ) {
+    return false;
+  }
   if (candidate.resolve !== undefined && typeof candidate.resolve !== "function") return false;
   return true;
 }
@@ -303,6 +338,7 @@ function isPlatformPluginConfig(value: unknown): value is NativitePlatformPlugin
   const candidate = value as {
     name?: unknown;
     platform?: unknown;
+    rootDir?: unknown;
     native?: unknown;
     mobile?: unknown;
     desktop?: unknown;
@@ -313,6 +349,13 @@ function isPlatformPluginConfig(value: unknown): value is NativitePlatformPlugin
   };
   if (typeof candidate.name !== "string" || candidate.name.length === 0) return false;
   if (typeof candidate.platform !== "string" || candidate.platform.length === 0) return false;
+  if (
+    candidate.rootDir !== undefined &&
+    typeof candidate.rootDir !== "string" &&
+    !(candidate.rootDir instanceof URL)
+  ) {
+    return false;
+  }
   if (candidate.native !== undefined && typeof candidate.native !== "boolean") return false;
   if (candidate.mobile !== undefined && typeof candidate.mobile !== "boolean") return false;
   if (candidate.desktop !== undefined && typeof candidate.desktop !== "boolean") return false;

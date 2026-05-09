@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import type { NativiteConfig } from "../index.ts";
-
+import { definePlugin, type NativiteConfig } from "../index.ts";
 import { resolveNativitePlugins } from "./resolve.ts";
 
 function makeBaseConfig(): NativiteConfig {
@@ -90,6 +90,44 @@ describe("resolveNativitePlugins", () => {
       const resolved = await resolveNativitePlugins(config, root, "dev");
       expect(resolved.platforms.ios.sources[0]?.absolutePath).toBe(
         join(root, "vendor", "camera", "ios", "PackageCamera.swift"),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves plugin paths relative to definePlugin import metadata", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nativite-plugin-import-meta-"));
+    try {
+      mkdirSync(join(root, "plugins", "camera", "ios"), { recursive: true });
+      const pluginModulePath = join(root, "plugins", "camera", "camera.ts");
+      writeFileSync(pluginModulePath, "export {}\n");
+      writeFileSync(
+        join(root, "plugins", "camera", "ios", "CameraPlugin.swift"),
+        "func noop() {}\n",
+      );
+
+      const config: NativiteConfig = {
+        ...makeBaseConfig(),
+        plugins: [
+          definePlugin(
+            {
+              name: "camera-plugin",
+              platforms: {
+                ios: {
+                  sources: ["./ios/CameraPlugin.swift"],
+                },
+              },
+            },
+            pathToFileURL(pluginModulePath),
+          ),
+        ],
+      };
+
+      const resolved = await resolveNativitePlugins(config, root, "generate");
+      expect(resolved.plugins[0]?.rootDir).toBe(join(root, "plugins", "camera"));
+      expect(resolved.platforms.ios.sources[0]?.absolutePath).toBe(
+        join(root, "plugins", "camera", "ios", "CameraPlugin.swift"),
       );
     } finally {
       rmSync(root, { recursive: true, force: true });

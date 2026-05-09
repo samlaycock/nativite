@@ -1,3 +1,6 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import type { NativiteConfig, NativitePlatformConfig, NativitePlatformPlugin } from "../index.ts";
 
 import { FIRST_PARTY_PLATFORM_PLUGINS } from "./first-party.ts";
@@ -6,6 +9,7 @@ export type ResolvedNativitePlatformRuntime = {
   id: string;
   config: NativitePlatformConfig;
   plugin: NativitePlatformPlugin;
+  rootDir: string;
   extensions: string[];
   environments: string[];
   bundlePlatform: string;
@@ -54,12 +58,23 @@ function normalizePlatformTraits(plugin: NativitePlatformPlugin): {
   return { native, mobile, desktop };
 }
 
+function resolvePlatformPluginRootDir(projectRoot: string, plugin: NativitePlatformPlugin): string {
+  const rootDir = plugin.rootDir;
+  if (rootDir instanceof URL) {
+    const path = fileURLToPath(rootDir);
+    return resolve(rootDir.href.endsWith("/") ? path : dirname(path));
+  }
+
+  return resolve(projectRoot, typeof rootDir === "string" && rootDir.length > 0 ? rootDir : ".");
+}
+
 export function getConfiguredPlatforms(config: NativiteConfig): NativitePlatformConfig[] {
   return config.platforms ?? [];
 }
 
 export function resolveConfiguredPlatformRuntimes(
   config: NativiteConfig,
+  projectRoot = process.cwd(),
 ): ResolvedNativitePlatformRuntime[] {
   const configuredPlatforms = getConfiguredPlatforms(config);
   const pluginByPlatform = new Map<string, NativitePlatformPlugin>();
@@ -85,6 +100,7 @@ export function resolveConfiguredPlatformRuntimes(
       id: platformEntry.platform,
       config: platformEntry,
       plugin,
+      rootDir: resolvePlatformPluginRootDir(projectRoot, plugin),
       extensions: toDotPrefixedSuffixes(platformEntry.platform, plugin.extensions),
       environments: normalizeEnvironments(platformEntry.platform, plugin.environments),
       bundlePlatform: platformEntry.platform,

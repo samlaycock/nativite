@@ -63,6 +63,74 @@ const result = await bridge.call("camera", "takePhoto", { quality: 0.8 });
 console.log(result.path); // "/path/to/photo.jpg"
 ```
 
+## Authoring Plugins
+
+Plugins are ordinary JavaScript or TypeScript modules. They do not need to live
+in a monorepo workspace, follow a package-name convention, or be published
+before they can be used. A project can import a plugin from any local file:
+
+```ts
+// plugins/camera/plugin.ts
+import { definePlugin } from "nativite";
+
+export const cameraPlugin = definePlugin(
+  {
+    name: "camera",
+    platforms: {
+      ios: {
+        sources: ["./ios/CameraPlugin.swift"],
+        registrars: ["registerCameraPlugin"],
+        dependencies: ["AVFoundation"],
+      },
+      macos: {
+        sources: ["./macos/CameraPlugin.swift"],
+        registrars: ["registerCameraPlugin"],
+      },
+    },
+  },
+  import.meta.url,
+);
+```
+
+```ts
+// nativite.config.ts
+import { defineConfig, ios } from "nativite";
+import { cameraPlugin } from "./plugins/camera/plugin";
+
+export default defineConfig({
+  app: {
+    name: "MyApp",
+    bundleId: "com.example.myapp",
+    version: "1.0.0",
+    buildNumber: 1,
+  },
+  platforms: [ios()],
+  plugins: [cameraPlugin],
+});
+```
+
+Passing `import.meta.url` to `definePlugin` makes relative native file paths
+resolve from the plugin module's directory. This is the recommended pattern for
+both local in-repo plugins and third-party packages because the consumer does
+not need to know where the plugin stores its native files.
+
+Plugins can also set `rootDir` directly:
+
+```ts
+definePlugin({
+  name: "camera",
+  rootDir: "./plugins/camera",
+  platforms: {
+    ios: { sources: ["./ios/CameraPlugin.swift"] },
+  },
+});
+```
+
+String `rootDir` values are resolved from the app project root. `URL` values
+are resolved as file-system paths, so package authors can use
+`rootDir: new URL(".", import.meta.url)` if they do not want to use the second
+`definePlugin` argument.
+
 ## Handler Resolution
 
 Handlers are stored as `"namespace.method"` keys:
@@ -88,7 +156,8 @@ This allows O(1) lookup and prevents namespace collisions between plugins.
 
 During project generation, plugins are resolved from the config:
 
-- Plugin packages are discovered and their Apple native registration functions identified.
+- Plugins are explicit config entries imported by the app from local files or external packages.
+- Relative plugin native file paths are resolved from the plugin `rootDir`; when `definePlugin(..., import.meta.url)` is used, that root is the plugin module directory.
 - iOS/macOS generation creates the `NativitePluginRegistrant` file with conditional compilation for each Apple platform.
 - Android `platforms.android` native source/resource/registrar/dependency contributions are rejected because Android Gradle inclusion and native registrant generation are not implemented.
 - Plugin fingerprints are included in the config hash for dirty-check optimization.
