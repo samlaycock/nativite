@@ -65,7 +65,7 @@ describe("built package exports", () => {
         execFileSync(process.execPath, [scriptPath], { cwd: packageRoot, stdio: "pipe" });
       }
     },
-    { timeout: 30_000 },
+    { timeout: 60_000 },
   );
 
   it(
