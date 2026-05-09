@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-struct OTAAsset: Decodable {
+struct OTAAsset: Codable {
   let path: String
   let hash: String
   let size: Int
@@ -15,6 +15,24 @@ struct OTAManifest: Decodable {
   let builtAt: String
   let minimumAppVersion: String?
   let signature: String?
+}
+
+private struct SignedOTAManifestPayload: Encodable {
+  let platform: String
+  let version: String
+  let hash: String
+  let assets: [OTAAsset]
+  let builtAt: String
+  let minimumAppVersion: String?
+
+  init(manifest: OTAManifest) {
+    platform = manifest.platform
+    version = manifest.version
+    hash = manifest.hash
+    assets = manifest.assets
+    builtAt = manifest.builtAt
+    minimumAppVersion = manifest.minimumAppVersion
+  }
 }
 
 class OTAUpdater {
@@ -107,12 +125,15 @@ class OTAUpdater {
   func rollbackPendingLaunchIfNeeded() {
     let markerURL = activeBundleURL.appendingPathComponent(".pending_launch")
     guard fileManager.fileExists(atPath: markerURL.path) else { return }
-    guard fileManager.fileExists(atPath: rollbackBundleURL.path) else { return }
 
     do {
       try fileManager.removeItem(at: activeBundleURL)
-      try fileManager.moveItem(at: rollbackBundleURL, to: activeBundleURL)
-      print("[OTAUpdater] Rolled back OTA bundle after an unsuccessful launch.")
+      if fileManager.fileExists(atPath: rollbackBundleURL.path) {
+        try fileManager.moveItem(at: rollbackBundleURL, to: activeBundleURL)
+        print("[OTAUpdater] Rolled back OTA bundle after an unsuccessful launch.")
+      } else {
+        print("[OTAUpdater] Removed failed first OTA bundle; embedded bundle will be used.")
+      }
     } catch {
       print("[OTAUpdater] Failed to roll back OTA bundle: \(error)")
     }
@@ -306,9 +327,9 @@ class OTAUpdater {
       throw OTAUpdaterError.invalidManifestSignature
     }
 
-    var json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-    json.removeValue(forKey: "signature")
-    let signedData = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let signedData = try encoder.encode(SignedOTAManifestPayload(manifest: manifest))
     let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
 
     guard publicKey.isValidSignature(signatureData, for: signedData) else {

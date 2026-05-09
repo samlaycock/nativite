@@ -35,7 +35,7 @@ describe("OTAUpdater.swift", () => {
 
   it("validates downloaded asset contents against the manifest", () => {
     expect(swift).toContain("import CryptoKit");
-    expect(swift).toContain("struct OTAAsset: Decodable");
+    expect(swift).toContain("struct OTAAsset: Codable");
     expect(swift).toContain("let assets: [OTAAsset]");
     expect(swift).toContain("guard data.count == asset.size else");
     expect(swift).toContain("guard sha256Hex(data) == asset.hash else");
@@ -45,10 +45,12 @@ describe("OTAUpdater.swift", () => {
   it("verifies signed manifests when a public key is configured", () => {
     expect(swift).toContain("let minimumAppVersion: String?");
     expect(swift).toContain("let signature: String?");
+    expect(swift).toContain("private struct SignedOTAManifestPayload: Encodable");
     expect(swift).toContain(
       "private func verifyManifest(data: Data, manifest: OTAManifest) throws",
     );
-    expect(swift).toContain('json.removeValue(forKey: "signature")');
+    expect(swift).toContain("encoder.outputFormatting = [.sortedKeys]");
+    expect(swift).toContain("encoder.encode(SignedOTAManifestPayload(manifest: manifest))");
     expect(swift).toContain("Curve25519.Signing.PublicKey");
     expect(swift).toContain("publicKey.isValidSignature(signatureData, for: signedData)");
   });
@@ -65,5 +67,8 @@ describe("OTAUpdater.swift", () => {
     expect(swift).toContain("func rollbackPendingLaunchIfNeeded()");
     expect(swift).toContain("func markLaunchSucceeded()");
     expect(swift).toContain('appendingPathComponent(".pending_launch")');
+    expect(swift).toContain(
+      'print("[OTAUpdater] Removed failed first OTA bundle; embedded bundle will be used.")',
+    );
   });
 });

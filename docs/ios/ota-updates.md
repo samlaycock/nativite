@@ -65,9 +65,11 @@ The manifest format is:
 `minimumAppVersion` is optional. When present, the native app version must be
 greater than or equal to it using numeric version comparison.
 
-For signed manifests, sign the JSON object without the `signature` property,
-serialized with lexicographically sorted keys. Assets are then downloaded
-relative to the manifest directory.
+For signed manifests, sign the canonical payload without the `signature`
+property. The canonical payload uses the manifest fields shown above, encodes
+`assets[].size` as a JSON integer, omits no required fields, and serializes keys
+lexicographically in the same form produced by Swift `JSONEncoder` with
+`.sortedKeys`. Assets are then downloaded relative to the manifest directory.
 
 ## Update Flow
 
