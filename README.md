@@ -104,14 +104,15 @@ export default defineConfig({
 });
 ```
 
-### 2. Generate native projects and web bundles
+### 2. Prepare production native projects
 
 ```bash
 bunx nativite build
 ```
 
-This runs a production Vite build for each configured native platform and writes
-the matching native projects locally:
+This prepares each configured native target for a production build. It runs a
+production Vite build, writes the matching web bundle, and creates or updates
+the native project that embeds that bundle:
 
 ```text
 .nativite/ios
@@ -140,6 +141,11 @@ open .nativite/android
 Xcode and Android Studio own native build settings, signing, simulator/device
 selection, and launch. Nativite owns generating the native project code and the
 web bundles those projects embed.
+
+For app-store submission, archive or package the generated project with the
+native toolchain. `nativite build` does not create final signed artifacts such as
+`.ipa`, `.aab`, `.apk`, signed `.app`, or `.dmg`; those are produced by Xcode,
+Android Studio, Gradle, `xcodebuild`, or CI using your signing configuration.
 
 ### 4. Optional web dev server
 

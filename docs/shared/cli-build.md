@@ -2,8 +2,15 @@
 
 > Maps to: `src/cli/build-command.ts`, `src/cli/index.ts`
 
-The `nativite build` command runs Vite production builds for the configured
-native platforms and prints the generated project paths.
+The `nativite build` command prepares production native projects for the
+configured platforms. It runs Vite production builds, creates or updates the
+generated native projects, and prints the generated project paths.
+
+`nativite build` does not create final distributable artifacts such as `.ipa`,
+`.aab`, `.apk`, signed `.app`, or `.dmg`. Those artifacts are produced by the
+native toolchain after the project has been generated: Xcode, Android Studio,
+Gradle, `xcodebuild`, or CI own signing, packaging, archiving, notarization, and
+store submission.
 
 ## Platform Selection
 
@@ -35,6 +42,23 @@ Next steps:
 The block includes only platforms that were requested and successfully built. If
 a build fails, the command exits immediately and does not print final next
 steps.
+
+## Store Artifact Flow
+
+For a first-time user, the production path is:
+
+1. Install Nativite and initialize the existing Vite app.
+2. Run `bunx nativite build` to prepare the native project and embedded
+   production web bundle.
+3. Configure signing in Xcode, Android Studio, Gradle, or the CI environment.
+4. Archive or package the generated native project with the native toolchain.
+5. Submit the resulting artifact with the platform's store tooling.
+
+Future packaging helpers should stay explicit and optional. They may wrap native
+commands to produce release artifacts, but they should consume signing inputs
+from the app, native project, or environment instead of becoming the source of
+truth for certificates, provisioning profiles, keystores, notarization
+credentials, or store-upload credentials.
 
 ## Published Runtime Templates
 
