@@ -38,12 +38,21 @@ export function createCliProgram(): Command {
     .command("init")
     .description("Prepare an existing Vite project for Nativite")
     .option("--force", "Overwrite nativite.config.ts if it already exists")
-    .action(async (options: { force?: boolean }) => {
+    .option(
+      "--platform <platform>",
+      "Add a first-party platform to nativite.config.ts (ios, macos, or android)",
+      collectValues,
+    )
+    .action(async (options: { force?: boolean; platform?: readonly string[] }) => {
       const exitCode = await runInitCommand(options);
       if (exitCode !== 0) process.exit(exitCode);
     });
 
   return program;
+}
+
+function collectValues(value: string, previous: readonly string[] = []): readonly string[] {
+  return [...previous, value];
 }
 
 function isMainModule(): boolean {

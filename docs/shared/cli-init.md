@@ -16,10 +16,18 @@ The command runs from the current working directory and requires an existing
 ## Generated Config
 
 When `nativite.config.ts` does not already exist, init writes a minimal config
-with iOS, macOS, and Android platform entries:
+for the selected first-party platforms. Pass `--platform` more than once to
+enable multiple targets:
+
+```bash
+bunx nativite init --platform ios --platform android
+```
+
+Supported values are `ios`, `macos`, and `android`. Without `--platform`, init
+uses a narrow host-aware default: `ios` on macOS and `android` on other hosts.
 
 ```ts
-import { android, defineConfig, ios, macos } from "nativite";
+import { defineConfig, ios } from "nativite";
 
 export default defineConfig({
   app: {
@@ -28,12 +36,13 @@ export default defineConfig({
     version: "1.0.0",
     buildNumber: 1,
   },
-  platforms: [ios(), macos(), android()],
+  platforms: [ios()],
 });
 ```
 
-The helper calls rely on built-in defaults: iOS minimum version `17.0`, macOS
-minimum version `14.0`, Android `minSdk` `26`, and Android `targetSdk` `35`.
+The helper calls rely on built-in defaults for whichever platforms are
+selected: iOS minimum version `17.0`, macOS minimum version `14.0`, Android
+`minSdk` `26`, and Android `targetSdk` `35`.
 
 Existing `nativite.config.ts` files are preserved by default. Passing `--force`
 allows init to overwrite the generated Nativite config.

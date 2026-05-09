@@ -28,4 +28,30 @@ describe("nativite CLI", () => {
     expect(help).toContain("init");
     expect(help).not.toContain("dev");
   });
+
+  it("documents init platform selection in help output", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "init", "--help"], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        NO_COLOR: "1",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+
+    const help = stripAnsi(stdout);
+    expect(help).toContain("--platform <platform>");
+    expect(help).toContain("ios,");
+    expect(help).toContain("macos, or android");
+  });
 });
