@@ -14,11 +14,13 @@ const VITE_CONFIG_FILENAMES = [
 
 export interface InitCommandOptions {
   readonly force?: boolean;
+  readonly platform?: string | readonly string[];
 }
 
 export interface InitCommandDependencies {
   readonly cwd: () => string;
   readonly createLogger: () => NativiteLogger;
+  readonly platform?: () => NodeJS.Platform;
 }
 
 interface PackageJson {
@@ -30,6 +32,8 @@ interface ProjectInfo {
   readonly bundleId: string;
 }
 
+type FirstPartyPlatform = "android" | "ios" | "macos";
+
 interface ViteUpdateResult {
   readonly updated: boolean;
   readonly reason?: string;
@@ -38,7 +42,14 @@ interface ViteUpdateResult {
 const defaultDependencies: InitCommandDependencies = {
   cwd: () => process.cwd(),
   createLogger: () => createNativiteLogger("nativite"),
+  platform: () => process.platform,
 };
+
+const FIRST_PARTY_PLATFORMS = [
+  "ios",
+  "macos",
+  "android",
+] as const satisfies readonly FirstPartyPlatform[];
 
 export async function runInitCommand(
   options: InitCommandOptions,
@@ -48,13 +59,17 @@ export async function runInitCommand(
   const logger = dependencies.createLogger();
 
   try {
+    const selectedPlatforms = resolveSelectedPlatforms(
+      options,
+      dependencies.platform?.() ?? process.platform,
+    );
     const projectInfo = await readProjectInfo(projectRoot);
     const configPath = join(projectRoot, CONFIG_FILENAME);
 
     if ((await fileExists(configPath)) && !options.force) {
       logger.warn(`${CONFIG_FILENAME} already exists. Leaving it unchanged.`);
     } else {
-      await writeFile(configPath, createNativiteConfig(projectInfo));
+      await writeFile(configPath, createNativiteConfig(projectInfo, selectedPlatforms));
       logger.info(`Wrote ${CONFIG_FILENAME}.`);
     }
 
@@ -110,9 +125,45 @@ function toPascalCase(value: string): string {
     .join("");
 }
 
-function createNativiteConfig(projectInfo: ProjectInfo): string {
+function resolveSelectedPlatforms(
+  options: InitCommandOptions,
+  hostPlatform: NodeJS.Platform,
+): readonly FirstPartyPlatform[] {
+  const requestedPlatforms =
+    typeof options.platform === "string" ? [options.platform] : (options.platform ?? []);
+
+  if (requestedPlatforms.length === 0) {
+    return hostPlatform === "darwin" ? ["ios"] : ["android"];
+  }
+
+  const selectedPlatforms = new Set<FirstPartyPlatform>();
+
+  for (const platform of requestedPlatforms) {
+    if (!isFirstPartyPlatform(platform)) {
+      throw new Error(
+        `Unknown platform "${platform}". Expected one of: ${FIRST_PARTY_PLATFORMS.join(", ")}.`,
+      );
+    }
+
+    selectedPlatforms.add(platform);
+  }
+
+  return [...selectedPlatforms];
+}
+
+function isFirstPartyPlatform(platform: string): platform is FirstPartyPlatform {
+  return FIRST_PARTY_PLATFORMS.includes(platform as FirstPartyPlatform);
+}
+
+function createNativiteConfig(
+  projectInfo: ProjectInfo,
+  selectedPlatforms: readonly FirstPartyPlatform[],
+): string {
+  const importNames = ["defineConfig", ...selectedPlatforms].sort();
+  const platformCalls = selectedPlatforms.map((platform) => `${platform}()`).join(", ");
+
   return [
-    'import { android, defineConfig, ios, macos } from "nativite";',
+    `import { ${importNames.join(", ")} } from "nativite";`,
     "",
     "export default defineConfig({",
     "  app: {",
@@ -121,7 +172,7 @@ function createNativiteConfig(projectInfo: ProjectInfo): string {
     '    version: "1.0.0",',
     "    buildNumber: 1,",
     "  },",
-    "  platforms: [ios(), macos(), android()],",
+    `  platforms: [${platformCalls}],`,
     "});",
     "",
   ].join("\n");

@@ -53,6 +53,13 @@ simple `vite.config.ts` to include `nativite()`. If your Vite config cannot be
 edited safely, the command prints the exact manual import and plugin changes to
 make.
 
+By default, init keeps the first path narrow: it enables `ios` on macOS and
+`android` on other hosts. Choose targets explicitly by repeating `--platform`:
+
+```bash
+bunx nativite init --platform ios --platform android
+```
+
 Then build the configured native targets:
 
 ```bash
@@ -66,7 +73,7 @@ If you prefer to configure the project by hand, create the files below.
 #### 1. Create `nativite.config.ts`
 
 ```ts
-import { android, defineConfig, ios, macos } from "nativite";
+import { defineConfig, ios } from "nativite";
 
 export default defineConfig({
   app: {
@@ -75,7 +82,7 @@ export default defineConfig({
     version: "1.0.0",
     buildNumber: 1,
   },
-  platforms: [ios(), macos(), android()],
+  platforms: [ios()],
 });
 ```
 

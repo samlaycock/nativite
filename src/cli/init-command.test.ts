@@ -27,7 +27,7 @@ describe("runInitCommand", () => {
     await rm(projectRoot, { force: true, recursive: true });
   });
 
-  it("creates the minimum Nativite config and adds the Vite plugin", async () => {
+  it("creates the minimum host-aware Nativite config and adds the Vite plugin", async () => {
     await writeFile(
       join(projectRoot, "package.json"),
       JSON.stringify({ name: "@example/my-vite-app" }),
@@ -49,6 +49,7 @@ describe("runInitCommand", () => {
       {
         cwd: () => projectRoot,
         createLogger: createMockLogger,
+        platform: () => "darwin",
       },
     );
     const nativiteConfig = await Bun.file(join(projectRoot, "nativite.config.ts")).text();
@@ -57,9 +58,69 @@ describe("runInitCommand", () => {
     expect(exitCode).toBe(0);
     expect(nativiteConfig).toContain('name: "MyViteApp"');
     expect(nativiteConfig).toContain('bundleId: "com.example.myviteapp"');
-    expect(nativiteConfig).toContain("platforms: [ios(), macos(), android()]");
+    expect(nativiteConfig).toContain('import { defineConfig, ios } from "nativite";');
+    expect(nativiteConfig).toContain("platforms: [ios()]");
     expect(viteConfig).toContain('import { nativite } from "nativite/vite";');
     expect(viteConfig).toContain("plugins: [nativite()]");
+  });
+
+  it("defaults to Android on non-macOS hosts", async () => {
+    await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "linux-app" }));
+
+    const exitCode = await runInitCommand(
+      {},
+      {
+        cwd: () => projectRoot,
+        createLogger: createMockLogger,
+        platform: () => "linux",
+      },
+    );
+    const nativiteConfig = await Bun.file(join(projectRoot, "nativite.config.ts")).text();
+
+    expect(exitCode).toBe(0);
+    expect(nativiteConfig).toContain('import { android, defineConfig } from "nativite";');
+    expect(nativiteConfig).toContain("platforms: [android()]");
+  });
+
+  it("creates a config for explicitly selected platforms", async () => {
+    await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "selected-app" }));
+
+    const exitCode = await runInitCommand(
+      { platform: ["ios", "android"] },
+      {
+        cwd: () => projectRoot,
+        createLogger: createMockLogger,
+        platform: () => "linux",
+      },
+    );
+    const nativiteConfig = await Bun.file(join(projectRoot, "nativite.config.ts")).text();
+
+    expect(exitCode).toBe(0);
+    expect(nativiteConfig).toContain('import { android, defineConfig, ios } from "nativite";');
+    expect(nativiteConfig).toContain("platforms: [ios(), android()]");
+    expect(nativiteConfig).not.toContain("macos()");
+  });
+
+  it("rejects unknown init platforms", async () => {
+    await writeFile(join(projectRoot, "package.json"), JSON.stringify({ name: "bad-app" }));
+    const error = mock(() => {});
+    const logger: NativiteLogger = {
+      ...createMockLogger(),
+      error,
+    };
+
+    const exitCode = await runInitCommand(
+      { platform: "windows" },
+      {
+        cwd: () => projectRoot,
+        createLogger: () => logger,
+      },
+    );
+
+    expect(exitCode).toBe(1);
+    expect(error).toHaveBeenCalledWith(
+      'Unknown platform "windows". Expected one of: ios, macos, android.',
+    );
   });
 
   it("adds the Vite plugin to a plugin variable used by defineConfig", async () => {
