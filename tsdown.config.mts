@@ -35,6 +35,11 @@ export default defineConfig([
         to: "./dist/runtime",
         flatten: true,
       },
+      {
+        from: "./src/native/android/assets/*.jar",
+        to: "./dist/assets",
+        flatten: true,
+      },
     ],
   },
   {

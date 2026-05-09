@@ -1,11 +1,18 @@
-import { chmodSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { gradleWrapperPropertiesTemplate } from "./gradle-wrapper-properties.ts";
 
 export const GRADLE_VERSION = "8.11.1";
 
-const gradleWrapperJarUrl = `https://raw.githubusercontent.com/gradle/gradle/v${GRADLE_VERSION}/gradle/wrapper/gradle-wrapper.jar`;
+const gradleWrapperJarAssetPath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "assets",
+  `gradle-wrapper-${GRADLE_VERSION}.jar`,
+);
+const gradleWrapperJarSha256 = "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046";
 
 function gradlewTemplate(): string {
   return `#!/bin/sh
@@ -55,32 +62,25 @@ if not "%ERRORLEVEL%"=="0" (
 `;
 }
 
-async function downloadGradleWrapperJar(): Promise<Uint8Array> {
-  let response: Response;
+function readGradleWrapperJar(): Uint8Array {
+  const bytes = readFileSync(gradleWrapperJarAssetPath);
+  const digest = createHash("sha256").update(bytes).digest("hex");
 
-  try {
-    response = await fetch(gradleWrapperJarUrl);
-  } catch (error) {
+  if (digest !== gradleWrapperJarSha256) {
     throw new Error(
-      `Failed to download Gradle wrapper ${GRADLE_VERSION} from ${gradleWrapperJarUrl}. Check your network connection and try again.`,
-      { cause: error },
+      `Packaged Gradle wrapper ${GRADLE_VERSION} failed SHA-256 verification. Expected ${gradleWrapperJarSha256}, received ${digest}.`,
     );
   }
 
-  if (!response.ok) {
-    throw new Error(
-      `Failed to download Gradle wrapper ${GRADLE_VERSION} from ${gradleWrapperJarUrl}: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  return new Uint8Array(await response.arrayBuffer());
+  return bytes;
 }
 
-export async function writeGradleWrapper(projectRoot: string): Promise<void> {
+export function writeGradleWrapper(projectRoot: string): void {
   const gradlewPath = join(projectRoot, "gradlew");
   const gradlewBatPath = join(projectRoot, "gradlew.bat");
   const gradleWrapperDir = join(projectRoot, "gradle", "wrapper");
 
+  mkdirSync(gradleWrapperDir, { recursive: true });
   writeFileSync(gradlewPath, gradlewTemplate());
   chmodSync(gradlewPath, 0o755);
   writeFileSync(gradlewBatPath, gradlewBatTemplate());
@@ -88,5 +88,5 @@ export async function writeGradleWrapper(projectRoot: string): Promise<void> {
     join(gradleWrapperDir, "gradle-wrapper.properties"),
     gradleWrapperPropertiesTemplate(),
   );
-  writeFileSync(join(gradleWrapperDir, "gradle-wrapper.jar"), await downloadGradleWrapperJar());
+  writeFileSync(join(gradleWrapperDir, "gradle-wrapper.jar"), readGradleWrapperJar());
 }

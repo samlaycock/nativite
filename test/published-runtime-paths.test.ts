@@ -41,7 +41,6 @@ type RegistryChunk = {
 
 describe("published runtime template paths", () => {
   const tempDirs: string[] = [];
-  const originalFetch = globalThis.fetch;
 
   function makeTempDir(prefix: string): string {
     const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -50,8 +49,6 @@ describe("published runtime template paths", () => {
   }
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
-
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -65,9 +62,6 @@ describe("published runtime template paths", () => {
 
       const registryChunk = Array.from(new Bun.Glob("dist/registry-*.mjs").scanSync()).at(0);
       expect(registryChunk).toBeDefined();
-
-      globalThis.fetch = (async () =>
-        new Response(new Uint8Array([1, 2, 3]))) as unknown as typeof fetch;
 
       const registry = (await import(
         `${pathToFileURL(join(process.cwd(), registryChunk!)).href}?runtime-paths`
@@ -102,6 +96,7 @@ describe("published runtime template paths", () => {
 
       expect(existsSync("dist/runtime/ViewController.swift")).toBe(true);
       expect(existsSync("dist/runtime/NativiteWebView.kt")).toBe(true);
+      expect(existsSync("dist/assets/gradle-wrapper-8.11.1.jar")).toBe(true);
     },
     { timeout: 30_000 },
   );

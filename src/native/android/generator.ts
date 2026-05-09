@@ -114,7 +114,7 @@ export async function generateProject(
     join(projectRoot, "settings.gradle.kts"),
     settingsGradleTemplate(androidConfig.app.name),
   );
-  await writeGradleWrapper(projectRoot);
+  writeGradleWrapper(projectRoot);
 
   // Root build files
   writeFileSync(join(projectRoot, "build.gradle.kts"), buildGradleRootTemplate());

@@ -7,10 +7,10 @@ import { join } from "node:path";
 import { androidConfig } from "../../../test/fixtures.ts";
 import { normalizeAndroidDevServerUrl, syncAndroidDevMetadata } from "./dev-metadata.ts";
 import { generateProject } from "./generator.ts";
+import { writeGradleWrapper } from "./gradle-wrapper.ts";
 
 describe("generateProject", () => {
   const tempDirs: string[] = [];
-  const originalFetch = globalThis.fetch;
 
   function makeTempDir(): string {
     const dir = mkdtempSync(join(tmpdir(), "nativite-android-test-"));
@@ -19,8 +19,6 @@ describe("generateProject", () => {
   }
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
-
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -80,18 +78,24 @@ describe("generateProject", () => {
     );
   });
 
-  function mockGradleWrapperDownload(): void {
-    globalThis.fetch = (async () =>
-      new Response(
-        new Uint8Array(Array.from({ length: 1024 }, (_, index) => index % 255)),
-      )) as unknown as typeof fetch;
-  }
+  it(
+    "writes the Gradle wrapper into a project without pre-created wrapper directories",
+    () => {
+      const cwd = makeTempDir();
+
+      writeGradleWrapper(cwd);
+
+      expect(existsSync(join(cwd, "gradlew"))).toBe(true);
+      expect(existsSync(join(cwd, "gradlew.bat"))).toBe(true);
+      expect(existsSync(join(cwd, "gradle", "wrapper", "gradle-wrapper.properties"))).toBe(true);
+      expect(existsSync(join(cwd, "gradle", "wrapper", "gradle-wrapper.jar"))).toBe(true);
+    },
+    { timeout: 60_000 },
+  );
 
   it(
     "generates gradlew with execute permissions",
     async () => {
-      mockGradleWrapperDownload();
-
       const cwd = makeTempDir();
       const result = await generateProject(androidConfig, cwd);
       const gradlewPath = join(result.projectPath, "gradlew");
@@ -108,8 +112,6 @@ describe("generateProject", () => {
   it(
     "generates gradlew.bat",
     async () => {
-      mockGradleWrapperDownload();
-
       const cwd = makeTempDir();
       const result = await generateProject(androidConfig, cwd);
       const gradlewBatPath = join(result.projectPath, "gradlew.bat");
@@ -122,8 +124,6 @@ describe("generateProject", () => {
   it(
     "generates gradle-wrapper.jar",
     async () => {
-      mockGradleWrapperDownload();
-
       const cwd = makeTempDir();
       const result = await generateProject(androidConfig, cwd);
       const jarPath = join(result.projectPath, "gradle", "wrapper", "gradle-wrapper.jar");
@@ -140,8 +140,6 @@ describe("generateProject", () => {
   it(
     "removes stale assets/dev.json in build mode (including skipped regeneration)",
     async () => {
-      mockGradleWrapperDownload();
-
       const cwd = makeTempDir();
       const first = await generateProject(androidConfig, cwd, false, "build");
 

@@ -50,7 +50,7 @@ The generator creates a complete Android Gradle project from the user's configur
 
 1. Creates all necessary directories with `mkdirSync(dir, { recursive: true })`.
 2. Writes `settings.gradle.kts` first (required by Gradle).
-3. Writes Gradle wrapper files (`gradlew`, `gradlew.bat`, `gradle-wrapper.properties`) directly and downloads the pinned `gradle-wrapper.jar` for Gradle 8.11.1 from Gradle's tagged source.
+3. Writes Gradle wrapper files (`gradlew`, `gradlew.bat`, `gradle-wrapper.properties`) directly and copies the packaged, checksum-verified `gradle-wrapper.jar` for Gradle 8.11.1.
 4. Writes root and app `build.gradle.kts` files.
 5. Writes `AndroidManifest.xml`.
 6. Generates Kotlin source files.
@@ -99,10 +99,10 @@ Validation notes:
 ## Gradle Configuration
 
 Android project generation does not require a globally installed `gradle`
-command. The generator creates the wrapper scripts directly and fetches the
-pinned Gradle 8.11.1 wrapper JAR from Gradle's `v8.11.1` source tag. If that
-download fails, generation fails before build files are written with a diagnostic
-that points at the wrapper URL and asks the user to check network access.
+command. The generator creates the wrapper scripts directly and copies the
+packaged Gradle 8.11.1 wrapper JAR. The packaged JAR is verified against a
+hardcoded SHA-256 digest before it is written into the generated Android project,
+so generation fails instead of persisting an unexpected wrapper binary.
 
 ### Version Catalog (`libs.versions.toml`)
 
