@@ -88,20 +88,17 @@ type BuildManifest = {
   builtAt: string;
 };
 
-function hashAssetContent(path: string): string {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
-}
-
 function createBuildManifestAssets(distDir: string): BuildManifestAsset[] {
   return collectAssets(distDir, distDir)
     .filter((path) => path !== "manifest.json")
     .sort()
     .map((path) => {
       const fullPath = join(distDir, path);
+      const content = readFileSync(fullPath);
       return {
         path,
-        hash: hashAssetContent(fullPath),
-        size: statSync(fullPath).size,
+        hash: createHash("sha256").update(content).digest("hex"),
+        size: content.byteLength,
       };
     });
 }

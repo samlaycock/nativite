@@ -191,9 +191,11 @@ class OTAUpdater {
       let (tempURL, _) = try await URLSession.shared.download(from: assetURL)
       let data = try Data(contentsOf: tempURL)
       guard data.count == asset.size else {
+        try? fileManager.removeItem(at: tempURL)
         throw OTAUpdaterError.assetSizeMismatch(path: asset.path)
       }
       guard sha256Hex(data) == asset.hash else {
+        try? fileManager.removeItem(at: tempURL)
         throw OTAUpdaterError.assetHashMismatch(path: asset.path)
       }
       try fileManager.moveItem(at: tempURL, to: destination)
