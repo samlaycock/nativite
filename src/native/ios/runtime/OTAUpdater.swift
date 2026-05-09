@@ -13,6 +13,8 @@ struct OTAManifest: Decodable {
   let hash: String
   let assets: [OTAAsset]
   let builtAt: String
+  let minimumAppVersion: String?
+  let signature: String?
 }
 
 class OTAUpdater {
@@ -24,6 +26,8 @@ class OTAUpdater {
     return url
   }()
   private let updateChannel: String = NativiteConfig.otaChannel
+  private let signingPublicKey: String = NativiteConfig.otaSigningPublicKey
+  private let allowInsecureHTTP: Bool = NativiteConfig.otaAllowInsecureHTTP
   private let fileManager = FileManager.default
   private let expectedPlatform: String = {
     #if os(iOS)
@@ -55,16 +59,42 @@ class OTAUpdater {
     return docs.appendingPathComponent("nativite_active_bundle_\(expectedPlatform)")
   }
 
+  private var rollbackBundleURL: URL {
+    let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    return docs.appendingPathComponent("nativite_rollback_bundle_\(expectedPlatform)")
+  }
+
   // Moves any staged bundle into the active position. Call before loadContent().
   func applyPendingUpdateIfAvailable() {
     guard fileManager.fileExists(atPath: stagedBundleURL.path) else { return }
     do {
-      if fileManager.fileExists(atPath: activeBundleURL.path) {
-        try fileManager.removeItem(at: activeBundleURL)
+      if fileManager.fileExists(atPath: rollbackBundleURL.path) {
+        try fileManager.removeItem(at: rollbackBundleURL)
       }
+      if fileManager.fileExists(atPath: activeBundleURL.path) {
+        try fileManager.moveItem(at: activeBundleURL, to: rollbackBundleURL)
+      }
+      try "pending".write(
+        to: stagedBundleURL.appendingPathComponent(".pending_launch"),
+        atomically: true,
+        encoding: .utf8
+      )
       try fileManager.moveItem(at: stagedBundleURL, to: activeBundleURL)
     } catch {
       print("[OTAUpdater] Failed to apply staged bundle: \(error)")
+    }
+  }
+
+  func markLaunchSucceeded() {
+    let markerURL = activeBundleURL.appendingPathComponent(".pending_launch")
+    guard fileManager.fileExists(atPath: markerURL.path) else { return }
+    do {
+      try fileManager.removeItem(at: markerURL)
+      if fileManager.fileExists(atPath: rollbackBundleURL.path) {
+        try fileManager.removeItem(at: rollbackBundleURL)
+      }
+    } catch {
+      print("[OTAUpdater] Failed to mark OTA launch successful: \(error)")
     }
   }
 
@@ -72,6 +102,20 @@ class OTAUpdater {
   func activeBundleIndexURL() -> URL? {
     let indexURL = activeBundleURL.appendingPathComponent("index.html")
     return fileManager.fileExists(atPath: indexURL.path) ? indexURL : nil
+  }
+
+  func rollbackPendingLaunchIfNeeded() {
+    let markerURL = activeBundleURL.appendingPathComponent(".pending_launch")
+    guard fileManager.fileExists(atPath: markerURL.path) else { return }
+    guard fileManager.fileExists(atPath: rollbackBundleURL.path) else { return }
+
+    do {
+      try fileManager.removeItem(at: activeBundleURL)
+      try fileManager.moveItem(at: rollbackBundleURL, to: activeBundleURL)
+      print("[OTAUpdater] Rolled back OTA bundle after an unsuccessful launch.")
+    } catch {
+      print("[OTAUpdater] Failed to roll back OTA bundle: \(error)")
+    }
   }
 
   // Returns OTA status for bridge calls.
@@ -87,7 +131,7 @@ class OTAUpdater {
 
     do {
       let (manifest, _) = try await fetchManifest()
-      guard manifest.platform == expectedPlatform else {
+      guard isManifestAllowed(manifest) else {
         return ["available": false]
       }
 
@@ -107,11 +151,7 @@ class OTAUpdater {
     guard NativiteConfig.otaEnabled else { return }
     do {
       let (manifest, bundleBaseURL) = try await fetchManifest()
-      guard manifest.platform == expectedPlatform else {
-        print(
-          "[OTAUpdater] Ignoring manifest for unexpected platform " +
-            "(expected \(expectedPlatform), got \(manifest.platform))."
-        )
+      guard isManifestAllowed(manifest) else {
         return
       }
 
@@ -143,6 +183,11 @@ class OTAUpdater {
     var lastError: Error?
 
     for baseURL in candidateBundleBaseURLs() {
+      guard isTransportAllowed(baseURL) else {
+        lastError = OTAUpdaterError.insecureTransport
+        continue
+      }
+
       let manifestURL = baseURL.appendingPathComponent("manifest.json")
       do {
         let (data, response) = try await URLSession.shared.data(from: manifestURL)
@@ -152,6 +197,7 @@ class OTAUpdater {
         }
 
         let manifest = try JSONDecoder().decode(OTAManifest.self, from: data)
+        try verifyManifest(data: data, manifest: manifest)
         return (manifest, baseURL)
       } catch {
         lastError = error
@@ -181,6 +227,9 @@ class OTAUpdater {
 
     for asset in manifest.assets {
       let assetURL = bundleBaseURL.appendingPathComponent(asset.path)
+      guard isTransportAllowed(assetURL) else {
+        throw OTAUpdaterError.insecureTransport
+      }
       let destination = stagedBundleURL.appendingPathComponent(asset.path)
 
       try fileManager.createDirectory(
@@ -218,9 +267,60 @@ class OTAUpdater {
   private func sha256Hex(_ data: Data) -> String {
     SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
   }
+
+  private func isTransportAllowed(_ url: URL) -> Bool {
+    guard url.scheme?.lowercased() == "https" else {
+      return allowInsecureHTTP
+    }
+    return true
+  }
+
+  private func isManifestAllowed(_ manifest: OTAManifest) -> Bool {
+    guard manifest.platform == expectedPlatform else {
+      print(
+        "[OTAUpdater] Ignoring manifest for unexpected platform " +
+          "(expected \(expectedPlatform), got \(manifest.platform))."
+      )
+      return false
+    }
+    guard isAppVersionAllowed(manifest.minimumAppVersion) else {
+      print("[OTAUpdater] Ignoring manifest that requires app \(manifest.minimumAppVersion ?? "").")
+      return false
+    }
+    return true
+  }
+
+  private func isAppVersionAllowed(_ minimumVersion: String?) -> Bool {
+    guard let minimumVersion, !minimumVersion.isEmpty else { return true }
+    return NativiteConfig.appVersion.compare(minimumVersion, options: .numeric) != .orderedAscending
+  }
+
+  private func verifyManifest(data: Data, manifest: OTAManifest) throws {
+    guard !signingPublicKey.isEmpty else { return }
+    guard let signature = manifest.signature, !signature.isEmpty else {
+      throw OTAUpdaterError.missingManifestSignature
+    }
+    guard let publicKeyData = Data(base64Encoded: signingPublicKey),
+          let signatureData = Data(base64Encoded: signature)
+    else {
+      throw OTAUpdaterError.invalidManifestSignature
+    }
+
+    var json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    json.removeValue(forKey: "signature")
+    let signedData = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+    let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+
+    guard publicKey.isValidSignature(signatureData, for: signedData) else {
+      throw OTAUpdaterError.invalidManifestSignature
+    }
+  }
 }
 
 enum OTAUpdaterError: Error {
   case assetSizeMismatch(path: String)
   case assetHashMismatch(path: String)
+  case insecureTransport
+  case missingManifestSignature
+  case invalidManifestSignature
 }

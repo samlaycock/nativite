@@ -37,7 +37,12 @@ describe("NativiteConfigSchema", () => {
       NativiteConfigSchema.parse({
         ...baseUserConfig,
         signing: { ios: { mode: "automatic", teamId: "ABCDE12345" } },
-        updates: { url: "https://updates.example.com", channel: "staging" },
+        updates: {
+          url: "https://updates.example.com",
+          channel: "staging",
+          signingPublicKey: "base64-public-key",
+          allowInsecureHTTP: false,
+        },
         plugins: [{ name: "my-plugin", customOption: true }],
         icon: "assets/icon.png",
         splash: { backgroundColor: "#FFFFFF", image: "assets/logo.png" },
@@ -410,6 +415,15 @@ describe("NativiteConfigSchema", () => {
       NativiteConfigSchema.parse({
         ...baseUserConfig,
         updates: { url: "not-a-url", channel: "prod" },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects empty OTA signing public keys", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        updates: { url: "https://updates.example.com", channel: "prod", signingPublicKey: "" },
       }),
     ).toThrow();
   });

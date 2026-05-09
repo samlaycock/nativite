@@ -113,6 +113,7 @@ class ViewController: UIViewController {
     }
 
     if NativiteConfig.otaEnabled {
+      otaUpdater.rollbackPendingLaunchIfNeeded()
       otaUpdater.applyPendingUpdateIfAvailable()
     }
     loadContent()
@@ -304,6 +305,10 @@ extension ViewController: WKNavigationDelegate {
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    if NativiteConfig.otaEnabled {
+      otaUpdater.markLaunchSucceeded()
+    }
+
     // The user script seeds :root with zero defaults at documentStart.
     // Re-push the real device values now that the JS context exists so
     // all --nv-* variables reflect actual safe area, traits, etc.
@@ -494,6 +499,7 @@ class ViewController: NSViewController {
     }
 
     if NativiteConfig.otaEnabled {
+      otaUpdater.rollbackPendingLaunchIfNeeded()
       otaUpdater.applyPendingUpdateIfAvailable()
     }
     loadContent()
@@ -688,6 +694,10 @@ extension ViewController: WKNavigationDelegate {
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    if NativiteConfig.otaEnabled {
+      otaUpdater.markLaunchSucceeded()
+    }
+
     // The user script seeds :root with zero defaults at documentStart.
     // Re-push the real device values now that the JS context exists so
     // all --nv-* variables reflect actual safe area, traits, etc.

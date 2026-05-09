@@ -100,6 +100,8 @@ export type NativiteRootConfigOverrides = {
   updates?: {
     url: string;
     channel: string;
+    signingPublicKey?: string;
+    allowInsecureHTTP?: boolean;
   };
   plugins?: NativitePlugin[];
   defaultChrome?: ChromeState;
@@ -355,6 +357,8 @@ type NormalizedNativiteConfig = {
   updates?: {
     url: string;
     channel: string;
+    signingPublicKey?: string;
+    allowInsecureHTTP?: boolean;
   };
   plugins?: NativitePlugin[];
   defaultChrome?: ChromeState;
@@ -411,6 +415,8 @@ const RootConfigOverridesSchema = z
       .object({
         url: z.string().url(),
         channel: z.string(),
+        signingPublicKey: z.string().min(1).optional(),
+        allowInsecureHTTP: z.boolean().optional(),
       })
       .optional(),
     plugins: z
@@ -507,6 +513,8 @@ export const NativiteConfigSchema = z
       .object({
         url: z.string().url(),
         channel: z.string(),
+        signingPublicKey: z.string().min(1).optional(),
+        allowInsecureHTTP: z.boolean().optional(),
       })
       .optional(),
     plugins: z
