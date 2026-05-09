@@ -1,8 +1,6 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import type { NativiteConfig, NativitePlatformConfig, NativitePlatformPlugin } from "../index.ts";
 
+import { resolveNativitePluginRootDir } from "../plugin-root.ts";
 import { FIRST_PARTY_PLATFORM_PLUGINS } from "./first-party.ts";
 
 export type ResolvedNativitePlatformRuntime = {
@@ -58,16 +56,6 @@ function normalizePlatformTraits(plugin: NativitePlatformPlugin): {
   return { native, mobile, desktop };
 }
 
-function resolvePlatformPluginRootDir(projectRoot: string, plugin: NativitePlatformPlugin): string {
-  const rootDir = plugin.rootDir;
-  if (rootDir instanceof URL) {
-    const path = fileURLToPath(rootDir);
-    return resolve(rootDir.href.endsWith("/") ? path : dirname(path));
-  }
-
-  return resolve(projectRoot, typeof rootDir === "string" && rootDir.length > 0 ? rootDir : ".");
-}
-
 export function getConfiguredPlatforms(config: NativiteConfig): NativitePlatformConfig[] {
   return config.platforms ?? [];
 }
@@ -100,7 +88,7 @@ export function resolveConfiguredPlatformRuntimes(
       id: platformEntry.platform,
       config: platformEntry,
       plugin,
-      rootDir: resolvePlatformPluginRootDir(projectRoot, plugin),
+      rootDir: resolveNativitePluginRootDir(projectRoot, plugin.rootDir),
       extensions: toDotPrefixedSuffixes(platformEntry.platform, plugin.extensions),
       environments: normalizeEnvironments(platformEntry.platform, plugin.environments),
       bundlePlatform: platformEntry.platform,
@@ -114,8 +102,11 @@ export function resolveConfiguredPlatformRuntimes(
 export function resolvePlatformRuntimeById(
   config: NativiteConfig,
   platformId: string,
+  projectRoot: string,
 ): ResolvedNativitePlatformRuntime | undefined {
-  return resolveConfiguredPlatformRuntimes(config).find((runtime) => runtime.id === platformId);
+  return resolveConfiguredPlatformRuntimes(config, projectRoot).find(
+    (runtime) => runtime.id === platformId,
+  );
 }
 
 function hasOwn<T extends object>(value: T, key: keyof T): boolean {
@@ -126,8 +117,10 @@ export function resolveConfigForPlatform(
   config: NativiteConfig,
   platformId: string,
 ): NativiteConfig {
-  const runtime = resolvePlatformRuntimeById(config, platformId);
-  const overrides = runtime?.config.overrides;
+  const platformConfig = getConfiguredPlatforms(config).find(
+    (entry) => entry.platform === platformId,
+  );
+  const overrides = platformConfig?.overrides;
   if (!overrides) return config;
 
   const merged: NativiteConfig = {

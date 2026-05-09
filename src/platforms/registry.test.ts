@@ -8,6 +8,7 @@ import { NativiteConfigSchema, definePlatformPlugin, ios, macos, platform } from
 import {
   resolveConfigForPlatform,
   resolveConfiguredPlatformRuntimes,
+  resolvePlatformRuntimeById,
   serializePlatformRuntimeMetadata,
 } from "./registry.ts";
 
@@ -93,6 +94,33 @@ describe("platform registry", () => {
 
       const runtimes = resolveConfiguredPlatformRuntimes(config);
       expect(runtimes[0]?.rootDir).toBe(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves platform runtime roots from the supplied project root", () => {
+    const root = mkdtempSync(join(tmpdir(), "nativite-platform-runtime-root-"));
+    try {
+      const config = NativiteConfigSchema.parse({
+        app: {
+          name: "TestApp",
+          bundleId: "com.example.testapp",
+          version: "1.0.0",
+          buildNumber: 1,
+        },
+        platforms: [platform("console", { deviceFamily: "tv" })],
+        platformPlugins: [
+          definePlatformPlugin({
+            name: "console-platform",
+            platform: "console",
+            rootDir: "./platforms/console",
+          }),
+        ],
+      });
+
+      const runtime = resolvePlatformRuntimeById(config, "console", root);
+      expect(runtime?.rootDir).toBe(join(root, "platforms", "console"));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
