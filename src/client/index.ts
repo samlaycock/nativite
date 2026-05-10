@@ -57,6 +57,19 @@ type BridgeMethodResult<
   ? TResult
   : unknown;
 
+type BridgeParameterlessMethodNames<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TNamespace extends keyof TContracts,
+> = {
+  [TMethod in BridgeMethodNames<TContracts, TNamespace>]: undefined extends BridgeMethodParams<
+    TContracts,
+    TNamespace,
+    TMethod
+  >
+    ? TMethod
+    : never;
+}[BridgeMethodNames<TContracts, TNamespace>];
+
 type BridgeEventPayload<
   TContracts extends BridgeContractRegistryShape<TContracts>,
   TEvent extends BridgeEventNames<TContracts>,
@@ -72,14 +85,23 @@ type BridgeCallArgs<
   TContracts extends BridgeContractRegistryShape<TContracts>,
   TNamespace extends keyof TContracts,
   TMethod extends BridgeMethodNames<TContracts, TNamespace>,
+  TAllowOptionsOnly extends boolean,
 > =
   undefined extends BridgeMethodParams<TContracts, TNamespace, TMethod>
-    ?
-        | [options?: BridgeCallOptions]
-        | [params: BridgeMethodParams<TContracts, TNamespace, TMethod>, options?: BridgeCallOptions]
+    ? TAllowOptionsOnly extends true
+      ?
+          | [options?: BridgeCallOptions]
+          | [
+              params: BridgeMethodParams<TContracts, TNamespace, TMethod>,
+              options?: BridgeCallOptions,
+            ]
+      : [params?: BridgeMethodParams<TContracts, TNamespace, TMethod>, options?: BridgeCallOptions]
     : [params: BridgeMethodParams<TContracts, TNamespace, TMethod>, options?: BridgeCallOptions];
 
-export interface TypedBridge<TContracts extends BridgeContractRegistryShape<TContracts>> {
+export interface TypedBridge<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TAllowOptionsOnly extends boolean = false,
+> {
   readonly isNative: boolean;
   call<
     TNamespace extends keyof TContracts & string,
@@ -87,12 +109,21 @@ export interface TypedBridge<TContracts extends BridgeContractRegistryShape<TCon
   >(
     namespace: TNamespace,
     method: TMethod,
-    ...args: BridgeCallArgs<TContracts, TNamespace, TMethod>
+    ...args: BridgeCallArgs<TContracts, TNamespace, TMethod, TAllowOptionsOnly>
   ): Promise<BridgeMethodResult<TContracts, TNamespace, TMethod>>;
   subscribe<TEvent extends BridgeEventNames<TContracts>>(
     event: TEvent,
     handler: (data: BridgeEventPayload<TContracts, TEvent>) => void,
   ): () => void;
+}
+
+export interface TypedBridgeOptions<TContracts extends BridgeContractRegistryShape<TContracts>> {
+  readonly parameterlessMethods?: {
+    readonly [TNamespace in keyof TContracts]?: readonly BridgeParameterlessMethodNames<
+      TContracts,
+      TNamespace
+    >[];
+  };
 }
 
 interface BridgeCallMessage {
@@ -221,14 +252,15 @@ function validateCallOptions(options?: BridgeCallOptions): void {
   }
 }
 
-function isBridgeCallOptions(value: unknown): value is BridgeCallOptions {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  const keys = Object.keys(candidate);
-  return (
-    keys.length > 0 &&
-    keys.every((key) => key === "timeoutMs" || key === "signal" || key === "strict")
-  );
+function isParameterlessMethod<TContracts extends BridgeContractRegistryShape<TContracts>>(
+  options: TypedBridgeOptions<TContracts> | undefined,
+  namespace: string,
+  method: string,
+): boolean {
+  const parameterlessMethods = options?.parameterlessMethods as
+    | Readonly<Record<string, readonly string[] | undefined>>
+    | undefined;
+  return parameterlessMethods?.[namespace]?.includes(method) === true;
 }
 
 function withCallGuards<T>(
@@ -518,16 +550,22 @@ export const bridge = {
   },
 } as const;
 
+export function createBridge<TContracts extends BridgeContractRegistryShape<TContracts>>(
+  options: TypedBridgeOptions<TContracts>,
+): TypedBridge<TContracts, true>;
 export function createBridge<
   TContracts extends BridgeContractRegistryShape<TContracts>,
->(): TypedBridge<TContracts> {
+>(): TypedBridge<TContracts>;
+export function createBridge<TContracts extends BridgeContractRegistryShape<TContracts>>(
+  options?: TypedBridgeOptions<TContracts>,
+): TypedBridge<TContracts> | TypedBridge<TContracts, true> {
   return {
     get isNative(): boolean {
       return bridge.isNative;
     },
     call(namespace: string, method: string, first?: unknown, second?: BridgeCallOptions) {
-      if (second === undefined && isBridgeCallOptions(first)) {
-        return bridge.call(namespace, method, undefined, first);
+      if (second === undefined && isParameterlessMethod(options, namespace, method)) {
+        return bridge.call(namespace, method, undefined, first as BridgeCallOptions | undefined);
       }
       return bridge.call(namespace, method, first, second);
     },

@@ -107,9 +107,17 @@ typedBridge.subscribe("camera.ready", (payload) => {
 subscribe signatures. The generic contract is compile-time only; it does not
 change the native message shape or add runtime validation.
 
-For methods without declared params, pass bridge options directly:
+For methods without declared params, pass explicit runtime metadata before using
+the options-only call form. This avoids guessing from object shape, so a real
+params payload like `{ strict: true }` is never mistaken for bridge options.
 
 ```typescript
+const typedBridge = createBridge<AppBridgeContracts>({
+  parameterlessMethods: {
+    camera: ["reset"],
+  },
+});
+
 await typedBridge.call("camera", "reset", { strict: true });
 ```
 
