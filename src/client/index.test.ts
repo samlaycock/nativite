@@ -177,12 +177,14 @@ describe("bridge.call", () => {
   });
 
   it("rejects invalid timeout options", async () => {
-    try {
-      await bridge.call("camera", "capture", undefined, { timeoutMs: -1 });
-      throw new Error("Expected promise to reject");
-    } catch (err) {
-      expect(err).toBeInstanceOf(NativiteBridgeError);
-      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("INVALID_OPTIONS");
+    for (const timeoutMs of [-1, 0]) {
+      try {
+        await bridge.call("camera", "capture", undefined, { timeoutMs });
+        throw new Error("Expected promise to reject");
+      } catch (err) {
+        expect(err).toBeInstanceOf(NativiteBridgeError);
+        expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("INVALID_OPTIONS");
+      }
     }
   });
 });
