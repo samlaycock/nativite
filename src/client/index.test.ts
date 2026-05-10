@@ -51,6 +51,10 @@ type TestBridgeContracts = {
       reset: {
         result: { readonly ok: boolean };
       };
+      setStrictMode: {
+        params: { readonly strict: boolean };
+        result: { readonly ok: boolean };
+      };
     };
     events: {
       "camera.ready": { readonly deviceCount: number };
@@ -72,16 +76,24 @@ function expectType<TValue>(_value: TValue): void {}
 
 function assertTypedBridgeContracts(): void {
   const typedBridge = createBridge<TestBridgeContracts>();
+  const typedBridgeWithParameterlessOptions = createBridge<TestBridgeContracts>({
+    parameterlessMethods: {
+      camera: ["reset"],
+    },
+  });
 
   expectType<Promise<{ readonly path: string }>>(
     typedBridge.call("camera", "capture", { quality: 0.9 }),
   );
   expectType<Promise<{ readonly ok: boolean }>>(typedBridge.call("camera", "reset"));
   expectType<Promise<{ readonly ok: boolean }>>(
-    typedBridge.call("camera", "reset", { strict: true }),
+    typedBridge.call("camera", "reset", undefined, { strict: true }),
   );
   expectType<Promise<{ readonly ok: boolean }>>(
-    typedBridge.call("camera", "reset", undefined, { strict: true }),
+    typedBridgeWithParameterlessOptions.call("camera", "reset", { strict: true }),
+  );
+  expectType<Promise<{ readonly ok: boolean }>>(
+    typedBridge.call("camera", "setStrictMode", { strict: true }),
   );
 
   typedBridge.subscribe("location.updated", (payload) => {
@@ -95,6 +107,8 @@ function assertTypedBridgeContracts(): void {
   void typedBridge.call("camera", "getCurrentPosition");
   // @ts-expect-error requires the declared params shape
   void typedBridge.call("camera", "capture", { quality: "high" });
+  // @ts-expect-error rejects parameterized methods in parameterless runtime metadata
+  createBridge<TestBridgeContracts>({ parameterlessMethods: { camera: ["capture"] } });
   // @ts-expect-error rejects unknown events
   typedBridge.subscribe("storage.changed", () => {});
 }
@@ -262,7 +276,11 @@ describe("createBridge", () => {
 
   it("treats a bare options object as options for parameterless typed calls", async () => {
     replyHandler = () => Promise.resolve({ result: { ok: true } });
-    const typedBridge = createBridge<TestBridgeContracts>();
+    const typedBridge = createBridge<TestBridgeContracts>({
+      parameterlessMethods: {
+        camera: ["reset"],
+      },
+    });
 
     const result = await typedBridge.call("camera", "reset", { strict: true });
 
@@ -271,6 +289,22 @@ describe("createBridge", () => {
     expect(msg["namespace"]).toBe("camera");
     expect(msg["method"]).toBe("reset");
     expect(msg["args"]).toBeNull();
+  });
+
+  it("keeps option-shaped params for typed calls unless the method is explicitly parameterless", async () => {
+    replyHandler = () => Promise.resolve({ result: { ok: true } });
+    const typedBridge = createBridge<TestBridgeContracts>({
+      parameterlessMethods: {
+        camera: ["reset"],
+      },
+    });
+
+    await typedBridge.call("camera", "setStrictMode", { strict: true });
+
+    const msg = nativeMessages[0]!;
+    expect(msg["namespace"]).toBe("camera");
+    expect(msg["method"]).toBe("setStrictMode");
+    expect(msg["args"]).toEqual({ strict: true });
   });
 
   it("keeps the explicit params and options tuple for parameterized typed calls", async () => {
