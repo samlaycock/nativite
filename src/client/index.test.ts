@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
+import type { TypedBridgeOptions } from "./index.ts";
+
 // ─── Mock window + native handler ───────────────────────────────────────────
 // Bun's test runner has no DOM. Provide a minimal global `window` and
 // simulate window.webkit.messageHandlers.nativite for native transport tests.
@@ -76,6 +78,7 @@ function expectType<TValue>(_value: TValue): void {}
 
 function assertTypedBridgeContracts(): void {
   const typedBridge = createBridge<TestBridgeContracts>();
+  const annotatedOptions: TypedBridgeOptions<TestBridgeContracts> = {};
   const typedBridgeWithParameterlessOptions = createBridge<
     TestBridgeContracts,
     { readonly camera: readonly ["reset"] }
@@ -98,6 +101,7 @@ function assertTypedBridgeContracts(): void {
   expectType<Promise<{ readonly ok: boolean }>>(
     typedBridge.call("camera", "setStrictMode", { strict: true }),
   );
+  expectType<TypedBridgeOptions<TestBridgeContracts>>(annotatedOptions);
 
   typedBridge.subscribe("location.updated", (payload) => {
     expectType<number>(payload.latitude);
@@ -112,6 +116,8 @@ function assertTypedBridgeContracts(): void {
   void typedBridge.call("camera", "capture", { quality: "high" });
   // @ts-expect-error rejects options-only calls for parameterless methods not listed at runtime
   void typedBridgeWithParameterlessOptions.call("location", "getCurrentPosition", { strict: true });
+  // @ts-expect-error rejects parameterlessMethods when the default options type is used directly
+  annotatedOptions.parameterlessMethods = { camera: ["reset"] };
   // @ts-expect-error rejects parameterized methods in parameterless runtime metadata
   createBridge<TestBridgeContracts, { readonly camera: readonly ["capture"] }>({
     parameterlessMethods: { camera: ["capture"] },
