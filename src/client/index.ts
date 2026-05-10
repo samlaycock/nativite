@@ -139,8 +139,7 @@ export interface TypedBridge<
 
 export interface TypedBridgeOptions<
   TContracts extends BridgeContractRegistryShape<TContracts>,
-  TParameterlessMethods extends BridgeParameterlessMethodMap<TContracts> =
-    BridgeParameterlessMethodMap<TContracts>,
+  TParameterlessMethods extends BridgeParameterlessMethodMap<TContracts> = Record<never, never>,
 > {
   readonly parameterlessMethods?: TParameterlessMethods;
 }
