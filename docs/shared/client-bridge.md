@@ -107,6 +107,12 @@ typedBridge.subscribe("camera.ready", (payload) => {
 subscribe signatures. The generic contract is compile-time only; it does not
 change the native message shape or add runtime validation.
 
+For methods without declared params, pass bridge options directly:
+
+```typescript
+await typedBridge.call("camera", "reset", { strict: true });
+```
+
 When not running in a native environment, returns `Promise.resolve(undefined)` by
 default for backwards compatibility. Pass `{ strict: true }` to reject instead:
 
