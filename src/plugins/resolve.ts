@@ -360,6 +360,7 @@ function computePluginFingerprint(
           key !== "resolve" &&
           key !== "platforms" &&
           key !== "bridge" &&
+          key !== "contracts" &&
           key !== "rootDir" &&
           key !== "fingerprint"
         );

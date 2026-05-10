@@ -13,6 +13,86 @@ export interface BridgeCallOptions {
   readonly strict?: boolean;
 }
 
+export interface BridgeMethodContract {
+  readonly params?: unknown;
+  readonly result?: unknown;
+}
+
+export interface BridgeNamespaceContract {
+  readonly methods?: Record<string, BridgeMethodContract>;
+  readonly events?: Record<string, unknown>;
+}
+
+export type BridgeContractRegistry = Record<string, BridgeNamespaceContract>;
+type BridgeContractRegistryShape<TContracts> = {
+  readonly [TNamespace in keyof TContracts]: BridgeNamespaceContract;
+};
+
+export type BridgeMethodNames<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TNamespace extends keyof TContracts,
+> = keyof NonNullable<TContracts[TNamespace]["methods"]> & string;
+
+export type BridgeEventNames<TContracts extends BridgeContractRegistryShape<TContracts>> = {
+  [TNamespace in keyof TContracts]: keyof NonNullable<TContracts[TNamespace]["events"]> & string;
+}[keyof TContracts];
+
+type BridgeMethodParams<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TNamespace extends keyof TContracts,
+  TMethod extends BridgeMethodNames<TContracts, TNamespace>,
+> = NonNullable<TContracts[TNamespace]["methods"]>[TMethod] extends {
+  readonly params: infer TParams;
+}
+  ? TParams
+  : undefined;
+
+type BridgeMethodResult<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TNamespace extends keyof TContracts,
+  TMethod extends BridgeMethodNames<TContracts, TNamespace>,
+> = NonNullable<TContracts[TNamespace]["methods"]>[TMethod] extends {
+  readonly result: infer TResult;
+}
+  ? TResult
+  : unknown;
+
+type BridgeEventPayload<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TEvent extends BridgeEventNames<TContracts>,
+> = {
+  [TNamespace in keyof TContracts]: TEvent extends keyof NonNullable<
+    TContracts[TNamespace]["events"]
+  >
+    ? NonNullable<TContracts[TNamespace]["events"]>[TEvent]
+    : never;
+}[keyof TContracts];
+
+type BridgeCallArgs<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TNamespace extends keyof TContracts,
+  TMethod extends BridgeMethodNames<TContracts, TNamespace>,
+> =
+  undefined extends BridgeMethodParams<TContracts, TNamespace, TMethod>
+    ? [params?: BridgeMethodParams<TContracts, TNamespace, TMethod>, options?: BridgeCallOptions]
+    : [params: BridgeMethodParams<TContracts, TNamespace, TMethod>, options?: BridgeCallOptions];
+
+export interface TypedBridge<TContracts extends BridgeContractRegistryShape<TContracts>> {
+  readonly isNative: boolean;
+  call<
+    TNamespace extends keyof TContracts & string,
+    TMethod extends BridgeMethodNames<TContracts, TNamespace>,
+  >(
+    namespace: TNamespace,
+    method: TMethod,
+    ...args: BridgeCallArgs<TContracts, TNamespace, TMethod>
+  ): Promise<BridgeMethodResult<TContracts, TNamespace, TMethod>>;
+  subscribe<TEvent extends BridgeEventNames<TContracts>>(
+    event: TEvent,
+    handler: (data: BridgeEventPayload<TContracts, TEvent>) => void,
+  ): () => void;
+}
+
 interface BridgeCallMessage {
   readonly id: string | null;
   readonly type: "call";
@@ -425,6 +505,12 @@ export const bridge = {
     };
   },
 } as const;
+
+export function createBridge<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+>(): TypedBridge<TContracts> {
+  return bridge as TypedBridge<TContracts>;
+}
 
 // ─── ota ─────────────────────────────────────────────────────────────────────
 

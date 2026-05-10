@@ -24,6 +24,21 @@ export type NativiteBridgeNamespace = {
   events?: string[];
 };
 
+export interface NativiteBridgeMethodContract {
+  readonly params?: unknown;
+  readonly result?: unknown;
+}
+
+export interface NativiteBridgeNamespaceContract {
+  readonly methods?: Record<string, NativiteBridgeMethodContract>;
+  readonly events?: Record<string, unknown>;
+}
+
+export type NativiteBridgeContractRegistry = Record<string, NativiteBridgeNamespaceContract>;
+type NativiteBridgeContractRegistryShape<TContracts> = {
+  readonly [TNamespace in keyof TContracts]: NativiteBridgeNamespaceContract;
+};
+
 export type NativiteApplePlatformContribution = {
   sources?: NativitePluginFile[];
   resources?: NativitePluginFile[];
@@ -51,7 +66,10 @@ export type NativitePluginContext = {
   mode: NativitePluginMode;
 };
 
-export type NativitePlugin = {
+export type NativitePlugin<
+  TContracts extends NativiteBridgeContractRegistryShape<TContracts> =
+    NativiteBridgeContractRegistry,
+> = {
   name: string;
   /**
    * Base directory for resolving relative plugin paths.
@@ -67,6 +85,11 @@ export type NativitePlugin = {
   bridge?: NativitePluginContribution["bridge"];
   /** Optional static contribution block. */
   platforms?: NativitePluginContribution["platforms"];
+  /**
+   * Type-only bridge contract for app and plugin authors.
+   * Runtime namespace/method/event registration still lives in `bridge`.
+   */
+  contracts?: TContracts;
   /**
    * Optional dynamic contribution resolver.
    * Runs during project generation/build to produce per-platform native inputs.
@@ -313,7 +336,10 @@ export function definePlatformPlugin(
  * import { definePlugin } from "nativite"
  * export const myPlugin = definePlugin({ name: "my-plugin", ... }, import.meta.url)
  */
-export function definePlugin(plugin: NativitePlugin, importMetaUrl?: string | URL): NativitePlugin {
+export function definePlugin<TContracts extends NativiteBridgeContractRegistryShape<TContracts>>(
+  plugin: NativitePlugin<TContracts>,
+  importMetaUrl?: string | URL,
+): NativitePlugin<TContracts> {
   if (!importMetaUrl || plugin.rootDir !== undefined) return plugin;
   return { ...plugin, rootDir: rootDirFromImportMeta(importMetaUrl) };
 }

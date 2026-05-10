@@ -134,6 +134,66 @@ describe("resolveNativitePlugins", () => {
     }
   });
 
+  it("does not include type-only bridge contracts in plugin fingerprints", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nativite-plugin-contracts-"));
+    try {
+      const basePlugin = {
+        name: "camera-plugin",
+        bridge: {
+          namespaces: [{ name: "camera", methods: ["capture"], events: ["camera.ready"] }],
+        },
+      };
+      const first = await resolveNativitePlugins(
+        {
+          ...makeBaseConfig(),
+          plugins: [
+            definePlugin({
+              ...basePlugin,
+              contracts: {} as {
+                camera: {
+                  methods: {
+                    capture: {
+                      params: { readonly quality: number };
+                      result: { readonly path: string };
+                    };
+                  };
+                };
+              },
+            }),
+          ],
+        },
+        root,
+        "generate",
+      );
+      const second = await resolveNativitePlugins(
+        {
+          ...makeBaseConfig(),
+          plugins: [
+            definePlugin({
+              ...basePlugin,
+              contracts: {} as {
+                camera: {
+                  methods: {
+                    capture: {
+                      params: { readonly quality: number; readonly format: "jpeg" };
+                      result: { readonly path: string; readonly width: number };
+                    };
+                  };
+                };
+              },
+            }),
+          ],
+        },
+        root,
+        "generate",
+      );
+
+      expect(first.plugins[0]?.fingerprint).toBe(second.plugins[0]?.fingerprint);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("throws when a declared plugin file does not exist", async () => {
     const root = mkdtempSync(join(tmpdir(), "nativite-plugin-missing-"));
     try {

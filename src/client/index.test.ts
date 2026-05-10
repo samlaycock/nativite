@@ -39,7 +39,61 @@ function removeNativeHandler(): void {
 // module evaluation. Static ESM imports are evaluated before this file's
 // top-level setup runs, which breaks nativiteReceive registration in CI.
 
-const { bridge, NativiteBridgeError } = await import("./index.ts");
+const { bridge, createBridge, NativiteBridgeError } = await import("./index.ts");
+
+type TestBridgeContracts = {
+  camera: {
+    methods: {
+      capture: {
+        params: { readonly quality: number };
+        result: { readonly path: string };
+      };
+      reset: {
+        result: { readonly ok: boolean };
+      };
+    };
+    events: {
+      "camera.ready": { readonly deviceCount: number };
+    };
+  };
+  location: {
+    methods: {
+      getCurrentPosition: {
+        result: { readonly latitude: number; readonly longitude: number };
+      };
+    };
+    events: {
+      "location.updated": { readonly latitude: number; readonly longitude: number };
+    };
+  };
+};
+
+function expectType<TValue>(_value: TValue): void {}
+
+function assertTypedBridgeContracts(): void {
+  const typedBridge = createBridge<TestBridgeContracts>();
+
+  expectType<Promise<{ readonly path: string }>>(
+    typedBridge.call("camera", "capture", { quality: 0.9 }),
+  );
+  expectType<Promise<{ readonly ok: boolean }>>(typedBridge.call("camera", "reset"));
+
+  typedBridge.subscribe("location.updated", (payload) => {
+    expectType<number>(payload.latitude);
+    expectType<number>(payload.longitude);
+  });
+
+  // @ts-expect-error rejects unknown namespaces
+  void typedBridge.call("storage", "get", { key: "prefs" });
+  // @ts-expect-error rejects methods outside the selected namespace
+  void typedBridge.call("camera", "getCurrentPosition");
+  // @ts-expect-error requires the declared params shape
+  void typedBridge.call("camera", "capture", { quality: "high" });
+  // @ts-expect-error rejects unknown events
+  typedBridge.subscribe("storage.changed", () => {});
+}
+
+void assertTypedBridgeContracts;
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -186,6 +240,18 @@ describe("bridge.call", () => {
         expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("INVALID_OPTIONS");
       }
     }
+  });
+});
+
+describe("createBridge", () => {
+  it("returns the runtime bridge with typed call and subscribe methods", async () => {
+    replyHandler = () => Promise.resolve({ result: { path: "photo.jpg" } });
+    const typedBridge = createBridge<TestBridgeContracts>();
+
+    const result = await typedBridge.call("camera", "capture", { quality: 0.9 });
+
+    expect(result).toEqual({ path: "photo.jpg" });
+    expect(postMessageWithReply).toHaveBeenCalledTimes(1);
   });
 });
 
