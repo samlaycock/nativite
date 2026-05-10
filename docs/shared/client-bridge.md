@@ -76,6 +76,37 @@ import { bridge } from "nativite/client";
 const result = await bridge.call("camera", "takePhoto", { quality: 0.8 });
 ```
 
+### `createBridge<Contracts>()`
+
+```typescript
+import { createBridge } from "nativite/client";
+
+interface AppBridgeContracts {
+  camera: {
+    methods: {
+      takePhoto: {
+        params: { readonly quality: number };
+        result: { readonly path: string };
+      };
+    };
+    events: {
+      "camera.ready": { readonly deviceCount: number };
+    };
+  };
+}
+
+const typedBridge = createBridge<AppBridgeContracts>();
+const photo = await typedBridge.call("camera", "takePhoto", { quality: 0.8 });
+
+typedBridge.subscribe("camera.ready", (payload) => {
+  console.log(payload.deviceCount);
+});
+```
+
+`createBridge()` returns the same runtime bridge object with typed call and
+subscribe signatures. The generic contract is compile-time only; it does not
+change the native message shape or add runtime validation.
+
 When not running in a native environment, returns `Promise.resolve(undefined)` by
 default for backwards compatibility. Pass `{ strict: true }` to reject instead:
 

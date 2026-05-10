@@ -73,9 +73,24 @@ before they can be used. A project can import a plugin from any local file:
 // plugins/camera/plugin.ts
 import { definePlugin } from "nativite";
 
+interface CameraBridgeContracts {
+  camera: {
+    methods: {
+      takePhoto: {
+        params: { readonly quality: number };
+        result: { readonly path: string };
+      };
+    };
+    events: {
+      "camera.ready": { readonly deviceCount: number };
+    };
+  };
+}
+
 export const cameraPlugin = definePlugin(
   {
     name: "camera",
+    contracts: {} as CameraBridgeContracts,
     platforms: {
       ios: {
         sources: ["./ios/CameraPlugin.swift"],
@@ -90,6 +105,22 @@ export const cameraPlugin = definePlugin(
   },
   import.meta.url,
 );
+```
+
+The `contracts` field is type-only metadata for TypeScript consumers. It lets
+plugin packages export a bridge contract that app code can pass to
+`createBridge<Contracts>()`; plugin resolution ignores it at runtime, so native
+registration still comes from the `bridge` namespace list and platform
+contributions.
+
+```ts
+import { createBridge } from "nativite/client";
+import { cameraPlugin } from "./plugins/camera/plugin";
+
+type CameraContracts = NonNullable<typeof cameraPlugin.contracts>;
+
+const bridge = createBridge<CameraContracts>();
+const photo = await bridge.call("camera", "takePhoto", { quality: 0.8 });
 ```
 
 ```ts
