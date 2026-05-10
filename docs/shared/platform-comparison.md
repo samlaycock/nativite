@@ -42,6 +42,19 @@ Android `shell.ready.areas` advertises only areas with active Compose renderers:
 | Port Setup      | Automatic (WebKit handler)                          | Transferred via `postWebMessage("__nativite_port__")` |
 | Reply Mechanism | `replyHandler(result, error)`                       | JSON reply through same port                          |
 
+## OTA Updates
+
+| Aspect            | iOS / macOS                                      | Android                                      |
+| ----------------- | ------------------------------------------------ | -------------------------------------------- |
+| Status API        | `ota.check()` queries remote and staged bundles  | `ota.check()` returns `{ available: false }` |
+| Bundle staging    | Downloads manifest assets into a staged bundle   | Not implemented                              |
+| Apply on launch   | Promotes staged bundle before web content loads  | Not implemented                              |
+| Rollback handling | Restores prior OTA bundle after failed first run | Not implemented                              |
+
+The top-level `updates` config is currently an Apple-runtime feature. Android
+keeps the JavaScript status API callable for cross-platform code, but there is
+no production Android OTA update flow yet.
+
 ## CSS Variables
 
 | Category        | iOS                                    | Android                           | macOS                                 |
