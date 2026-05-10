@@ -191,6 +191,11 @@ Notes:
 - `icon`
 - `splash`
 
+`updates` currently enables OTA bundle checks and staged bundle application for
+iOS and macOS generated runtimes. Android exposes the same JavaScript
+`ota.check()` status shape, but it always reports `{ available: false }` until
+Android OTA staging/apply support is implemented.
+
 ## JavaScript Runtime APIs
 
 ### `nativite/client`
@@ -214,6 +219,9 @@ console.log(update.available, update.version);
 
 unsub();
 ```
+
+`ota.check()` is implemented by the Apple runtimes today. On Android it is a
+compatibility placeholder that resolves to `{ available: false }`.
 
 ### `nativite/chrome`
 

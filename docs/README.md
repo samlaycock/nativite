@@ -25,6 +25,8 @@ Technical reference for how nativite features are implemented on each native pla
 - [Theme](./android/theme.md) — Material 3 dynamic colours and theming
 - [Project Generation](./android/project-generation.md) — Gradle project generation and structure
 - [Dev Workflow](./android/dev-workflow.md) — IDE-owned debug runs and dev server integration
+- OTA updates — Not implemented yet; Android bridge OTA checks currently return
+  `{ available: false }`
 
 ## macOS
 

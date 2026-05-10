@@ -4,6 +4,9 @@
 > Generated file: `OTAUpdater.swift`
 
 The OTA (Over-the-Air) update system allows the web bundle to be updated without going through the App Store review process.
+This runtime is shared by the generated iOS and macOS targets. Android does not
+currently implement OTA staging or application; its bridge returns
+`{ available: false }` for OTA status checks.
 
 ## Architecture
 

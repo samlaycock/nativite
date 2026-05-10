@@ -99,6 +99,11 @@ Cleans up ports and references when a webview is destroyed.
 | `__nativite__.__ping__`      | Returns `"pong"`                                  |
 | `__nativite__.__ota_check__` | Returns `{ available: false }` placeholder status |
 
+Android does not currently stage, apply, or roll back OTA web bundles. The
+placeholder `__ota_check__` handler keeps the shared JavaScript `ota.check()`
+API safe to call on Android while accurately reporting that no Android OTA
+update is available.
+
 ### Built-in Chrome Handlers
 
 | Handler                                          | Description                                                                                                      |
