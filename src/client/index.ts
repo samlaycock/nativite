@@ -28,7 +28,7 @@ interface NativeReply {
 
 interface PendingAndroidCall {
   readonly resolve: (value: unknown) => void;
-  readonly reject: (reason: Error) => void;
+  readonly reject: (reason: unknown) => void;
 }
 
 export class NativiteBridgeError extends Error {
@@ -131,10 +131,10 @@ function getAbortReason(signal: AbortSignal): string {
 
 function validateCallOptions(options?: BridgeCallOptions): void {
   if (options?.timeoutMs === undefined) return;
-  if (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 0) {
+  if (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0) {
     throw createBridgeError(
       "INVALID_OPTIONS",
-      "bridge.call timeoutMs must be a non-negative finite number",
+      "bridge.call timeoutMs must be a positive finite number",
     );
   }
 }
@@ -145,8 +145,6 @@ function withCallGuards<T>(
   options?: BridgeCallOptions,
   onCancel?: () => void,
 ): Promise<T> {
-  validateCallOptions(options);
-
   return new Promise<T>((resolve, reject) => {
     let settled = false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -221,7 +219,7 @@ function setupAndroidPortListener(): void {
             pendingAndroidCalls.delete(id);
             const error = msg["error"];
             if (error !== undefined) {
-              pending.reject(normalizeNativeError(error));
+              pending.reject(error);
             } else {
               pending.resolve(msg["result"]);
             }
