@@ -1,12 +1,45 @@
 /// <reference lib="dom" />
 
-type BridgeCallMessage = {
-  id: string | null;
-  type: "call";
-  namespace: string;
-  method: string;
-  args: unknown;
-};
+export type BridgeErrorCode =
+  | "NATIVE_UNAVAILABLE"
+  | "NATIVE_ERROR"
+  | "TIMEOUT"
+  | "ABORTED"
+  | "INVALID_OPTIONS";
+
+export interface BridgeCallOptions {
+  readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+  readonly strict?: boolean;
+}
+
+interface BridgeCallMessage {
+  readonly id: string | null;
+  readonly type: "call";
+  readonly namespace: string;
+  readonly method: string;
+  readonly args: unknown;
+}
+
+interface NativeReply {
+  readonly result?: unknown;
+  readonly error?: unknown;
+}
+
+interface PendingAndroidCall {
+  readonly resolve: (value: unknown) => void;
+  readonly reject: (reason: Error) => void;
+}
+
+export class NativiteBridgeError extends Error {
+  readonly code: BridgeErrorCode;
+
+  constructor(code: BridgeErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "NativiteBridgeError";
+    this.code = code;
+  }
+}
 
 type NativeToJsMessage = {
   readonly id?: null;
@@ -49,10 +82,124 @@ function getIOSHandler(): WebKitHandler | undefined {
 // We listen for it and use the port for bidirectional RPC.
 
 let androidPort: MessagePort | null = null;
-const pendingAndroidCalls = new Map<
-  string,
-  { resolve: (value: unknown) => void; reject: (reason: Error) => void }
->();
+const pendingAndroidCalls = new Map<string, PendingAndroidCall>();
+
+function createBridgeError(
+  code: BridgeErrorCode,
+  message: string,
+  cause?: unknown,
+): NativiteBridgeError {
+  return new NativiteBridgeError(code, message, { cause });
+}
+
+function normalizeNativeError(error: unknown): NativiteBridgeError {
+  if (error instanceof NativiteBridgeError) return error;
+  if (typeof error === "string") return createBridgeError("NATIVE_ERROR", error);
+  if (error instanceof Error) {
+    return createBridgeError("NATIVE_ERROR", error.message, error);
+  }
+  if (typeof error === "object" && error !== null) {
+    const candidate = error as { readonly code?: unknown; readonly message?: unknown };
+    if (typeof candidate.message === "string") {
+      const code = typeof candidate.code === "string" ? candidate.code : "NATIVE_ERROR";
+      return createBridgeError(
+        isBridgeErrorCode(code) ? code : "NATIVE_ERROR",
+        candidate.message,
+        error,
+      );
+    }
+  }
+  return createBridgeError("NATIVE_ERROR", "Native bridge call failed", error);
+}
+
+function isBridgeErrorCode(code: string): code is BridgeErrorCode {
+  return (
+    code === "NATIVE_UNAVAILABLE" ||
+    code === "NATIVE_ERROR" ||
+    code === "TIMEOUT" ||
+    code === "ABORTED" ||
+    code === "INVALID_OPTIONS"
+  );
+}
+
+function getAbortReason(signal: AbortSignal): string {
+  const { reason } = signal;
+  if (reason instanceof Error && reason.message !== "") return reason.message;
+  if (typeof reason === "string" && reason !== "") return reason;
+  return "Native bridge call was aborted";
+}
+
+function validateCallOptions(options?: BridgeCallOptions): void {
+  if (options?.timeoutMs === undefined) return;
+  if (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 0) {
+    throw createBridgeError(
+      "INVALID_OPTIONS",
+      "bridge.call timeoutMs must be a non-negative finite number",
+    );
+  }
+}
+
+function withCallGuards<T>(
+  operation: Promise<T>,
+  message: BridgeCallMessage,
+  options?: BridgeCallOptions,
+  onCancel?: () => void,
+): Promise<T> {
+  validateCallOptions(options);
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = (): void => {
+      if (timeout !== undefined) clearTimeout(timeout);
+      options?.signal?.removeEventListener("abort", onAbort);
+    };
+
+    const settle = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const cancel = (error: NativiteBridgeError): void => {
+      onCancel?.();
+      settle(() => reject(error));
+    };
+
+    const onAbort = (): void => {
+      cancel(createBridgeError("ABORTED", getAbortReason(options!.signal!)));
+    };
+
+    if (options?.signal?.aborted === true) {
+      onAbort();
+      return;
+    }
+
+    options?.signal?.addEventListener("abort", onAbort, { once: true });
+
+    if (options?.timeoutMs !== undefined) {
+      timeout = setTimeout(() => {
+        cancel(
+          createBridgeError(
+            "TIMEOUT",
+            `Native bridge call ${message.namespace}.${message.method} timed out after ${options.timeoutMs}ms`,
+          ),
+        );
+      }, options.timeoutMs);
+    }
+
+    operation.then(
+      (value) => {
+        settle(() => resolve(value));
+      },
+      (error: unknown) => {
+        settle(() => reject(normalizeNativeError(error)));
+      },
+    );
+  });
+}
 
 function setupAndroidPortListener(): void {
   if (typeof window === "undefined") return;
@@ -74,7 +221,7 @@ function setupAndroidPortListener(): void {
             pendingAndroidCalls.delete(id);
             const error = msg["error"];
             if (error !== undefined) {
-              pending.reject(new Error(typeof error === "string" ? error : JSON.stringify(error)));
+              pending.reject(normalizeNativeError(error));
             } else {
               pending.resolve(msg["result"]);
             }
@@ -99,15 +246,21 @@ function isAndroidEnvironment(): boolean {
   return androidPort !== null;
 }
 
-async function androidCall(msg: BridgeCallMessage): Promise<unknown> {
-  if (!androidPort) throw new Error("Nativite Android port not available");
+async function androidCall(msg: BridgeCallMessage, options?: BridgeCallOptions): Promise<unknown> {
+  if (!androidPort) {
+    throw createBridgeError("NATIVE_UNAVAILABLE", "Nativite Android port not available");
+  }
 
   const id = crypto.randomUUID();
   msg = { ...msg, id };
 
-  return new Promise<unknown>((resolve, reject) => {
+  const operation = new Promise<unknown>((resolve, reject) => {
     pendingAndroidCalls.set(id, { resolve, reject });
     androidPort!.postMessage(JSON.stringify(msg));
+  });
+
+  return withCallGuards(operation, msg, options, () => {
+    pendingAndroidCalls.delete(id);
   });
 }
 
@@ -118,24 +271,29 @@ function isNativeEnvironment(): boolean {
   return getIOSHandler() !== undefined || isAndroidEnvironment();
 }
 
-async function nativeCall(msg: BridgeCallMessage): Promise<unknown> {
+async function nativeCall(msg: BridgeCallMessage, options?: BridgeCallOptions): Promise<unknown> {
   // Android: use WebMessagePort
   if (isAndroidEnvironment()) {
-    return androidCall(msg);
+    return androidCall(msg, options);
   }
 
   // iOS: use postMessageWithReply
   const handler = getIOSHandler();
-  if (!handler) throw new Error("Nativite native handler not available");
-  if (typeof handler.postMessageWithReply !== "function") {
-    throw new Error("Nativite iOS handler does not support postMessageWithReply");
+  if (!handler) {
+    throw createBridgeError("NATIVE_UNAVAILABLE", "Nativite native handler not available");
   }
-  const reply = (await handler.postMessageWithReply(msg)) as {
-    result?: unknown;
-    error?: string;
-  };
-  if (reply.error !== undefined) throw new Error(reply.error);
-  return reply.result;
+  if (typeof handler.postMessageWithReply !== "function") {
+    throw createBridgeError(
+      "NATIVE_UNAVAILABLE",
+      "Nativite iOS handler does not support postMessageWithReply",
+    );
+  }
+  const operation = handler.postMessageWithReply(msg).then((reply) => {
+    const nativeReply = reply as NativeReply;
+    if (nativeReply.error !== undefined) throw normalizeNativeError(nativeReply.error);
+    return nativeReply.result;
+  });
+  return withCallGuards(operation, msg, options);
 }
 
 // ─── Event listeners (bridge.subscribe) ──────────────────────────────────────
@@ -220,15 +378,38 @@ export const bridge = {
    * iOS: Uses postMessageWithReply for synchronous request/response matching.
    * Android: Uses WebMessagePort with id-correlated replies.
    */
-  call(namespace: string, method: string, params?: unknown): Promise<unknown> {
-    if (!isNativeEnvironment()) return Promise.resolve(undefined);
-    return nativeCall({
-      id: null,
-      type: "call",
-      namespace,
-      method,
-      args: params ?? null,
-    });
+  call(
+    namespace: string,
+    method: string,
+    params?: unknown,
+    options?: BridgeCallOptions,
+  ): Promise<unknown> {
+    try {
+      validateCallOptions(options);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    if (!isNativeEnvironment()) {
+      if (options?.strict === true) {
+        return Promise.reject(
+          createBridgeError(
+            "NATIVE_UNAVAILABLE",
+            `Native bridge is not available for ${namespace}.${method}`,
+          ),
+        );
+      }
+      return Promise.resolve(undefined);
+    }
+    return nativeCall(
+      {
+        id: null,
+        type: "call",
+        namespace,
+        method,
+        args: params ?? null,
+      },
+      options,
+    );
   },
 
   /**

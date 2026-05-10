@@ -39,7 +39,7 @@ function removeNativeHandler(): void {
 // module evaluation. Static ESM imports are evaluated before this file's
 // top-level setup runs, which breaks nativiteReceive registration in CI.
 
-const { bridge } = await import("./index.ts");
+const { bridge, NativiteBridgeError } = await import("./index.ts");
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 
@@ -97,6 +97,24 @@ describe("bridge.call", () => {
       throw new Error("Expected promise to reject");
     } catch (err) {
       expect((err as Error).message).toBe("Camera not available");
+      expect(err).toBeInstanceOf(NativiteBridgeError);
+      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("NATIVE_ERROR");
+    }
+  });
+
+  it("preserves structured native error codes", async () => {
+    replyHandler = () =>
+      Promise.resolve({
+        error: { code: "NATIVE_UNAVAILABLE", message: "Plugin is missing" },
+      });
+
+    try {
+      await bridge.call("camera", "capture");
+      throw new Error("Expected promise to reject");
+    } catch (err) {
+      expect(err).toBeInstanceOf(NativiteBridgeError);
+      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("NATIVE_UNAVAILABLE");
+      expect((err as Error).message).toBe("Plugin is missing");
     }
   });
 
@@ -112,6 +130,60 @@ describe("bridge.call", () => {
     const result = await bridge.call("camera", "capture");
     expect(result).toBeUndefined();
     expect(postMessageWithReply).not.toHaveBeenCalled();
+  });
+
+  it("rejects in non-native environment when strict mode is enabled", async () => {
+    removeNativeHandler();
+
+    try {
+      await bridge.call("camera", "capture", undefined, { strict: true });
+      throw new Error("Expected promise to reject");
+    } catch (err) {
+      expect(err).toBeInstanceOf(NativiteBridgeError);
+      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("NATIVE_UNAVAILABLE");
+    }
+  });
+
+  it("rejects when a native call times out", async () => {
+    replyHandler = () => new Promise(() => {});
+
+    try {
+      await bridge.call("camera", "capture", undefined, { timeoutMs: 1 });
+      throw new Error("Expected promise to reject");
+    } catch (err) {
+      expect(err).toBeInstanceOf(NativiteBridgeError);
+      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("TIMEOUT");
+      expect((err as Error).message).toContain("camera.capture");
+    }
+  });
+
+  it("rejects when a call is aborted before native replies", async () => {
+    const controller = new AbortController();
+    replyHandler = () => new Promise(() => {});
+
+    const promise = bridge.call("camera", "capture", undefined, {
+      signal: controller.signal,
+    });
+    controller.abort("User cancelled");
+
+    try {
+      await promise;
+      throw new Error("Expected promise to reject");
+    } catch (err) {
+      expect(err).toBeInstanceOf(NativiteBridgeError);
+      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("ABORTED");
+      expect((err as Error).message).toBe("User cancelled");
+    }
+  });
+
+  it("rejects invalid timeout options", async () => {
+    try {
+      await bridge.call("camera", "capture", undefined, { timeoutMs: -1 });
+      throw new Error("Expected promise to reject");
+    } catch (err) {
+      expect(err).toBeInstanceOf(NativiteBridgeError);
+      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("INVALID_OPTIONS");
+    }
   });
 });
 

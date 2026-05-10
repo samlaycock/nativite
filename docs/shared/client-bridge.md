@@ -37,6 +37,10 @@ pendingCalls.set(id, { resolve, reject });
 port.postMessage(JSON.stringify({ ...msg, id }));
 ```
 
+Pending Android calls are removed when the native side replies, when a timeout
+fires, or when the call's `AbortSignal` is aborted. This prevents unresolved
+native requests from accumulating indefinitely if native fails to respond.
+
 ## Public API
 
 ### `bridge.isNative`
@@ -47,10 +51,21 @@ bridge.isNative: boolean
 
 Returns `true` when running inside a native webview (iOS or Android). Returns `false` in a regular browser.
 
-### `bridge.call(namespace, method, params?)`
+### `bridge.call(namespace, method, params?, options?)`
 
 ```typescript
-bridge.call(namespace: string, method: string, params?: unknown): Promise<unknown>
+bridge.call(
+  namespace: string,
+  method: string,
+  params?: unknown,
+  options?: BridgeCallOptions,
+): Promise<unknown>
+
+interface BridgeCallOptions {
+  readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+  readonly strict?: boolean;
+}
 ```
 
 Makes an RPC call to a registered native handler. Returns a promise that resolves with the handler's result or rejects with an error.
@@ -61,7 +76,52 @@ import { bridge } from "nativite/client";
 const result = await bridge.call("camera", "takePhoto", { quality: 0.8 });
 ```
 
-When not running in a native environment, returns `Promise.resolve(undefined)` silently.
+When not running in a native environment, returns `Promise.resolve(undefined)` by
+default for backwards compatibility. Pass `{ strict: true }` to reject instead:
+
+```javascript
+await bridge.call("camera", "takePhoto", undefined, { strict: true });
+```
+
+#### Timeouts and Cancellation
+
+Pass `timeoutMs` to reject if native does not reply in time:
+
+```javascript
+await bridge.call("camera", "takePhoto", { quality: 0.8 }, { timeoutMs: 5000 });
+```
+
+Pass an `AbortSignal` to cancel a pending call from app code:
+
+```javascript
+const controller = new AbortController();
+const promise = bridge.call("location", "watchOnce", null, {
+  signal: controller.signal,
+});
+
+controller.abort("No longer needed");
+await promise;
+```
+
+Timeout and abort failures reject with `NativiteBridgeError`.
+
+#### Structured Errors
+
+Bridge calls reject with `NativiteBridgeError`, which exposes a stable `code`
+property:
+
+```typescript
+type BridgeErrorCode =
+  | "NATIVE_UNAVAILABLE"
+  | "NATIVE_ERROR"
+  | "TIMEOUT"
+  | "ABORTED"
+  | "INVALID_OPTIONS";
+```
+
+Native string errors are normalized to `NATIVE_ERROR`. Native structured errors
+with `{ code, message }` preserve the code when it matches a supported bridge
+error code.
 
 ### `bridge.subscribe(event, handler)`
 
