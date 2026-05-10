@@ -112,7 +112,7 @@ the options-only call form. This avoids guessing from object shape, so a real
 params payload like `{ strict: true }` is never mistaken for bridge options.
 
 ```typescript
-const typedBridge = createBridge<AppBridgeContracts>({
+const typedBridge = createBridge<AppBridgeContracts, { readonly camera: readonly ["reset"] }>({
   parameterlessMethods: {
     camera: ["reset"],
   },
