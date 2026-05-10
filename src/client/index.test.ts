@@ -76,7 +76,10 @@ function expectType<TValue>(_value: TValue): void {}
 
 function assertTypedBridgeContracts(): void {
   const typedBridge = createBridge<TestBridgeContracts>();
-  const typedBridgeWithParameterlessOptions = createBridge<TestBridgeContracts>({
+  const typedBridgeWithParameterlessOptions = createBridge<
+    TestBridgeContracts,
+    { readonly camera: readonly ["reset"] }
+  >({
     parameterlessMethods: {
       camera: ["reset"],
     },
@@ -107,8 +110,12 @@ function assertTypedBridgeContracts(): void {
   void typedBridge.call("camera", "getCurrentPosition");
   // @ts-expect-error requires the declared params shape
   void typedBridge.call("camera", "capture", { quality: "high" });
+  // @ts-expect-error rejects options-only calls for parameterless methods not listed at runtime
+  void typedBridgeWithParameterlessOptions.call("location", "getCurrentPosition", { strict: true });
   // @ts-expect-error rejects parameterized methods in parameterless runtime metadata
-  createBridge<TestBridgeContracts>({ parameterlessMethods: { camera: ["capture"] } });
+  createBridge<TestBridgeContracts, { readonly camera: readonly ["capture"] }>({
+    parameterlessMethods: { camera: ["capture"] },
+  });
   // @ts-expect-error rejects unknown events
   typedBridge.subscribe("storage.changed", () => {});
 }
@@ -276,7 +283,7 @@ describe("createBridge", () => {
 
   it("treats a bare options object as options for parameterless typed calls", async () => {
     replyHandler = () => Promise.resolve({ result: { ok: true } });
-    const typedBridge = createBridge<TestBridgeContracts>({
+    const typedBridge = createBridge<TestBridgeContracts, { readonly camera: readonly ["reset"] }>({
       parameterlessMethods: {
         camera: ["reset"],
       },
@@ -293,7 +300,7 @@ describe("createBridge", () => {
 
   it("keeps option-shaped params for typed calls unless the method is explicitly parameterless", async () => {
     replyHandler = () => Promise.resolve({ result: { ok: true } });
-    const typedBridge = createBridge<TestBridgeContracts>({
+    const typedBridge = createBridge<TestBridgeContracts, { readonly camera: readonly ["reset"] }>({
       parameterlessMethods: {
         camera: ["reset"],
       },

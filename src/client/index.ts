@@ -70,6 +70,22 @@ type BridgeParameterlessMethodNames<
     : never;
 }[BridgeMethodNames<TContracts, TNamespace>];
 
+type BridgeParameterlessMethodMap<TContracts extends BridgeContractRegistryShape<TContracts>> = {
+  readonly [TNamespace in keyof TContracts]?: readonly BridgeParameterlessMethodNames<
+    TContracts,
+    TNamespace
+  >[];
+};
+
+type BridgeListedParameterlessMethodNames<
+  TParameterlessMethods extends BridgeParameterlessMethodMap<TContracts>,
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TNamespace extends keyof TContracts,
+> = Extract<
+  NonNullable<TParameterlessMethods[TNamespace]>[number],
+  BridgeMethodNames<TContracts, TNamespace>
+>;
+
 type BridgeEventPayload<
   TContracts extends BridgeContractRegistryShape<TContracts>,
   TEvent extends BridgeEventNames<TContracts>,
@@ -85,10 +101,14 @@ type BridgeCallArgs<
   TContracts extends BridgeContractRegistryShape<TContracts>,
   TNamespace extends keyof TContracts,
   TMethod extends BridgeMethodNames<TContracts, TNamespace>,
-  TAllowOptionsOnly extends boolean,
+  TParameterlessMethods extends BridgeParameterlessMethodMap<TContracts>,
 > =
   undefined extends BridgeMethodParams<TContracts, TNamespace, TMethod>
-    ? TAllowOptionsOnly extends true
+    ? TMethod extends BridgeListedParameterlessMethodNames<
+        TParameterlessMethods,
+        TContracts,
+        TNamespace
+      >
       ?
           | [options?: BridgeCallOptions]
           | [
@@ -100,7 +120,7 @@ type BridgeCallArgs<
 
 export interface TypedBridge<
   TContracts extends BridgeContractRegistryShape<TContracts>,
-  TAllowOptionsOnly extends boolean = false,
+  TParameterlessMethods extends BridgeParameterlessMethodMap<TContracts> = Record<never, never>,
 > {
   readonly isNative: boolean;
   call<
@@ -109,7 +129,7 @@ export interface TypedBridge<
   >(
     namespace: TNamespace,
     method: TMethod,
-    ...args: BridgeCallArgs<TContracts, TNamespace, TMethod, TAllowOptionsOnly>
+    ...args: BridgeCallArgs<TContracts, TNamespace, TMethod, TParameterlessMethods>
   ): Promise<BridgeMethodResult<TContracts, TNamespace, TMethod>>;
   subscribe<TEvent extends BridgeEventNames<TContracts>>(
     event: TEvent,
@@ -117,13 +137,12 @@ export interface TypedBridge<
   ): () => void;
 }
 
-export interface TypedBridgeOptions<TContracts extends BridgeContractRegistryShape<TContracts>> {
-  readonly parameterlessMethods?: {
-    readonly [TNamespace in keyof TContracts]?: readonly BridgeParameterlessMethodNames<
-      TContracts,
-      TNamespace
-    >[];
-  };
+export interface TypedBridgeOptions<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TParameterlessMethods extends BridgeParameterlessMethodMap<TContracts> =
+    BridgeParameterlessMethodMap<TContracts>,
+> {
+  readonly parameterlessMethods?: TParameterlessMethods;
 }
 
 interface BridgeCallMessage {
@@ -550,15 +569,18 @@ export const bridge = {
   },
 } as const;
 
-export function createBridge<TContracts extends BridgeContractRegistryShape<TContracts>>(
-  options: TypedBridgeOptions<TContracts>,
-): TypedBridge<TContracts, true>;
 export function createBridge<
   TContracts extends BridgeContractRegistryShape<TContracts>,
->(): TypedBridge<TContracts>;
-export function createBridge<TContracts extends BridgeContractRegistryShape<TContracts>>(
-  options?: TypedBridgeOptions<TContracts>,
-): TypedBridge<TContracts> | TypedBridge<TContracts, true> {
+  TParameterlessMethods extends BridgeParameterlessMethodMap<TContracts> = Record<never, never>,
+>(
+  options?: TypedBridgeOptions<TContracts, TParameterlessMethods>,
+): TypedBridge<TContracts, TParameterlessMethods>;
+export function createBridge<
+  TContracts extends BridgeContractRegistryShape<TContracts>,
+  TParameterlessMethods extends BridgeParameterlessMethodMap<TContracts> = Record<never, never>,
+>(
+  options?: TypedBridgeOptions<TContracts, TParameterlessMethods>,
+): TypedBridge<TContracts, TParameterlessMethods> {
   return {
     get isNative(): boolean {
       return bridge.isNative;
@@ -572,7 +594,7 @@ export function createBridge<TContracts extends BridgeContractRegistryShape<TCon
     subscribe(event: string, handler: (data: unknown) => void) {
       return bridge.subscribe(event, handler);
     },
-  } as TypedBridge<TContracts>;
+  } as TypedBridge<TContracts, TParameterlessMethods>;
 }
 
 // ─── ota ─────────────────────────────────────────────────────────────────────
