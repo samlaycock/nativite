@@ -77,6 +77,12 @@ function assertTypedBridgeContracts(): void {
     typedBridge.call("camera", "capture", { quality: 0.9 }),
   );
   expectType<Promise<{ readonly ok: boolean }>>(typedBridge.call("camera", "reset"));
+  expectType<Promise<{ readonly ok: boolean }>>(
+    typedBridge.call("camera", "reset", { strict: true }),
+  );
+  expectType<Promise<{ readonly ok: boolean }>>(
+    typedBridge.call("camera", "reset", undefined, { strict: true }),
+  );
 
   typedBridge.subscribe("location.updated", (payload) => {
     expectType<number>(payload.latitude);
@@ -252,6 +258,39 @@ describe("createBridge", () => {
 
     expect(result).toEqual({ path: "photo.jpg" });
     expect(postMessageWithReply).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a bare options object as options for parameterless typed calls", async () => {
+    replyHandler = () => Promise.resolve({ result: { ok: true } });
+    const typedBridge = createBridge<TestBridgeContracts>();
+
+    const result = await typedBridge.call("camera", "reset", { strict: true });
+
+    expect(result).toEqual({ ok: true });
+    const msg = nativeMessages[0]!;
+    expect(msg["namespace"]).toBe("camera");
+    expect(msg["method"]).toBe("reset");
+    expect(msg["args"]).toBeNull();
+  });
+
+  it("keeps the explicit params and options tuple for parameterized typed calls", async () => {
+    replyHandler = () => Promise.resolve({ result: { path: "photo.jpg" } });
+    const typedBridge = createBridge<TestBridgeContracts>();
+
+    await typedBridge.call("camera", "capture", { quality: 0.9 }, { strict: true });
+
+    const msg = nativeMessages[0]!;
+    expect(msg["args"]).toEqual({ quality: 0.9 });
+  });
+
+  it("keeps an empty object as params rather than treating it as empty options", async () => {
+    replyHandler = () => Promise.resolve({ result: { path: "photo.jpg" } });
+    const typedBridge = createBridge<TestBridgeContracts>();
+
+    await (typedBridge.call as typeof bridge.call)("camera", "capture", {});
+
+    const msg = nativeMessages[0]!;
+    expect(msg["args"]).toEqual({});
   });
 });
 

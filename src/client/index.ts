@@ -74,7 +74,9 @@ type BridgeCallArgs<
   TMethod extends BridgeMethodNames<TContracts, TNamespace>,
 > =
   undefined extends BridgeMethodParams<TContracts, TNamespace, TMethod>
-    ? [params?: BridgeMethodParams<TContracts, TNamespace, TMethod>, options?: BridgeCallOptions]
+    ?
+        | [options?: BridgeCallOptions]
+        | [params: BridgeMethodParams<TContracts, TNamespace, TMethod>, options?: BridgeCallOptions]
     : [params: BridgeMethodParams<TContracts, TNamespace, TMethod>, options?: BridgeCallOptions];
 
 export interface TypedBridge<TContracts extends BridgeContractRegistryShape<TContracts>> {
@@ -217,6 +219,16 @@ function validateCallOptions(options?: BridgeCallOptions): void {
       "bridge.call timeoutMs must be a positive finite number",
     );
   }
+}
+
+function isBridgeCallOptions(value: unknown): value is BridgeCallOptions {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  const keys = Object.keys(candidate);
+  return (
+    keys.length > 0 &&
+    keys.every((key) => key === "timeoutMs" || key === "signal" || key === "strict")
+  );
 }
 
 function withCallGuards<T>(
@@ -509,7 +521,20 @@ export const bridge = {
 export function createBridge<
   TContracts extends BridgeContractRegistryShape<TContracts>,
 >(): TypedBridge<TContracts> {
-  return bridge as TypedBridge<TContracts>;
+  return {
+    get isNative(): boolean {
+      return bridge.isNative;
+    },
+    call(namespace: string, method: string, first?: unknown, second?: BridgeCallOptions) {
+      if (second === undefined && isBridgeCallOptions(first)) {
+        return bridge.call(namespace, method, undefined, first);
+      }
+      return bridge.call(namespace, method, first, second);
+    },
+    subscribe(event: string, handler: (data: unknown) => void) {
+      return bridge.subscribe(event, handler);
+    },
+  } as TypedBridge<TContracts>;
 }
 
 // ─── ota ─────────────────────────────────────────────────────────────────────
