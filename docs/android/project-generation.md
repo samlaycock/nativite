@@ -92,6 +92,9 @@ project generation:
 
 Plugin authors should expose Android registrars as Kotlin functions that accept
 `NativiteBridge`, for example `fun registerCameraPlugin(bridge: NativiteBridge)`.
+When that function lives outside the generated app package, declare it as
+`{ symbol: "registerCameraPlugin", import: "com.example.camera.registerCameraPlugin" }`
+so `NativitePluginRegistrant.kt` can import it before calling it.
 
 ## Configuration
 

@@ -247,7 +247,12 @@ describe("resolveNativitePlugins", () => {
               android: {
                 sources: ["./native/android/CameraPlugin.kt"],
                 resources: ["./native/android/camera.xml"],
-                registrars: ["registerCameraPlugin"],
+                registrars: [
+                  {
+                    symbol: "registerCameraPlugin",
+                    import: "com.example.camera.registerCameraPlugin",
+                  },
+                ],
                 dependencies: [
                   "androidx.camera:camera-core:1.4.0",
                   {
@@ -269,7 +274,9 @@ describe("resolveNativitePlugins", () => {
       expect(resolved.platforms.android.resources[0]?.absolutePath).toBe(
         join(root, "native", "android", "camera.xml"),
       );
-      expect(resolved.platforms.android.registrars).toEqual(["registerCameraPlugin"]);
+      expect(resolved.platforms.android.registrars).toEqual([
+        "com.example.camera.registerCameraPlugin",
+      ]);
       expect(resolved.platforms.android.dependencies).toEqual([
         {
           kind: "gradle",

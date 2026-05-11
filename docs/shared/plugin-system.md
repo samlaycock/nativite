@@ -37,7 +37,9 @@ func registerNativitePlugins(on bridge: NativiteBridge) {
 Android plugins export a registration function that accepts `NativiteBridge`.
 The generated `NativitePluginRegistrant.kt` calls each function from
 `platforms.android.registrars`, and `MainActivity` invokes that registrant before
-rendering the web view.
+rendering the web view. Registrars in plugin-owned Kotlin packages should include
+an `import` path so the generated registrant can compile outside the plugin
+package.
 
 ```kotlin
 fun registerCameraPlugin(bridge: NativiteBridge) {
@@ -99,7 +101,12 @@ export const cameraPlugin = definePlugin(
       android: {
         sources: ["./android/CameraPlugin.kt"],
         resources: ["./android/res"],
-        registrars: ["registerCameraPlugin"],
+        registrars: [
+          {
+            symbol: "registerCameraPlugin",
+            import: "com.example.camera.registerCameraPlugin",
+          },
+        ],
         dependencies: ["androidx.camera:camera-core:1.4.0"],
       },
     },
