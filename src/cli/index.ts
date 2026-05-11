@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runBuildCommand } from "./build-command.ts";
+import { runDevCommand } from "./dev-command.ts";
 import { runInitCommand } from "./init-command.ts";
 
 // Read the version from package.json at runtime so the CLI always reports the
@@ -29,6 +30,17 @@ export function createCliProgram(): Command {
     .option("--platform <platform>", "Build only one configured platform")
     .action(async (options: { platform?: string }) => {
       const exitCode = await runBuildCommand(options);
+      if (exitCode !== 0) process.exit(exitCode);
+    });
+
+  // ─── nativite dev ──────────────────────────────────────────────────────────
+
+  program
+    .command("dev")
+    .description("Show optional native development status and next steps")
+    .option("--url <url>", "Check a specific Vite dev server URL")
+    .action(async (options: { url?: string }) => {
+      const exitCode = await runDevCommand(options);
       if (exitCode !== 0) process.exit(exitCode);
     });
 
