@@ -114,6 +114,14 @@ describe("ViewController.swift", () => {
     expect(swift).toContain("injectionTime: .atDocumentStart");
   });
 
+  it("sends an explicit native platform header on dev server URL requests", () => {
+    expect(swift).toContain(
+      'request.setValue(nvPlatform, forHTTPHeaderField: "x-nativite-platform")',
+    );
+    expect(swift).toContain('request.setValue("macos", forHTTPHeaderField: "x-nativite-platform")');
+    expect(swift).toContain("webView.load(nativiteRequest(url: devURL))");
+  });
+
   it("guards OTA calls behind NativiteConfig.otaEnabled", () => {
     expect(swift).toContain("if NativiteConfig.otaEnabled {");
     expect(swift).toContain("otaUpdater.rollbackPendingLaunchIfNeeded()");

@@ -845,7 +845,10 @@ struct NativiteChildWebView: UIViewRepresentable {
       if url.isFileURL {
         webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
       } else {
-        webView.load(URLRequest(url: url))
+        var request = URLRequest(url: url)
+        let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+        request.setValue(nvPlatform, forHTTPHeaderField: "x-nativite-platform")
+        webView.load(request)
       }
     }
   }
@@ -916,7 +919,9 @@ struct NativiteChildWebView: NSViewRepresentable {
       if url.isFileURL {
         webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
       } else {
-        webView.load(URLRequest(url: url))
+        var request = URLRequest(url: url)
+        request.setValue("macos", forHTTPHeaderField: "x-nativite-platform")
+        webView.load(request)
       }
     }
   }

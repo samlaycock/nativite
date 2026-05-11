@@ -73,6 +73,14 @@ describe("NativiteWebView.kt", () => {
     expect(kt).toContain("normalizeAndroidDevUrl(devUrl)");
   });
 
+  it("sends an explicit native platform header on WebView URL loads", () => {
+    expect(kt).toContain(
+      'private val NATIVITE_REQUEST_HEADERS = mapOf("x-nativite-platform" to "android")',
+    );
+    expect(kt).toContain("webView.loadUrl(loadUrl, NATIVITE_REQUEST_HEADERS)");
+    expect(kt).toContain("webView.loadUrl(resolveContentUrl(context), NATIVITE_REQUEST_HEADERS)");
+  });
+
   it("normalizes loopback dev URLs for Android emulator access", () => {
     expect(kt).toContain('private const val ANDROID_EMULATOR_LOOPBACK_HOST = "10.0.2.2"');
     expect(kt).toContain("fun normalizeAndroidDevUrl(devUrl: String): String");

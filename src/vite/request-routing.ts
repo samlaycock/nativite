@@ -73,6 +73,38 @@ function acceptsHtmlDocument(acceptHeader: string): boolean {
   return /\btext\/html\b|\bapplication\/xhtml\+xml\b/.test(acceptHeader);
 }
 
+function queryParam(url: string, name: string): string | undefined {
+  const queryIndex = url.indexOf("?");
+  if (queryIndex === -1) return undefined;
+
+  const hashIndex = url.indexOf("#", queryIndex);
+  const query = url.slice(queryIndex + 1, hashIndex === -1 ? undefined : hashIndex);
+  if (!query) return undefined;
+
+  return new URLSearchParams(query).get(name) ?? undefined;
+}
+
+function normalizePlatform(value: string | undefined): string | undefined {
+  const platform = value?.trim().toLowerCase();
+  if (!platform || !/^[a-z0-9-]+$/.test(platform)) return undefined;
+  return platform;
+}
+
+export function resolveNativeRequestPlatform(
+  url: string,
+  headers: RequestHeaders,
+): string | undefined {
+  const explicitHeader = normalizePlatform(normalizeHeaderValue(headers["x-nativite-platform"]));
+  if (explicitHeader) return explicitHeader;
+
+  const explicitQuery = normalizePlatform(queryParam(url, "__nativite_platform"));
+  if (explicitQuery) return explicitQuery;
+
+  const userAgent = normalizeHeaderValue(headers["user-agent"]) ?? "";
+  const match = userAgent.match(/Nativite\/([a-z0-9-]+)\//i);
+  return normalizePlatform(match?.[1]);
+}
+
 export function shouldTransformNativeRequest(url: string, headers: RequestHeaders): boolean {
   const pathname = stripQueryAndHash(url);
   const moduleQuery = hasModuleQuery(url);
