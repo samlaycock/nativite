@@ -135,6 +135,10 @@ describe("NativiteWebView.kt", () => {
     expect(kt).toContain("WebSettings.MIXED_CONTENT_ALWAYS_ALLOW");
     expect(kt).toContain("WebSettings.MIXED_CONTENT_NEVER_ALLOW");
     expect(kt).not.toContain("settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW");
+    expect(kt).toContain(
+      "if (BuildConfig.DEBUG) {\n            WebSettings.MIXED_CONTENT_ALWAYS_ALLOW",
+    );
+    expect(kt).toContain("} else {\n            WebSettings.MIXED_CONTENT_NEVER_ALLOW");
   });
 
   it("disables algorithmic darkening so CSS-controlled dark mode is not overridden", () => {
