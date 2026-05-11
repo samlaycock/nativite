@@ -10,7 +10,7 @@ export type NativitePluginRoot = string | URL;
 
 export type NativitePluginFile = string | { path: string };
 
-export type NativitePluginRegistrar = string | { symbol: string };
+export type NativitePluginRegistrar = string | { symbol: string; import?: string };
 
 export type NativiteFrameworkDependency =
   | string

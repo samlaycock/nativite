@@ -179,31 +179,55 @@ function normalizeFiles(
   return normalized;
 }
 
-function normalizeRegistrarInput(input: NativitePluginRegistrar): string {
-  if (typeof input === "string") return input;
-  return input.symbol;
-}
-
 function normalizeRegistrars(
   pluginName: string,
   entries: NativitePluginRegistrar[] | undefined,
+  platform: PlatformKey,
 ): string[] {
   if (!entries || entries.length === 0) return [];
   const symbols = new Set<string>();
   const symbolPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  const qualifiedSymbolPattern = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$/;
 
   for (const entry of entries) {
-    const symbol = normalizeRegistrarInput(entry).trim();
+    const symbol = (typeof entry === "string" ? entry : entry.symbol).trim();
+    const importPath = typeof entry === "string" ? undefined : entry.import?.trim();
+    const normalizedSymbol = platform === "android" && importPath ? importPath : symbol;
     if (symbol.length === 0) {
       throw new Error(`[nativite] Plugin "${pluginName}" declares an empty registrar symbol.`);
     }
-    if (!symbolPattern.test(symbol)) {
+    if (importPath !== undefined && importPath.length === 0) {
+      throw new Error(`[nativite] Plugin "${pluginName}" declares an empty registrar import.`);
+    }
+    if (importPath !== undefined && !importPath.endsWith(`.${symbol}`)) {
+      throw new Error(
+        `[nativite] Plugin "${pluginName}" registrar import "${importPath}" is invalid. ` +
+          `Expected it to end with ".${symbol}".`,
+      );
+    }
+    if (platform === "android" && importPath !== undefined && !symbolPattern.test(symbol)) {
+      throw new Error(
+        `[nativite] Plugin "${pluginName}" registrar "${symbol}" is invalid. ` +
+          "Expected a Kotlin function name like registerMyPlugin.",
+      );
+    }
+    if (
+      platform === "android" &&
+      !symbolPattern.test(normalizedSymbol) &&
+      !qualifiedSymbolPattern.test(normalizedSymbol)
+    ) {
+      throw new Error(
+        `[nativite] Plugin "${pluginName}" registrar "${normalizedSymbol}" is invalid. ` +
+          "Expected a Kotlin function name or fully-qualified import like com.example.registerMyPlugin.",
+      );
+    }
+    if (platform !== "android" && !symbolPattern.test(symbol)) {
       throw new Error(
         `[nativite] Plugin "${pluginName}" registrar "${symbol}" is invalid. ` +
           "Expected a native function name like registerMyPlugin.",
       );
     }
-    symbols.add(symbol);
+    symbols.add(normalizedSymbol);
   }
 
   return [...symbols];
@@ -329,7 +353,7 @@ function normalizePlatformContribution(
   return {
     sources: normalizeFiles(pluginName, rootDir, "source", contribution.sources),
     resources: normalizeFiles(pluginName, rootDir, "resource", contribution.resources),
-    registrars: normalizeRegistrars(pluginName, contribution.registrars),
+    registrars: normalizeRegistrars(pluginName, contribution.registrars, platform),
     dependencies: normalizeDependencies(pluginName, contribution.dependencies, platform),
   };
 }
