@@ -44,6 +44,10 @@ describe("generateProject", () => {
 
     expect(JSON.parse(readFileSync(destinationPath, "utf-8"))).toEqual({
       devURL: "http://10.0.2.2:5173/",
+      android: {
+        emulatorURL: "http://10.0.2.2:5173/",
+        deviceURL: "http://10.0.2.2:5173/",
+      },
     });
   });
 
@@ -75,6 +79,49 @@ describe("generateProject", () => {
     expect(normalizeAndroidDevServerUrl("http://192.168.1.10:5173/")).toBe(
       "http://192.168.1.10:5173/",
     );
+  });
+
+  it("prefers explicit Android emulator and device URLs from dev metadata", () => {
+    const cwd = makeTempDir();
+    const sourcePath = join(cwd, ".nativite", "dev.json");
+    const destinationPath = join(
+      cwd,
+      ".nativite",
+      "android",
+      "app",
+      "src",
+      "main",
+      "assets",
+      "dev.json",
+    );
+    mkdirSync(join(cwd, ".nativite"), { recursive: true });
+    writeFileSync(
+      sourcePath,
+      JSON.stringify({
+        devURL: "http://192.168.1.2:5173/",
+        native: {
+          androidEmulatorURL: "http://10.0.2.2:5173/",
+          androidDeviceURL: "http://192.168.1.2:5173/",
+          androidUsbReverseCommand: "adb reverse tcp:5173 tcp:5173",
+        },
+      }),
+    );
+
+    syncAndroidDevMetadata(cwd, "dev");
+
+    expect(JSON.parse(readFileSync(destinationPath, "utf-8"))).toEqual({
+      devURL: "http://10.0.2.2:5173/",
+      native: {
+        androidEmulatorURL: "http://10.0.2.2:5173/",
+        androidDeviceURL: "http://192.168.1.2:5173/",
+        androidUsbReverseCommand: "adb reverse tcp:5173 tcp:5173",
+      },
+      android: {
+        emulatorURL: "http://10.0.2.2:5173/",
+        deviceURL: "http://192.168.1.2:5173/",
+        usbReverseCommand: "adb reverse tcp:5173 tcp:5173",
+      },
+    });
   });
 
   it.skip(

@@ -195,6 +195,84 @@ function rewriteRequestToIndexHtml(url: string, fileName: string): string {
   return `/${fileName}${suffix}`;
 }
 
+interface DevServerMetadata {
+  devURL: string;
+  urls: {
+    local: string[];
+    network: string[];
+  };
+  native: {
+    iosSimulatorURL?: string;
+    iosDeviceURL?: string;
+    androidEmulatorURL?: string;
+    androidDeviceURL?: string;
+    androidUsbReverseCommand?: string;
+  };
+  diagnostics: string[];
+}
+
+function normalizeUrlForHost(devUrl: string, host: string): string {
+  try {
+    const url = new URL(devUrl);
+    url.hostname = host;
+    return url.toString();
+  } catch {
+    return devUrl;
+  }
+}
+
+function localLoopbackUrl(localUrl: string | undefined): string | undefined {
+  if (!localUrl) return undefined;
+  return normalizeUrlForHost(localUrl, "localhost");
+}
+
+function urlPort(devUrl: string | undefined): string | undefined {
+  if (!devUrl) return undefined;
+  try {
+    const url = new URL(devUrl);
+    return url.port || (url.protocol === "https:" ? "443" : "80");
+  } catch {
+    return undefined;
+  }
+}
+
+function createDevServerMetadata(resolvedUrls: DevServerMetadata["urls"]): DevServerMetadata {
+  const localUrl = resolvedUrls.local[0];
+  const networkUrl = resolvedUrls.network[0];
+  const devURL = networkUrl ?? localUrl ?? "http://localhost:5173/";
+  const loopbackUrl = localLoopbackUrl(localUrl ?? devURL);
+  const androidEmulatorURL = loopbackUrl ? normalizeUrlForHost(loopbackUrl, "10.0.2.2") : undefined;
+  const port = urlPort(loopbackUrl ?? devURL);
+  const diagnostics: string[] = [];
+
+  if (resolvedUrls.network.length === 0) {
+    diagnostics.push(
+      "No network dev server URL was reported by Vite. Physical devices usually need server.host set to 0.0.0.0 or true.",
+    );
+  }
+
+  if (networkUrl) {
+    diagnostics.push("Use the network URL for physical iOS and Android devices on the same LAN.");
+  } else if (port) {
+    diagnostics.push(
+      `For Android USB devices, run: adb reverse tcp:${port} tcp:${port}, then use the local dev server URL.`,
+    );
+  }
+
+  return {
+    devURL,
+    urls: resolvedUrls,
+    native: {
+      iosSimulatorURL: loopbackUrl,
+      iosDeviceURL: networkUrl,
+      androidEmulatorURL,
+      androidDeviceURL: networkUrl ?? loopbackUrl,
+      androidUsbReverseCommand: port ? `adb reverse tcp:${port} tcp:${port}` : undefined,
+    },
+    diagnostics,
+  };
+}
+
 // ─── Config loading ───────────────────────────────────────────────────────────
 
 /**
@@ -450,7 +528,7 @@ function nativiteCorePlugin(): Plugin {
       const serverConfig =
         command === "serve"
           ? {
-              host: true as const,
+              ...(userConfig.server?.host === undefined ? { host: true as const } : {}),
               hmr:
                 hmrConfig === false
                   ? false
@@ -614,12 +692,19 @@ function nativiteCorePlugin(): Plugin {
       });
 
       server.httpServer?.once("listening", () => {
-        const localUrl = server.resolvedUrls?.local[0];
-        const networkUrl = server.resolvedUrls?.network[0];
-        const devUrl = networkUrl ?? localUrl ?? "http://localhost:5173";
+        const metadata = createDevServerMetadata({
+          local: server.resolvedUrls?.local ?? [],
+          network: server.resolvedUrls?.network ?? [],
+        });
 
         mkdirSync(nativiteDir, { recursive: true });
-        writeFileSync(join(nativiteDir, "dev.json"), JSON.stringify({ devURL: devUrl }, null, 2));
+        writeFileSync(join(nativiteDir, "dev.json"), JSON.stringify(metadata, null, 2));
+        viteConfig.logger.info(`[nativite] Native dev server URL: ${metadata.devURL}`, {
+          timestamp: true,
+        });
+        for (const diagnostic of metadata.diagnostics) {
+          viteConfig.logger.warn(`[nativite] ${diagnostic}`, { timestamp: true });
+        }
         syncAndroidDevMetadata(viteConfig.root, "dev");
       });
 

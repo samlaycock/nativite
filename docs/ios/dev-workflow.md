@@ -61,7 +61,32 @@ bunx vite dev
 ```
 
 The Nativite Vite plugin writes `.nativite/dev.json` with the resolved dev server
-URL. Debug native builds can use that URL instead of loading the embedded bundle.
+URL. When the app has not set `server.host`, the plugin asks Vite to bind to all
+interfaces so physical devices can use the LAN URL. Explicit `server.host`
+settings are preserved.
+
+The metadata includes all Vite local and network URLs plus native-specific
+connection hints:
+
+```json
+{
+  "devURL": "http://192.168.1.2:5173/",
+  "urls": {
+    "local": ["http://localhost:5173/"],
+    "network": ["http://192.168.1.2:5173/"]
+  },
+  "native": {
+    "iosSimulatorURL": "http://localhost:5173/",
+    "iosDeviceURL": "http://192.168.1.2:5173/"
+  }
+}
+```
+
+Debug native builds can use the selected URL instead of loading the embedded
+bundle. iOS simulators can use the local loopback URL because they share the host
+network stack. Physical iOS devices usually need the network URL and must be on a
+network that can reach the Vite host. If Vite reports no network URL, Nativite
+warns that `server.host` may need to be set to `0.0.0.0` or `true`.
 
 Open and run the generated debug project in Xcode. Nativite does not own
 simulator orchestration from the CLI.
