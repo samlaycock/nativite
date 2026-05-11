@@ -38,7 +38,22 @@ function safePluginDirName(pluginName: string): string {
   return pluginName.replace(/[^A-Za-z0-9_.-]/g, "_");
 }
 
-function copyPluginInputs(
+function pluginInputDestination(
+  file: { readonly pluginName: string; readonly absolutePath: string },
+  outputRoot: string,
+  preserveFileParentDir: boolean,
+): string {
+  const sourceStat = statSync(file.absolutePath);
+  const destinationRoot = join(outputRoot, safePluginDirName(file.pluginName));
+
+  if (!sourceStat.isDirectory() && preserveFileParentDir) {
+    return join(destinationRoot, basename(dirname(file.absolutePath)), basename(file.absolutePath));
+  }
+
+  return join(destinationRoot, basename(file.absolutePath));
+}
+
+function pluginInputDirs(
   files: readonly { readonly pluginName: string; readonly absolutePath: string }[],
   outputRoot: string,
   preserveFileParentDir = false,
@@ -46,19 +61,26 @@ function copyPluginInputs(
   const dirs = new Set<string>();
 
   for (const file of files) {
-    const source = file.absolutePath;
-    const destinationRoot = join(outputRoot, safePluginDirName(file.pluginName));
-    const sourceStat = statSync(source);
-    const destination =
-      !sourceStat.isDirectory() && preserveFileParentDir
-        ? join(destinationRoot, basename(dirname(source)), basename(source))
-        : join(destinationRoot, basename(source));
-    mkdirSync(dirname(destination), { recursive: true });
-    cpSync(source, destination, { recursive: true });
-    dirs.add(statSync(destination).isDirectory() ? destination : dirname(destination));
+    const destination = pluginInputDestination(file, outputRoot, preserveFileParentDir);
+    dirs.add(statSync(file.absolutePath).isDirectory() ? destination : dirname(destination));
   }
 
   return [...dirs].sort((a, b) => a.localeCompare(b));
+}
+
+function copyPluginInputs(
+  files: readonly { readonly pluginName: string; readonly absolutePath: string }[],
+  outputRoot: string,
+  preserveFileParentDir = false,
+): string[] {
+  for (const file of files) {
+    const source = file.absolutePath;
+    const destination = pluginInputDestination(file, outputRoot, preserveFileParentDir);
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(source, destination, { recursive: true });
+  }
+
+  return pluginInputDirs(files, outputRoot, preserveFileParentDir);
 }
 
 function readRuntimeFile(pkg: string, filename: string): string {
@@ -83,6 +105,8 @@ object NativiteConfig {
 function generationHashInputs(
   config: NativiteConfig,
   resolvedPlugins: Awaited<ReturnType<typeof resolveNativitePlugins>>,
+  pluginSourceDir: string,
+  pluginResourceDir: string,
 ) {
   const androidConfig = resolveConfigForPlatform(config, "android");
   const androidPlatform = (config.platforms ?? []).find((p) => p.platform === "android");
@@ -108,8 +132,12 @@ function generationHashInputs(
     {
       name: "app/build.gradle.kts",
       content: buildGradleAppTemplate(androidConfig, minSdk, targetSdk, {
-        sourceDirs: [],
-        resourceDirs: [],
+        sourceDirs: pluginInputDirs(resolvedPlugins.platforms.android.sources, pluginSourceDir),
+        resourceDirs: pluginInputDirs(
+          resolvedPlugins.platforms.android.resources,
+          pluginResourceDir,
+          true,
+        ),
         dependencies: pluginDependencies,
       }),
     },
@@ -153,10 +181,14 @@ export async function generateProject(
   const projectRoot = join(nativiteDir, "android");
   const androidConfig = resolveConfigForPlatform(config, "android");
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
+  const appDir = join(projectRoot, "app");
+  const srcMainDir = join(appDir, "src", "main");
+  const pluginSourceDir = join(srcMainDir, "generated", "nativite", "plugins", "java");
+  const pluginResourceDir = join(srcMainDir, "generated", "nativite", "plugins", "res");
   const hash = hashConfigForGeneration(
     config,
     resolvedPlugins,
-    generationHashInputs(config, resolvedPlugins),
+    generationHashInputs(config, resolvedPlugins, pluginSourceDir, pluginResourceDir),
   );
 
   // Ensure production/generate mode never packages stale dev server settings.
@@ -182,13 +214,9 @@ export async function generateProject(
     DEFAULT_ANDROID_TARGET_SDK;
 
   const packagePath = androidConfig.app.bundleId.split(".");
-  const appDir = join(projectRoot, "app");
-  const srcMainDir = join(appDir, "src", "main");
   const javaDir = join(srcMainDir, "java", ...packagePath);
   const resDir = join(srcMainDir, "res");
   const valuesDir = join(resDir, "values");
-  const pluginSourceDir = join(srcMainDir, "generated", "nativite", "plugins", "java");
-  const pluginResourceDir = join(srcMainDir, "generated", "nativite", "plugins", "res");
   const mipmapXxxhdpiDir = join(resDir, "mipmap-xxxhdpi");
   const mipmapAnydpiDir = join(resDir, "mipmap-anydpi-v26");
   const assetsDir = join(srcMainDir, "assets");

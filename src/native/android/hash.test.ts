@@ -25,4 +25,17 @@ describe("hashConfigForGeneration", () => {
 
     expect(first).not.toBe(second);
   });
+
+  it("is independent of generated input ordering", () => {
+    const first = hashConfigForGeneration(androidConfig, emptyResolvedPlugins, [
+      { name: "B.kt", content: "b" },
+      { name: "A.kt", content: "a" },
+    ]);
+    const second = hashConfigForGeneration(androidConfig, emptyResolvedPlugins, [
+      { name: "A.kt", content: "a" },
+      { name: "B.kt", content: "b" },
+    ]);
+
+    expect(first).toBe(second);
+  });
 });
