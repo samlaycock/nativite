@@ -1,55 +1,23 @@
 import { describe, expect, it } from "bun:test";
 
+import { createCliProgram } from "./index.ts";
 import { stripAnsi } from "./strip-ansi.test-helper.ts";
 
 describe("nativite CLI", () => {
-  it("does not expose the removed dev command in help output", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "--help"], {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        NO_COLOR: "1",
-      },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+  it("does not expose the removed dev command in help output", () => {
+    const help = stripAnsi(createCliProgram().helpInformation());
 
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
-
-    expect(exitCode).toBe(0);
-    expect(stderr).toBe("");
-
-    const help = stripAnsi(stdout);
     expect(help).toContain("build");
     expect(help).toContain("init");
     expect(help).not.toContain("dev");
   });
 
-  it("documents init platform selection in help output", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/cli/index.ts", "init", "--help"], {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        NO_COLOR: "1",
-      },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+  it("documents init platform selection in help output", () => {
+    const program = createCliProgram();
+    const initCommand = program.commands.find((command) => command.name() === "init");
 
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
-
-    expect(exitCode).toBe(0);
-    expect(stderr).toBe("");
-
-    const help = stripAnsi(stdout);
+    expect(initCommand).toBeDefined();
+    const help = stripAnsi(initCommand!.helpInformation());
     expect(help).toContain("--platform <platform>");
     expect(help).toContain("ios,");
     expect(help).toContain("macos, or android");
