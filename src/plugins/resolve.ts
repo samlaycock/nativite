@@ -200,7 +200,7 @@ function normalizeRegistrars(
     if (!symbolPattern.test(symbol)) {
       throw new Error(
         `[nativite] Plugin "${pluginName}" registrar "${symbol}" is invalid. ` +
-          "Expected a Swift global function name like registerMyPlugin.",
+          "Expected a native function name like registerMyPlugin.",
       );
     }
     symbols.add(symbol);

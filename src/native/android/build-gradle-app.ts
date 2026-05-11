@@ -135,8 +135,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.webkit)
-    implementation(libs.androidx.core.splashscreen)
-${pluginDependencyLines}
+    implementation(libs.androidx.core.splashscreen)${pluginDependencyLines ? `\n${pluginDependencyLines}` : ""}
 }
 `;
 }
