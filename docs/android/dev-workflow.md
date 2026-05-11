@@ -72,16 +72,36 @@ bunx vite dev
 
 The Nativite Vite plugin writes `.nativite/dev.json` with the resolved dev server
 URL, then mirrors it into `.nativite/android/app/src/main/assets/dev.json` for
-debug packaging. Android debug builds convert host loopback URLs to the emulator
-host alias:
+debug packaging. When the app has not set `server.host`, the plugin asks Vite
+to bind to all interfaces so physical devices can use the LAN URL. Explicit
+`server.host` settings are preserved.
+
+The metadata includes the selected URL, all local and network URLs reported by
+Vite, and native-specific connection hints:
 
 ```json
-{ "devURL": "http://10.0.2.2:5173" }
+{
+  "devURL": "http://192.168.1.2:5173/",
+  "urls": {
+    "local": ["http://localhost:5173/"],
+    "network": ["http://192.168.1.2:5173/"]
+  },
+  "native": {
+    "androidEmulatorURL": "http://10.0.2.2:5173/",
+    "androidDeviceURL": "http://192.168.1.2:5173/",
+    "androidUsbReverseCommand": "adb reverse tcp:5173 tcp:5173"
+  }
+}
 ```
 
 `10.0.2.2` is the Android emulator's special IP for the host machine's loopback
-address. Generated non-dev and build flows remove the Android asset copy so
-release builds do not package stale dev server metadata.
+address. The Android debug asset copy uses the emulator URL for `devURL` and
+also records `android.deviceURL` plus the optional `adb reverse` command for USB
+device workflows. If Vite reports no network URL, Nativite warns that physical
+devices usually need `server.host` set to `0.0.0.0` or `true`.
+
+Generated non-dev and build flows remove the Android asset copy so release
+builds do not package stale dev server metadata.
 
 Open and run the generated debug project in Android Studio. Nativite does not
 own emulator orchestration from the CLI.

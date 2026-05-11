@@ -40,6 +40,55 @@ async function runCloseBundle(plugin: Plugin, root: string, outDir: string) {
   await handler.call({ environment: { name: "ios" } } as never);
 }
 
+async function runConfigureServer(
+  plugin: Plugin,
+  root: string,
+  resolvedUrls: { local: string[]; network: string[] },
+): Promise<string[]> {
+  const configResolved = plugin.configResolved;
+  const configureServer = plugin.configureServer;
+  if (!configResolved || !configureServer) {
+    throw new Error("nativite core plugin dev server hooks are missing");
+  }
+
+  const configResolvedHandler =
+    typeof configResolved === "function" ? configResolved : configResolved.handler;
+  await configResolvedHandler.call(
+    {} as never,
+    {
+      root,
+      logger: {
+        error() {},
+        info() {},
+        warn() {},
+      },
+      configFile: undefined,
+    } as unknown as ResolvedConfig,
+  );
+
+  const listeners: (() => void)[] = [];
+  const handler = typeof configureServer === "function" ? configureServer : configureServer.handler;
+  await handler.call(
+    {} as never,
+    {
+      config: { root },
+      resolvedUrls,
+      httpServer: {
+        once(event: string, cb: () => void) {
+          if (event === "listening") listeners.push(cb);
+        },
+      },
+      watcher: { on() {} },
+      environments: {},
+      middlewares: { use() {} },
+    } as never,
+  );
+  return listeners.map((listener) => {
+    listener();
+    return readFileSync(join(root, ".nativite", "dev.json"), "utf8");
+  });
+}
+
 function writeNativiteConfig(projectRoot: string) {
   writeFileSync(
     join(projectRoot, "nativite.config.ts"),
@@ -149,6 +198,58 @@ describe("nativite core build config", () => {
     expect(config.server).toBeObject();
     expect(hmr).toBeObject();
     expect(hmr?.overlay).toBe(true);
+  });
+
+  it("enables device-friendly host binding by default during dev server runs", async () => {
+    const plugin = getCorePlugin();
+    const config = await runConfigHook(plugin, {}, { command: "serve", mode: "development" });
+
+    expect(config.server?.host).toBe(true);
+  });
+
+  it("preserves an explicit user dev server host", async () => {
+    const plugin = getCorePlugin();
+    const config = await runConfigHook(
+      plugin,
+      { server: { host: "127.0.0.1" } },
+      { command: "serve", mode: "development" },
+    );
+
+    expect(config.server?.host).toBeUndefined();
+  });
+
+  it("writes native dev server URL diagnostics for devices and emulators", async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), "nativite-vite-dev-metadata-"));
+    try {
+      writeNativiteConfig(projectRoot);
+      const [rawMetadata] = await runConfigureServer(getCorePlugin(), projectRoot, {
+        local: ["http://localhost:5173/"],
+        network: ["http://192.168.1.2:5173/"],
+      });
+
+      const metadata = JSON.parse(rawMetadata!) as {
+        devURL: string;
+        urls: { local: string[]; network: string[] };
+        native: {
+          iosSimulatorURL: string;
+          iosDeviceURL: string;
+          androidEmulatorURL: string;
+          androidDeviceURL: string;
+          androidUsbReverseCommand: string;
+        };
+      };
+
+      expect(metadata.devURL).toBe("http://192.168.1.2:5173/");
+      expect(metadata.urls.local).toEqual(["http://localhost:5173/"]);
+      expect(metadata.urls.network).toEqual(["http://192.168.1.2:5173/"]);
+      expect(metadata.native.iosSimulatorURL).toBe("http://localhost:5173/");
+      expect(metadata.native.iosDeviceURL).toBe("http://192.168.1.2:5173/");
+      expect(metadata.native.androidEmulatorURL).toBe("http://10.0.2.2:5173/");
+      expect(metadata.native.androidDeviceURL).toBe("http://192.168.1.2:5173/");
+      expect(metadata.native.androidUsbReverseCommand).toBe("adb reverse tcp:5173 tcp:5173");
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 
   it("disables the Vite HMR error overlay when NATIVITE_DEV_ERROR_OVERLAY is false", async () => {
