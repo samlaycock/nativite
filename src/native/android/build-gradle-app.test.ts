@@ -73,4 +73,22 @@ describe("buildGradleAppTemplate", () => {
     expect(output).toContain("delete(nativiteDevMetadataFile)");
     expect(output).toContain("dependsOn(deleteNativiteDevMetadata)");
   });
+
+  it("includes Android plugin source dirs, resource dirs, and Gradle dependencies", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 35, {
+      sourceDirs: ["/tmp/plugin/java"],
+      resourceDirs: ["/tmp/plugin/res"],
+      dependencies: [
+        {
+          kind: "gradle",
+          notation: "androidx.camera:camera-core:1.4.0",
+          configuration: "implementation",
+        },
+      ],
+    });
+
+    expect(output).toContain('java.srcDirs("/tmp/plugin/java")');
+    expect(output).toContain('res.srcDirs("/tmp/plugin/res")');
+    expect(output).toContain('add("implementation", "androidx.camera:camera-core:1.4.0")');
+  });
 });

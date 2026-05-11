@@ -34,23 +34,18 @@ func registerNativitePlugins(on bridge: NativiteBridge) {
 
 ### Android (Kotlin)
 
-Android native plugin contributions are not supported yet. A plugin must not
-declare `platforms.android.sources`, `resources`, `registrars`, or
-`dependencies`; when Android is an enabled platform, plugin resolution fails
-before project generation if any of those fields are present. This prevents
-Kotlin sources or Gradle dependencies from being silently omitted from the
-generated project.
-
-The Android bridge still supports built-in handlers, and generated Android
-runtime code can register handlers directly:
-
-Plugins register handlers on the bridge's handler map:
+Android plugins export a registration function that accepts `NativiteBridge`.
+The generated `NativitePluginRegistrant.kt` calls each function from
+`platforms.android.registrars`, and `MainActivity` invokes that registrant before
+rendering the web view.
 
 ```kotlin
-bridge.handlers["camera.takePhoto"] = { args, completion ->
-    val quality = (args as? Map<*, *>)?.get("quality") as? Double ?: 1.0
-    // ... perform native work ...
-    completion(mapOf("path" to photoPath))
+fun registerCameraPlugin(bridge: NativiteBridge) {
+    bridge.register(namespace = "camera", method = "takePhoto") { args, completion ->
+        val quality = (args as? Map<*, *>)?.get("quality") as? Double ?: 1.0
+        // ... perform native work ...
+        completion(Result.success(mapOf("path" to photoPath)))
+    }
 }
 ```
 
@@ -100,6 +95,12 @@ export const cameraPlugin = definePlugin(
       macos: {
         sources: ["./macos/CameraPlugin.swift"],
         registrars: ["registerCameraPlugin"],
+      },
+      android: {
+        sources: ["./android/CameraPlugin.kt"],
+        resources: ["./android/res"],
+        registrars: ["registerCameraPlugin"],
+        dependencies: ["androidx.camera:camera-core:1.4.0"],
       },
     },
   },
@@ -190,5 +191,5 @@ During project generation, plugins are resolved from the config:
 - Plugins are explicit config entries imported by the app from local files or external packages.
 - Relative plugin native file paths are resolved from the plugin `rootDir`; when `definePlugin(..., import.meta.url)` is used, that root is the plugin module directory.
 - iOS/macOS generation creates the `NativitePluginRegistrant` file with conditional compilation for each Apple platform.
-- Android `platforms.android` native source/resource/registrar/dependency contributions are rejected because Android Gradle inclusion and native registrant generation are not implemented.
+- Android generation copies plugin sources/resources into generated project-owned directories, adds them to Gradle source sets, emits Gradle dependencies, and creates `NativitePluginRegistrant.kt`.
 - Plugin fingerprints are included in the config hash for dirty-check optimization.

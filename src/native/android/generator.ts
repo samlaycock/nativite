@@ -1,5 +1,13 @@
 import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,12 +26,41 @@ import { gradlePropertiesTemplate } from "./gradle-properties.ts";
 import { gradleWrapperPropertiesTemplate } from "./gradle-wrapper-properties.ts";
 import { hashConfigForGeneration } from "./hash.ts";
 import { mainActivityTemplate } from "./main-activity.ts";
+import { nativitePluginRegistrantTemplate } from "./nativite-plugin-registrant.ts";
 import { stringsXmlTemplate, colorsXmlTemplate, themesXmlTemplate } from "./resources.ts";
 import { settingsGradleTemplate } from "./settings-gradle.ts";
 import { splashScreenTemplate } from "./splash-screen.ts";
 import { versionCatalogTemplate } from "./version-catalog.ts";
 
 const runtimeDir = join(dirname(fileURLToPath(import.meta.url)), "runtime");
+
+function safePluginDirName(pluginName: string): string {
+  return pluginName.replace(/[^A-Za-z0-9_.-]/g, "_");
+}
+
+function copyPluginInputs(
+  files: readonly { readonly pluginName: string; readonly absolutePath: string }[],
+  outputRoot: string,
+  preserveFileParentDir = false,
+): string[] {
+  const dirs = new Set<string>();
+
+  for (const file of files) {
+    const source = file.absolutePath;
+    const destinationRoot = join(outputRoot, safePluginDirName(file.pluginName));
+    const sourceStat = statSync(source);
+    const destination =
+      !sourceStat.isDirectory() && preserveFileParentDir
+        ? join(destinationRoot, basename(dirname(source)), basename(source))
+        : join(destinationRoot, basename(source));
+    mkdirSync(dirname(destination), { recursive: true });
+    cpSync(source, destination, { recursive: true });
+    dirs.add(statSync(destination).isDirectory() ? destination : dirname(destination));
+  }
+
+  return [...dirs].sort((a, b) => a.localeCompare(b));
+}
+
 function readRuntimeFile(pkg: string, filename: string): string {
   const src = readFileSync(join(runtimeDir, filename), "utf-8");
   return `package ${pkg}\n\n${src}`;
@@ -90,6 +127,8 @@ export async function generateProject(
   const javaDir = join(srcMainDir, "java", ...packagePath);
   const resDir = join(srcMainDir, "res");
   const valuesDir = join(resDir, "values");
+  const pluginSourceDir = join(srcMainDir, "generated", "nativite", "plugins", "java");
+  const pluginResourceDir = join(srcMainDir, "generated", "nativite", "plugins", "res");
   const mipmapXxxhdpiDir = join(resDir, "mipmap-xxxhdpi");
   const mipmapAnydpiDir = join(resDir, "mipmap-anydpi-v26");
   const assetsDir = join(srcMainDir, "assets");
@@ -106,6 +145,8 @@ export async function generateProject(
     mipmapXxxhdpiDir,
     mipmapAnydpiDir,
     assetsDir,
+    pluginSourceDir,
+    pluginResourceDir,
     gradleWrapperDir,
   ]) {
     mkdirSync(dir, { recursive: true });
@@ -137,10 +178,27 @@ export async function generateProject(
   mkdirSync(gradleDir, { recursive: true });
   writeFileSync(join(gradleDir, "libs.versions.toml"), versionCatalogTemplate());
 
+  const pluginSourceDirs = copyPluginInputs(
+    resolvedPlugins.platforms.android.sources,
+    pluginSourceDir,
+  );
+  const pluginResourceDirs = copyPluginInputs(
+    resolvedPlugins.platforms.android.resources,
+    pluginResourceDir,
+    true,
+  );
+  const pluginDependencies = resolvedPlugins.platforms.android.dependencies.filter(
+    (dependency) => dependency.kind === "gradle",
+  );
+
   // App module build file
   writeFileSync(
     join(appDir, "build.gradle.kts"),
-    buildGradleAppTemplate(androidConfig, minSdk, targetSdk),
+    buildGradleAppTemplate(androidConfig, minSdk, targetSdk, {
+      sourceDirs: pluginSourceDirs,
+      resourceDirs: pluginResourceDirs,
+      dependencies: pluginDependencies,
+    }),
   );
 
   // Android manifest
@@ -155,6 +213,10 @@ export async function generateProject(
   writeFileSync(join(javaDir, "NativiteWebView.kt"), readRuntimeFile(pkg, "NativiteWebView.kt"));
   writeFileSync(join(javaDir, "NativiteVars.kt"), readRuntimeFile(pkg, "NativiteVars.kt"));
   writeFileSync(join(javaDir, "NativiteTheme.kt"), readRuntimeFile(pkg, "NativiteTheme.kt"));
+  writeFileSync(
+    join(javaDir, "NativitePluginRegistrant.kt"),
+    `package ${pkg}\n\n${nativitePluginRegistrantTemplate(resolvedPlugins)}`,
+  );
 
   // Resources
   writeFileSync(join(valuesDir, "strings.xml"), stringsXmlTemplate(androidConfig));

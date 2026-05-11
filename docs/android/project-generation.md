@@ -78,16 +78,20 @@ Same as iOS: SHA256 hash of normalised config (including plugin fingerprints). S
 
 ## Native Plugin Contributions
 
-Android native plugin contributions are currently unsupported. If Android is
-enabled and a plugin declares `platforms.android.sources`, `resources`,
-`registrars`, or `dependencies`, plugin resolution throws before Gradle project
-generation. The generated Android project does not copy plugin Kotlin sources,
-merge plugin resources, add plugin dependencies, or generate an Android plugin
-registrant.
+Android consumes `platforms.android` native plugin contributions during Gradle
+project generation:
 
-This is an explicit contract boundary for the current release: iOS/macOS consume
-native plugin contributions, while Android support must be implemented before
-plugins can rely on parity.
+- `sources` are copied into `app/src/main/generated/nativite/plugins/java` and
+  added to the main source set with `java.srcDirs(...)`.
+- `resources` are copied into `app/src/main/generated/nativite/plugins/res` and
+  added to the main source set with `res.srcDirs(...)`.
+- `dependencies` are emitted into `app/build.gradle.kts` with Gradle `add(...)`
+  calls. String dependencies default to the `implementation` configuration.
+- `registrars` are emitted into `NativitePluginRegistrant.kt`, and
+  `MainActivity` calls `registerNativitePlugins(bridge)` before rendering.
+
+Plugin authors should expose Android registrars as Kotlin functions that accept
+`NativiteBridge`, for example `fun registerCameraPlugin(bridge: NativiteBridge)`.
 
 ## Configuration
 
@@ -155,6 +159,7 @@ assets are merged.
 - `androidx.compose` (BOM + ui, ui-graphics, material3)
 - `androidx.webkit` (WebViewCompat, WebMessagePort)
 - `androidx.core:core-splashscreen`
+- Plugin Gradle dependencies declared through `platforms.android.dependencies`
 
 ### Gradle Properties
 

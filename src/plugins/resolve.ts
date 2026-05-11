@@ -23,13 +23,20 @@ export type ResolvedNativitePluginFile = {
 export type ResolvedNativiteFrameworkDependency = {
   name: string;
   weak: boolean;
+  kind?: "framework";
+};
+
+export type ResolvedNativiteGradleDependency = {
+  kind: "gradle";
+  notation: string;
+  configuration: string;
 };
 
 export type ResolvedNativitePlatformContribution = {
   sources: ResolvedNativitePluginFile[];
   resources: ResolvedNativitePluginFile[];
   registrars: string[];
-  dependencies: ResolvedNativiteFrameworkDependency[];
+  dependencies: (ResolvedNativiteFrameworkDependency | ResolvedNativiteGradleDependency)[];
 };
 
 export type ResolvedNativitePlugin = {
@@ -202,7 +209,7 @@ function normalizeRegistrars(
   return [...symbols];
 }
 
-function normalizeDependencyInput(
+function normalizeFrameworkDependencyInput(
   dep: NativitePluginDependency,
 ): ResolvedNativiteFrameworkDependency {
   if (typeof dep === "string") {
@@ -225,16 +232,72 @@ function normalizeDependencyInput(
   };
 }
 
+function normalizeGradleDependencyInput(
+  dep: NativitePluginDependency,
+): ResolvedNativiteGradleDependency {
+  if (typeof dep === "string") {
+    return { kind: "gradle", notation: dep, configuration: "implementation" };
+  }
+
+  const candidate = dep as { kind?: unknown; notation?: unknown; configuration?: unknown };
+  if (candidate.kind !== undefined && candidate.kind !== "gradle") {
+    throw new Error(
+      `[nativite] Unsupported Android dependency kind ${JSON.stringify(candidate.kind)}. Use kind: "gradle".`,
+    );
+  }
+  if (typeof candidate.notation !== "string") {
+    throw new Error("[nativite] Gradle dependency notation must be a string.");
+  }
+
+  return {
+    kind: "gradle",
+    notation: candidate.notation,
+    configuration:
+      typeof candidate.configuration === "string" ? candidate.configuration : "implementation",
+  };
+}
+
 function normalizeDependencies(
   pluginName: string,
   entries: NativitePluginDependency[] | undefined,
-): ResolvedNativiteFrameworkDependency[] {
+  platform: PlatformKey,
+): (ResolvedNativiteFrameworkDependency | ResolvedNativiteGradleDependency)[] {
   if (!entries || entries.length === 0) return [];
+
+  if (platform === "android") {
+    const byDeclaration = new Map<string, ResolvedNativiteGradleDependency>();
+
+    for (const entry of entries) {
+      const normalized = normalizeGradleDependencyInput(entry);
+      const notation = normalized.notation.trim();
+      const configuration = normalized.configuration.trim();
+      if (notation.length === 0) {
+        throw new Error(
+          `[nativite] Plugin "${pluginName}" declares a Gradle dependency with no notation.`,
+        );
+      }
+      if (configuration.length === 0) {
+        throw new Error(
+          `[nativite] Plugin "${pluginName}" declares a Gradle dependency with no configuration.`,
+        );
+      }
+
+      byDeclaration.set(`${configuration}:${notation}`, {
+        kind: "gradle",
+        notation,
+        configuration,
+      });
+    }
+
+    return [...byDeclaration.values()].sort((a, b) =>
+      `${a.configuration}:${a.notation}`.localeCompare(`${b.configuration}:${b.notation}`),
+    );
+  }
 
   const byName = new Map<string, boolean>();
 
   for (const entry of entries) {
-    const normalized = normalizeDependencyInput(entry);
+    const normalized = normalizeFrameworkDependencyInput(entry);
     const name = normalized.name.trim();
     if (name.length === 0) {
       throw new Error(
@@ -260,38 +323,15 @@ function normalizePlatformContribution(
   pluginName: string,
   rootDir: string,
   contribution: NativiteApplePlatformContribution | undefined,
+  platform: PlatformKey,
 ): ResolvedNativitePlatformContribution {
   if (!contribution) return emptyPlatformContribution();
   return {
     sources: normalizeFiles(pluginName, rootDir, "source", contribution.sources),
     resources: normalizeFiles(pluginName, rootDir, "resource", contribution.resources),
     registrars: normalizeRegistrars(pluginName, contribution.registrars),
-    dependencies: normalizeDependencies(pluginName, contribution.dependencies),
+    dependencies: normalizeDependencies(pluginName, contribution.dependencies, platform),
   };
-}
-
-function hasNativePlatformContribution(
-  contribution: NativiteApplePlatformContribution | undefined,
-): boolean {
-  return (
-    (contribution?.sources?.length ?? 0) > 0 ||
-    (contribution?.resources?.length ?? 0) > 0 ||
-    (contribution?.registrars?.length ?? 0) > 0 ||
-    (contribution?.dependencies?.length ?? 0) > 0
-  );
-}
-
-function assertNoAndroidNativeContribution(
-  pluginName: string,
-  contribution: NativiteApplePlatformContribution | undefined,
-): void {
-  if (!hasNativePlatformContribution(contribution)) return;
-
-  throw new Error(
-    `[nativite] Plugin "${pluginName}" declares Android native plugin contributions, ` +
-      "but Android plugin source/resource/registrar/dependency inclusion is not supported yet. " +
-      "Remove platforms.android from the plugin or gate it until Android native plugin support is implemented.",
-  );
 }
 
 function aggregatePlatform(
@@ -301,7 +341,10 @@ function aggregatePlatform(
   const filesByPath = new Map<string, ResolvedNativitePluginFile>();
   const resourcesByPath = new Map<string, ResolvedNativitePluginFile>();
   const registrarSymbols = new Set<string>();
-  const dependenciesByName = new Map<string, boolean>();
+  const dependenciesByKey = new Map<
+    string,
+    ResolvedNativiteFrameworkDependency | ResolvedNativiteGradleDependency
+  >();
 
   for (const plugin of plugins) {
     const current = plugin.platforms[platform];
@@ -323,11 +366,19 @@ function aggregatePlatform(
     }
 
     for (const dependency of current.dependencies) {
-      const previousWeak = dependenciesByName.get(dependency.name);
-      if (previousWeak === undefined) {
-        dependenciesByName.set(dependency.name, dependency.weak);
-      } else if (previousWeak && !dependency.weak) {
-        dependenciesByName.set(dependency.name, false);
+      if (dependency.kind === "gradle") {
+        dependenciesByKey.set(`${dependency.configuration}:${dependency.notation}`, dependency);
+        continue;
+      }
+
+      const key = dependency.name;
+      const existing = dependenciesByKey.get(key) as
+        | ResolvedNativiteFrameworkDependency
+        | undefined;
+      if (!existing) {
+        dependenciesByKey.set(key, dependency);
+      } else if (existing.weak && !dependency.weak) {
+        dependenciesByKey.set(key, dependency);
       }
     }
   }
@@ -338,9 +389,11 @@ function aggregatePlatform(
       a.absolutePath.localeCompare(b.absolutePath),
     ),
     registrars: [...registrarSymbols],
-    dependencies: [...dependenciesByName.entries()]
-      .map(([name, weak]) => ({ name, weak }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+    dependencies: [...dependenciesByKey.values()].sort((a, b) => {
+      const left = a.kind === "gradle" ? `${a.configuration}:${a.notation}` : a.name;
+      const right = b.kind === "gradle" ? `${b.configuration}:${b.notation}` : b.name;
+      return left.localeCompare(right);
+    }),
   };
 }
 
@@ -422,18 +475,31 @@ export async function resolveNativitePlugins(
         : undefined;
 
     const mergedContribution = mergeContributions(staticContribution, dynamicContribution);
-    if (androidEnabled) {
-      assertNoAndroidNativeContribution(plugin.name, mergedContribution.platforms?.android);
-    }
-
     const normalizedPlatforms = {
       ios: iosEnabled
-        ? normalizePlatformContribution(plugin.name, rootDir, mergedContribution.platforms?.ios)
+        ? normalizePlatformContribution(
+            plugin.name,
+            rootDir,
+            mergedContribution.platforms?.ios,
+            "ios",
+          )
         : emptyPlatformContribution(),
       macos: macosEnabled
-        ? normalizePlatformContribution(plugin.name, rootDir, mergedContribution.platforms?.macos)
+        ? normalizePlatformContribution(
+            plugin.name,
+            rootDir,
+            mergedContribution.platforms?.macos,
+            "macos",
+          )
         : emptyPlatformContribution(),
-      android: emptyPlatformContribution(),
+      android: androidEnabled
+        ? normalizePlatformContribution(
+            plugin.name,
+            rootDir,
+            mergedContribution.platforms?.android,
+            "android",
+          )
+        : emptyPlatformContribution(),
     };
 
     const fingerprint = computePluginFingerprint(plugin, mergedContribution, normalizedPlatforms);
