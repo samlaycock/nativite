@@ -4,12 +4,22 @@ import { createCliProgram } from "./index.ts";
 import { stripAnsi } from "./strip-ansi.test-helper.ts";
 
 describe("nativite CLI", () => {
-  it("does not expose the removed dev command in help output", () => {
+  it("exposes the optional dev status command in help output", () => {
     const help = stripAnsi(createCliProgram().helpInformation());
 
     expect(help).toContain("build");
+    expect(help).toContain("dev");
     expect(help).toContain("init");
-    expect(help).not.toContain("dev");
+  });
+
+  it("documents dev URL selection in help output", () => {
+    const program = createCliProgram();
+    const devCommand = program.commands.find((command) => command.name() === "dev");
+
+    expect(devCommand).toBeDefined();
+    const help = stripAnsi(devCommand!.helpInformation());
+    expect(help).toContain("--url <url>");
+    expect(help).toContain("Vite dev server URL");
   });
 
   it("documents init platform selection in help output", () => {
