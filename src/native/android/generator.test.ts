@@ -124,6 +124,62 @@ describe("generateProject", () => {
     });
   });
 
+  it("strips diagnostics from Android assets when syncing full Vite dev metadata", () => {
+    const cwd = makeTempDir();
+    const sourcePath = join(cwd, ".nativite", "dev.json");
+    const destinationPath = join(
+      cwd,
+      ".nativite",
+      "android",
+      "app",
+      "src",
+      "main",
+      "assets",
+      "dev.json",
+    );
+    mkdirSync(join(cwd, ".nativite"), { recursive: true });
+    writeFileSync(
+      sourcePath,
+      JSON.stringify({
+        devURL: "http://192.168.1.2:5173/",
+        urls: {
+          local: ["http://localhost:5173/"],
+          network: ["http://192.168.1.2:5173/"],
+        },
+        native: {
+          iosSimulatorURL: "http://localhost:5173/",
+          iosDeviceURL: "http://192.168.1.2:5173/",
+          androidEmulatorURL: "http://10.0.2.2:5173/",
+          androidDeviceURL: "http://192.168.1.2:5173/",
+          androidUsbReverseCommand: "adb reverse tcp:5173 tcp:5173",
+        },
+        diagnostics: ["Use the network URL for physical iOS and Android devices on the same LAN."],
+      }),
+    );
+
+    syncAndroidDevMetadata(cwd, "dev");
+
+    expect(JSON.parse(readFileSync(destinationPath, "utf-8"))).toEqual({
+      devURL: "http://10.0.2.2:5173/",
+      urls: {
+        local: ["http://localhost:5173/"],
+        network: ["http://192.168.1.2:5173/"],
+      },
+      native: {
+        iosSimulatorURL: "http://localhost:5173/",
+        iosDeviceURL: "http://192.168.1.2:5173/",
+        androidEmulatorURL: "http://10.0.2.2:5173/",
+        androidDeviceURL: "http://192.168.1.2:5173/",
+        androidUsbReverseCommand: "adb reverse tcp:5173 tcp:5173",
+      },
+      android: {
+        emulatorURL: "http://10.0.2.2:5173/",
+        deviceURL: "http://192.168.1.2:5173/",
+        usbReverseCommand: "adb reverse tcp:5173 tcp:5173",
+      },
+    });
+  });
+
   it.skip(
     "generates gradlew with execute permissions",
     async () => {

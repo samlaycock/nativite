@@ -237,6 +237,7 @@ describe("nativite core build config", () => {
           androidDeviceURL: string;
           androidUsbReverseCommand: string;
         };
+        diagnostics?: string[];
       };
 
       expect(metadata.devURL).toBe("http://192.168.1.2:5173/");
@@ -247,6 +248,7 @@ describe("nativite core build config", () => {
       expect(metadata.native.androidEmulatorURL).toBe("http://10.0.2.2:5173/");
       expect(metadata.native.androidDeviceURL).toBe("http://192.168.1.2:5173/");
       expect(metadata.native.androidUsbReverseCommand).toBe("adb reverse tcp:5173 tcp:5173");
+      expect(metadata.diagnostics).toBeUndefined();
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }

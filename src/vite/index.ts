@@ -696,13 +696,14 @@ function nativiteCorePlugin(): Plugin {
           local: server.resolvedUrls?.local ?? [],
           network: server.resolvedUrls?.network ?? [],
         });
+        const { diagnostics, ...persistedMetadata } = metadata;
 
         mkdirSync(nativiteDir, { recursive: true });
-        writeFileSync(join(nativiteDir, "dev.json"), JSON.stringify(metadata, null, 2));
+        writeFileSync(join(nativiteDir, "dev.json"), JSON.stringify(persistedMetadata, null, 2));
         viteConfig.logger.info(`[nativite] Native dev server URL: ${metadata.devURL}`, {
           timestamp: true,
         });
-        for (const diagnostic of metadata.diagnostics) {
+        for (const diagnostic of diagnostics) {
           viteConfig.logger.warn(`[nativite] ${diagnostic}`, { timestamp: true });
         }
         syncAndroidDevMetadata(viteConfig.root, "dev");
