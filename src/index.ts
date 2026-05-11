@@ -16,7 +16,11 @@ export type NativiteFrameworkDependency =
   | string
   | { kind?: "framework"; name: string; weak?: boolean };
 
-export type NativitePluginDependency = NativiteFrameworkDependency;
+export type NativiteGradleDependency =
+  | string
+  | { kind: "gradle"; notation: string; configuration?: string };
+
+export type NativitePluginDependency = NativiteFrameworkDependency | NativiteGradleDependency;
 
 export type NativiteBridgeNamespace = {
   name: string;
@@ -53,9 +57,8 @@ export type NativitePluginContribution = {
   /**
    * First-party native plugin source/resource/registrar/dependency contributions.
    *
-   * Android native contributions are not currently supported by the generated
-   * Gradle project. Declaring `platforms.android` causes plugin resolution to
-   * fail before generation so unsupported native code is not silently ignored.
+   * Android dependencies use Gradle notation strings or
+   * `{ kind: "gradle", notation, configuration }` objects.
    */
   platforms?: Record<string, NativiteApplePlatformContribution | undefined>;
 };

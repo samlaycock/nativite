@@ -4,6 +4,7 @@ import { basename, extname, relative } from "node:path";
 import type { NativiteConfig } from "../../index.ts";
 import type {
   ResolvedNativiteFrameworkDependency,
+  ResolvedNativiteGradleDependency,
   ResolvedNativitePluginFile,
   ResolvedNativitePlugins,
 } from "../../plugins/resolve.ts";
@@ -49,6 +50,12 @@ function resourceFileType(absolutePath: string): string {
   }
   if (ext === ".json") return "text.json";
   return "file";
+}
+
+function isFrameworkDependency(
+  dep: ResolvedNativiteFrameworkDependency | ResolvedNativiteGradleDependency,
+): dep is ResolvedNativiteFrameworkDependency {
+  return dep.kind !== "gradle";
 }
 
 // Static UUIDs — safe because the project is always fully regenerated from scratch.
@@ -131,9 +138,9 @@ export function pbxprojTemplate(
 
   const pluginSources = resolvedPlugins.platforms[targetPlatform].sources;
   const pluginResources = resolvedPlugins.platforms[targetPlatform].resources;
-  const frameworkDeps = resolvedPlugins.platforms[targetPlatform].dependencies.filter(
-    (dep) => dep.name !== "WebKit",
-  );
+  const frameworkDeps = resolvedPlugins.platforms[targetPlatform].dependencies
+    .filter(isFrameworkDependency)
+    .filter((dep) => dep.name !== "WebKit");
 
   type PluginFileRef = {
     id: string;

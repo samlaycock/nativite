@@ -225,11 +225,12 @@ describe("resolveNativitePlugins", () => {
     }
   });
 
-  it("throws when Android native plugin contributions are declared", async () => {
-    const root = mkdtempSync(join(tmpdir(), "nativite-plugin-android-unsupported-"));
+  it("resolves Android native plugin contributions", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nativite-plugin-android-"));
     try {
       mkdirSync(join(root, "native", "android"), { recursive: true });
       writeFileSync(join(root, "native", "android", "CameraPlugin.kt"), "class CameraPlugin\n");
+      writeFileSync(join(root, "native", "android", "camera.xml"), "<resources />\n");
       const baseConfig = makeBaseConfig();
 
       const config: NativiteConfig = {
@@ -245,24 +246,42 @@ describe("resolveNativitePlugins", () => {
             platforms: {
               android: {
                 sources: ["./native/android/CameraPlugin.kt"],
+                resources: ["./native/android/camera.xml"],
                 registrars: ["registerCameraPlugin"],
+                dependencies: [
+                  "androidx.camera:camera-core:1.4.0",
+                  {
+                    kind: "gradle",
+                    notation: "androidx.camera:camera-camera2:1.4.0",
+                    configuration: "implementation",
+                  },
+                ],
               },
             },
           },
         ],
       };
 
-      let error: unknown;
-      try {
-        await resolveNativitePlugins(config, root, "generate");
-      } catch (err) {
-        error = err;
-      }
-
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toContain(
-        'Plugin "camera-plugin" declares Android native plugin contributions',
+      const resolved = await resolveNativitePlugins(config, root, "generate");
+      expect(resolved.platforms.android.sources[0]?.absolutePath).toBe(
+        join(root, "native", "android", "CameraPlugin.kt"),
       );
+      expect(resolved.platforms.android.resources[0]?.absolutePath).toBe(
+        join(root, "native", "android", "camera.xml"),
+      );
+      expect(resolved.platforms.android.registrars).toEqual(["registerCameraPlugin"]);
+      expect(resolved.platforms.android.dependencies).toEqual([
+        {
+          kind: "gradle",
+          notation: "androidx.camera:camera-camera2:1.4.0",
+          configuration: "implementation",
+        },
+        {
+          kind: "gradle",
+          notation: "androidx.camera:camera-core:1.4.0",
+          configuration: "implementation",
+        },
+      ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

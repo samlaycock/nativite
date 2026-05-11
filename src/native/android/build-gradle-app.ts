@@ -1,10 +1,50 @@
 import type { NativiteConfig } from "../../index.ts";
+import type { ResolvedNativiteGradleDependency } from "../../plugins/resolve.ts";
+
+export interface AndroidPluginGradleInputs {
+  readonly sourceDirs: readonly string[];
+  readonly resourceDirs: readonly string[];
+  readonly dependencies: readonly ResolvedNativiteGradleDependency[];
+}
+
+function escapeKotlinString(input: string): string {
+  return input.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("$", "\\$");
+}
+
+function sourceSetEntries(
+  method: "java.srcDirs" | "res.srcDirs",
+  paths: readonly string[],
+): string {
+  if (paths.length === 0) return "";
+
+  const quotedPaths = paths.map((path) => `"${escapeKotlinString(path)}"`).join(", ");
+  return `
+            ${method}(${quotedPaths})`;
+}
+
+function pluginDependencyEntries(
+  dependencies: readonly ResolvedNativiteGradleDependency[],
+): string {
+  if (dependencies.length === 0) return "";
+
+  return dependencies
+    .map((dependency) => {
+      const configuration = escapeKotlinString(dependency.configuration);
+      const notation = escapeKotlinString(dependency.notation);
+      return `    add("${configuration}", "${notation}")`;
+    })
+    .join("\n");
+}
 
 export function buildGradleAppTemplate(
   config: NativiteConfig,
   minSdk: number,
   targetSdk: number,
+  pluginInputs: AndroidPluginGradleInputs = { sourceDirs: [], resourceDirs: [], dependencies: [] },
 ): string {
+  const pluginSourceSetEntries = `${sourceSetEntries("java.srcDirs", pluginInputs.sourceDirs)}${sourceSetEntries("res.srcDirs", pluginInputs.resourceDirs)}`;
+  const pluginDependencyLines = pluginDependencyEntries(pluginInputs.dependencies);
+
   return `plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -74,7 +114,7 @@ android {
     sourceSets {
         getByName("main") {
             assets.srcDirs("src/main/assets")
-            assets.srcDir(nativiteGeneratedAssetsDir)
+            assets.srcDir(nativiteGeneratedAssetsDir)${pluginSourceSetEntries}
         }
     }
 }
@@ -96,6 +136,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.core.splashscreen)
+${pluginDependencyLines}
 }
 `;
 }

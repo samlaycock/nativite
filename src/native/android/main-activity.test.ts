@@ -25,6 +25,11 @@ describe("mainActivityTemplate", () => {
     expect(output).toContain("NativiteApp(bridge = bridge)");
   });
 
+  it("registers native plugins before rendering", () => {
+    const output = mainActivityTemplate(androidConfig);
+    expect(output).toContain("registerNativitePlugins(bridge)");
+  });
+
   it("excludes splash screen import when no splash config", () => {
     const output = mainActivityTemplate(androidConfig);
     expect(output).not.toContain("installSplashScreen");

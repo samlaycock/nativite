@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
         bridge.getDefaultChromeState()?.let { defaultState ->
             bridge.chromeState.value = defaultState
         }
+        registerNativitePlugins(bridge)
 
         setContent {
             NativiteTheme {
