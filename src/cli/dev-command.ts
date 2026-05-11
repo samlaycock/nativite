@@ -53,12 +53,19 @@ function readDevServerUrl(cwd: string): string | undefined {
   }
 }
 
-async function checkUrlReachable(url: string): Promise<boolean> {
+export async function checkUrlReachable(url: string, timeoutMs = 5_000): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
   try {
-    const response = await fetch(url, { method: "HEAD" });
-    return response.ok || response.status < 500;
+    const response = await fetch(url, { method: "HEAD", signal: controller.signal });
+    return response.status < 400;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

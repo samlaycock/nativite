@@ -1,10 +1,16 @@
-import { describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
 
 import type { NativiteConfig } from "../index.ts";
 import type { ResolvedNativitePlatformRuntime } from "../platforms/registry.ts";
 import type { NativiteLogger } from "./logger.ts";
 
-import { runDevCommand, type DevCommandDependencies } from "./dev-command.ts";
+import { checkUrlReachable, runDevCommand, type DevCommandDependencies } from "./dev-command.ts";
+
+const ORIGINAL_FETCH = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = ORIGINAL_FETCH;
+});
 
 function createMockConfig(): NativiteConfig {
   return {
@@ -125,5 +131,47 @@ describe("runDevCommand", () => {
     const exitCode = await runDevCommand({}, createDependencies({ runtimes: [] }));
 
     expect(exitCode).toBe(1);
+  });
+});
+
+describe("checkUrlReachable", () => {
+  it("treats 2xx and 3xx responses as reachable", async () => {
+    globalThis.fetch = mock(async () => {
+      return new Response(null, { status: 302 });
+    }) as unknown as typeof fetch;
+
+    const reachable = await checkUrlReachable("http://localhost:5173");
+
+    expect(reachable).toBe(true);
+  });
+
+  it("treats 4xx responses as not reachable", async () => {
+    globalThis.fetch = mock(async () => {
+      return new Response(null, { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const reachable = await checkUrlReachable("http://localhost:5173");
+
+    expect(reachable).toBe(false);
+  });
+
+  it("aborts the reachability check instead of waiting indefinitely", async () => {
+    const abortSignals: AbortSignal[] = [];
+    globalThis.fetch = mock((_url: URL | RequestInfo, init?: RequestInit) => {
+      const signal = init?.signal;
+      if (signal) abortSignals.push(signal);
+
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      });
+    }) as unknown as typeof fetch;
+
+    const reachable = await checkUrlReachable("http://localhost:5173", 1);
+
+    expect(reachable).toBe(false);
+    expect(abortSignals).toHaveLength(1);
+    expect(abortSignals[0]!.aborted).toBe(true);
   });
 });
