@@ -74,7 +74,9 @@ Gradle wrapper operation.
 
 ## Dirty-Check Optimization
 
-Same as iOS: SHA256 hash of normalised config (including plugin fingerprints). Skips regeneration if hash matches the stored `.hash-android` file.
+Same as iOS: SHA256 hash of normalised config, resolved plugin fingerprints, and generated Kotlin/XML/Gradle template inputs. Skips regeneration if hash matches the stored `.hash-android` file.
+
+This means package upgrades regenerate Android projects when embedded runtime or template output changes, even when the user's config is unchanged.
 
 ## Native Plugin Contributions
 

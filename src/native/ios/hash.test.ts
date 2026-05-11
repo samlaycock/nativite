@@ -1,7 +1,18 @@
 import { describe, expect, it } from "bun:test";
 
+import type { ResolvedNativitePlugins } from "../../plugins/resolve.ts";
+
 import { baseConfig, pluginsSortedConfig, pluginsUnsortedConfig } from "../../../test/fixtures.ts";
-import { hashConfig } from "./hash.ts";
+import { hashConfig, hashConfigForGeneration } from "./hash.ts";
+
+const emptyResolvedPlugins: ResolvedNativitePlugins = {
+  plugins: [],
+  platforms: {
+    ios: { sources: [], resources: [], registrars: [], dependencies: [] },
+    macos: { sources: [], resources: [], registrars: [], dependencies: [] },
+    android: { sources: [], resources: [], registrars: [], dependencies: [] },
+  },
+};
 
 describe("hashConfig", () => {
   // ── Determinism ──────────────────────────────────────────────────────────────
@@ -93,5 +104,31 @@ describe("hashConfig", () => {
       plugins: [{ name: "plugin-a" }, { name: "plugin-b" }],
     };
     expect(hashConfig(configA)).toBe(hashConfig(configB));
+  });
+});
+
+describe("hashConfigForGeneration", () => {
+  it("includes generated template inputs in the generation hash", () => {
+    const first = hashConfigForGeneration(baseConfig, emptyResolvedPlugins, [
+      { name: "Runtime.swift", content: "let value = 1" },
+    ]);
+    const second = hashConfigForGeneration(baseConfig, emptyResolvedPlugins, [
+      { name: "Runtime.swift", content: "let value = 2" },
+    ]);
+
+    expect(first).not.toBe(second);
+  });
+
+  it("is independent of generated input ordering", () => {
+    const first = hashConfigForGeneration(baseConfig, emptyResolvedPlugins, [
+      { name: "B.swift", content: "b" },
+      { name: "A.swift", content: "a" },
+    ]);
+    const second = hashConfigForGeneration(baseConfig, emptyResolvedPlugins, [
+      { name: "A.swift", content: "a" },
+      { name: "B.swift", content: "b" },
+    ]);
+
+    expect(first).toBe(second);
   });
 });

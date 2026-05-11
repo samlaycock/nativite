@@ -23,6 +23,64 @@ function readRuntimeFile(filename: string): string {
   return readFileSync(join(runtimeDir, filename), "utf-8");
 }
 
+function generationHashInputs(
+  config: NativiteConfig,
+  resolvedPlugins: Awaited<ReturnType<typeof resolveNativitePlugins>>,
+  targetPlatform: AppleTargetPlatform,
+  projectRoot: string,
+) {
+  const platformConfig = resolveConfigForPlatform(config, targetPlatform);
+  const appIconFilename = config.icon ? basename(resolve("", config.icon)) : undefined;
+  const splashImageFilename = config.splash?.image
+    ? basename(resolve("", config.splash.image))
+    : undefined;
+
+  return [
+    {
+      name: "NativiteApp.swift",
+      content: mainEntryTemplate({ toolbarStyle: config.defaultChrome?.toolbar?.toolbarStyle }),
+    },
+    { name: "AppDelegate.swift", content: appDelegateTemplate(config) },
+    { name: "NativiteConfig.swift", content: nativiteConfigTemplate(config) },
+    { name: "ViewController.swift", content: readRuntimeFile("ViewController.swift") },
+    { name: "NativiteBridge.swift", content: readRuntimeFile("NativiteBridge.swift") },
+    {
+      name: "NativitePluginRegistrant.swift",
+      content: nativitePluginRegistrantTemplate(resolvedPlugins),
+    },
+    { name: "NativiteChrome.swift", content: readRuntimeFile("NativiteChrome.swift") },
+    { name: "NativiteChromeState.swift", content: readRuntimeFile("NativiteChromeState.swift") },
+    { name: "NativiteVars.swift", content: readRuntimeFile("NativiteVars.swift") },
+    { name: "NativiteKeyboard.swift", content: readRuntimeFile("NativiteKeyboard.swift") },
+    { name: "OTAUpdater.swift", content: readRuntimeFile("OTAUpdater.swift") },
+    {
+      name: "Info.plist",
+      content:
+        targetPlatform === "ios"
+          ? infoPlistTemplate(platformConfig)
+          : infoPlistMacOSTemplate(platformConfig),
+    },
+    { name: "AppIcon.appiconset/Contents.json", content: appIconContentsTemplate(appIconFilename) },
+    ...(targetPlatform === "ios" && config.splash
+      ? [
+          { name: "LaunchScreen.storyboard", content: launchScreenTemplate(config) },
+          ...(splashImageFilename
+            ? [
+                {
+                  name: "Splash.imageset/Contents.json",
+                  content: splashImageContentsTemplate(splashImageFilename),
+                },
+              ]
+            : []),
+        ]
+      : []),
+    {
+      name: "project.pbxproj",
+      content: pbxprojTemplate(config, resolvedPlugins, projectRoot, targetPlatform),
+    },
+  ];
+}
+
 function nativiteConfigTemplate(config: NativiteConfig): string {
   const otaEnabled = Boolean(config.updates);
   const otaServerURL = config.updates?.url ?? "";
@@ -98,7 +156,11 @@ export async function generateProject(
   const appName = config.app.name;
   const platformConfig = resolveConfigForPlatform(config, targetPlatform);
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
-  const hash = hashConfigForGeneration(config, resolvedPlugins);
+  const hash = hashConfigForGeneration(
+    config,
+    resolvedPlugins,
+    generationHashInputs(config, resolvedPlugins, targetPlatform, projectRoot),
+  );
 
   // Dirty check — skip if nothing has changed
   if (!force && existsSync(hashFile)) {

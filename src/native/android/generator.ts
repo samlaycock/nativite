@@ -80,6 +80,62 @@ object NativiteConfig {
 `;
 }
 
+function generationHashInputs(
+  config: NativiteConfig,
+  resolvedPlugins: Awaited<ReturnType<typeof resolveNativitePlugins>>,
+) {
+  const androidConfig = resolveConfigForPlatform(config, "android");
+  const androidPlatform = (config.platforms ?? []).find((p) => p.platform === "android");
+  const minSdk =
+    (androidPlatform as { minSdk?: number } | undefined)?.minSdk ?? DEFAULT_ANDROID_MIN_SDK;
+  const targetSdk =
+    (androidPlatform as { targetSdk?: number } | undefined)?.targetSdk ??
+    DEFAULT_ANDROID_TARGET_SDK;
+  const pkg = androidConfig.app.bundleId;
+  const pluginDependencies = resolvedPlugins.platforms.android.dependencies.filter(
+    (dependency) => dependency.kind === "gradle",
+  );
+
+  return [
+    { name: "settings.gradle.kts", content: settingsGradleTemplate(androidConfig.app.name) },
+    { name: "build.gradle.kts", content: buildGradleRootTemplate() },
+    { name: "gradle.properties", content: gradlePropertiesTemplate() },
+    {
+      name: "gradle/wrapper/gradle-wrapper.properties",
+      content: gradleWrapperPropertiesTemplate(),
+    },
+    { name: "gradle/libs.versions.toml", content: versionCatalogTemplate() },
+    {
+      name: "app/build.gradle.kts",
+      content: buildGradleAppTemplate(androidConfig, minSdk, targetSdk, {
+        sourceDirs: [],
+        resourceDirs: [],
+        dependencies: pluginDependencies,
+      }),
+    },
+    { name: "AndroidManifest.xml", content: androidManifestTemplate(androidConfig) },
+    { name: "MainActivity.kt", content: mainActivityTemplate(androidConfig) },
+    { name: "NativiteConfig.kt", content: nativiteConfigTemplate(pkg, config) },
+    { name: "NativiteBridge.kt", content: readRuntimeFile(pkg, "NativiteBridge.kt") },
+    { name: "NativiteChrome.kt", content: readRuntimeFile(pkg, "NativiteChrome.kt") },
+    { name: "NativiteWebView.kt", content: readRuntimeFile(pkg, "NativiteWebView.kt") },
+    { name: "NativiteVars.kt", content: readRuntimeFile(pkg, "NativiteVars.kt") },
+    { name: "NativiteTheme.kt", content: readRuntimeFile(pkg, "NativiteTheme.kt") },
+    {
+      name: "NativitePluginRegistrant.kt",
+      content: `package ${pkg}\n\n${nativitePluginRegistrantTemplate(resolvedPlugins)}`,
+    },
+    { name: "strings.xml", content: stringsXmlTemplate(androidConfig) },
+    { name: "colors.xml", content: colorsXmlTemplate() },
+    { name: "themes.xml", content: themesXmlTemplate(androidConfig) },
+    ...(androidConfig.splash
+      ? [{ name: "splash.xml", content: splashScreenTemplate(androidConfig) }]
+      : []),
+    { name: "ic_launcher.xml", content: appIconXmlTemplate() },
+    { name: "ic_launcher_foreground.png", content: appIconTemplate() },
+  ];
+}
+
 export interface GenerateResult {
   readonly skipped: boolean;
   readonly projectPath: string;
@@ -97,7 +153,11 @@ export async function generateProject(
   const projectRoot = join(nativiteDir, "android");
   const androidConfig = resolveConfigForPlatform(config, "android");
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
-  const hash = hashConfigForGeneration(config, resolvedPlugins);
+  const hash = hashConfigForGeneration(
+    config,
+    resolvedPlugins,
+    generationHashInputs(config, resolvedPlugins),
+  );
 
   // Ensure production/generate mode never packages stale dev server settings.
   syncAndroidDevMetadata(cwd, mode);

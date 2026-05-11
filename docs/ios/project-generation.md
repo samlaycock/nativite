@@ -47,11 +47,12 @@ workflows.
 
 ## Dirty-Check Optimization
 
-The generator computes a SHA256 hash of the normalised config (including resolved plugin fingerprints). If the hash matches the stored `.hash-ios` or `.hash-macos` file from the previous generation, regeneration is skipped entirely.
+The generator computes a SHA256 hash of the normalised config, resolved plugin fingerprints, and generated Swift/template inputs. If the hash matches the stored `.hash-ios` or `.hash-macos` file from the previous generation, regeneration is skipped entirely.
 
 A force regeneration is triggered when:
 
 - The hash doesn't match (config changed)
+- Embedded runtime or template output changed between package versions
 - The `force` flag is passed
 - Legacy detection finds the project needs migration (e.g., missing `NativiteApp.swift` entry point or presence of stale `NativiteRootView` in AppDelegate)
 
