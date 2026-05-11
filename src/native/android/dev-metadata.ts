@@ -40,12 +40,14 @@ export function syncAndroidDevMetadata(cwd: string, mode: NativitePluginMode): v
   const rawDevMetadata = readFileSync(sourcePath, "utf-8");
   const parsedDevMetadata = JSON.parse(rawDevMetadata) as {
     devURL?: unknown;
+    diagnostics?: unknown;
     native?: {
       androidEmulatorURL?: unknown;
       androidDeviceURL?: unknown;
       androidUsbReverseCommand?: unknown;
     };
   };
+  const { diagnostics: _diagnostics, ...devMetadata } = parsedDevMetadata;
   const androidEmulatorURL =
     typeof parsedDevMetadata.native?.androidEmulatorURL === "string"
       ? parsedDevMetadata.native.androidEmulatorURL
@@ -56,7 +58,7 @@ export function syncAndroidDevMetadata(cwd: string, mode: NativitePluginMode): v
       ? normalizeAndroidDevServerUrl(parsedDevMetadata.devURL)
       : parsedDevMetadata.devURL);
   const normalizedDevMetadata = {
-    ...parsedDevMetadata,
+    ...devMetadata,
     devURL,
     android: {
       emulatorURL: devURL,
