@@ -1,8 +1,33 @@
 import { describe, expect, it } from "bun:test";
 
-import { shouldTransformNativeRequest } from "./request-routing.ts";
+import { resolveNativeRequestPlatform, shouldTransformNativeRequest } from "./request-routing.ts";
 
 describe("native dev request routing", () => {
+  it("prefers the explicit native platform header over User-Agent routing", () => {
+    const platform = resolveNativeRequestPlatform("/src/main.ts", {
+      "x-nativite-platform": "android",
+      "user-agent": "Mozilla/5.0 Nativite/ios/1.0",
+    });
+
+    expect(platform).toBe("android");
+  });
+
+  it("uses the explicit native platform query marker when no header is present", () => {
+    const platform = resolveNativeRequestPlatform("/?__nativite_platform=ipad", {
+      "user-agent": "Mozilla/5.0",
+    });
+
+    expect(platform).toBe("ipad");
+  });
+
+  it("falls back to the legacy Nativite User-Agent platform token", () => {
+    const platform = resolveNativeRequestPlatform("/src/main.ts", {
+      "user-agent": "Mozilla/5.0 Nativite/macos/1.0",
+    });
+
+    expect(platform).toBe("macos");
+  });
+
   it("bypasses direct static asset requests even when headers are ambiguous", () => {
     const shouldTransform = shouldTransformNativeRequest("/src/assets/react.svg", {
       accept: "*/*",

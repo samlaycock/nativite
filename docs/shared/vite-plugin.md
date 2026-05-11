@@ -116,16 +116,33 @@ And excludes nativite packages from dependency optimisation:
 optimizeDeps.exclude: ["nativite", "nativite/chrome", "nativite/client", "nativite/css"]
 ```
 
-### User-Agent Based Routing
+### Native Request Routing
 
-Each native webview includes a platform identifier in its User-Agent:
+Each native webview sends an explicit `x-nativite-platform` request header on
+top-level URL loads when the runtime API supports custom headers:
+
+- iOS: `x-nativite-platform: ios`
+- iPad: `x-nativite-platform: ipad`
+- Android: `x-nativite-platform: android`
+- macOS: `x-nativite-platform: macos`
+
+The dev middleware also accepts a `__nativite_platform=<platform>` query marker
+for explicit routing. The marker is primarily useful for tools or runtimes that
+cannot attach request headers.
+
+For backwards compatibility, each native webview also includes a platform
+identifier in its User-Agent:
 
 - iOS: `Nativite/ios/1.0`
 - iPad: `Nativite/ipad/1.0`
 - Android: `Nativite/android/1.0`
 - macOS: `Nativite/macos/1.0`
 
-The dev server middleware intercepts requests, reads the User-Agent, and routes to the correct Vite environment for module transformation. This means an iOS simulator and Android emulator can connect to the same dev server simultaneously and receive platform-specific code.
+The dev server middleware prefers the explicit header, then the query marker,
+then falls back to the User-Agent token. This keeps environment routing stable
+when WebView User-Agent strings are rewritten, cached, or omitted on specific
+requests. It also preserves platform-specific code for simultaneous iOS,
+Android, and desktop connections to the same dev server.
 
 ### Request Classification
 

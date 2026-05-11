@@ -24,6 +24,7 @@ import java.net.URI
 private const val PRODUCTION_BASE_URL = "https://appassets.androidplatform.net/assets/dist/index.html"
 private const val SET_PLATFORM_ATTRIBUTE_SCRIPT = "document.documentElement.setAttribute('data-nv-platform','android');"
 private const val ANDROID_EMULATOR_LOOPBACK_HOST = "10.0.2.2"
+private val NATIVITE_REQUEST_HEADERS = mapOf("x-nativite-platform" to "android")
 
 @SuppressLint("SetJavaScriptEnabled")
 fun createNativiteWebView(
@@ -243,10 +244,10 @@ fun NativiteWebView(
         if (url != null) {
             val (loadUrl, spaRoute) = resolveChildUrl(context, url)
             webView.tag = spaRoute
-            webView.loadUrl(loadUrl)
+            webView.loadUrl(loadUrl, NATIVITE_REQUEST_HEADERS)
         } else {
             webView.tag = null
-            webView.loadUrl(resolveContentUrl(context))
+            webView.loadUrl(resolveContentUrl(context), NATIVITE_REQUEST_HEADERS)
         }
         onDispose {}
     }

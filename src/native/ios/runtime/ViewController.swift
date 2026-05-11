@@ -163,10 +163,17 @@ class ViewController: UIViewController {
     return true
   }
 
+  private func nativiteRequest(url: URL) -> URLRequest {
+    let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+    var request = URLRequest(url: url)
+    request.setValue(nvPlatform, forHTTPHeaderField: "x-nativite-platform")
+    return request
+  }
+
   private func loadContent() {
     #if DEBUG
     if let devURL = resolveDevURL() {
-      webView.load(URLRequest(url: devURL))
+      webView.load(nativiteRequest(url: devURL))
       return
     }
     #endif
@@ -365,7 +372,7 @@ extension ViewController: WKUIDelegate {
       return nil
     }
 
-    webView.load(URLRequest(url: url))
+    webView.load(nativiteRequest(url: url))
     return nil
   }
 
@@ -556,10 +563,16 @@ class ViewController: NSViewController {
     return true
   }
 
+  private func nativiteRequest(url: URL) -> URLRequest {
+    var request = URLRequest(url: url)
+    request.setValue("macos", forHTTPHeaderField: "x-nativite-platform")
+    return request
+  }
+
   private func loadContent() {
     #if DEBUG
     if let devURL = resolveDevURL() {
-      webView.load(URLRequest(url: devURL))
+      webView.load(nativiteRequest(url: devURL))
       return
     }
     #endif
@@ -721,7 +734,7 @@ extension ViewController: WKUIDelegate {
       return nil
     }
 
-    webView.load(URLRequest(url: url))
+    webView.load(nativiteRequest(url: url))
     return nil
   }
 

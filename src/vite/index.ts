@@ -35,7 +35,7 @@ import {
   platformExtensionsPlugin,
   resolvePlatformIndexHtml,
 } from "./platform-extensions-plugin.ts";
-import { shouldTransformNativeRequest } from "./request-routing.ts";
+import { resolveNativeRequestPlatform, shouldTransformNativeRequest } from "./request-routing.ts";
 
 export type { NativiteConfig, Platform };
 
@@ -639,25 +639,22 @@ function nativiteCorePlugin(): Plugin {
     }) {
       const environmentToPlatform = environmentPlatformMap(platformMetadata);
 
-      // ── Middleware: route each WKWebView to its named platform environment ─────
-      // The WKWebView appends "Nativite/<platform>/1.0" to its User-Agent via
-      // WKWebViewConfiguration.applicationNameForUserAgent (set in the Swift
-      // template). The platform token identifies both that the request is from a
-      // native WebView AND which named Vite environment should serve its modules.
+      // ── Middleware: route each native WebView to its named platform environment ─
+      // Explicit request markers are preferred because User-Agent strings can be
+      // rewritten or cached by WebView runtimes. The legacy Nativite/<platform>/1.0
+      // User-Agent token remains supported as a fallback for subresources and old
+      // generated runtimes.
       server.middlewares.use(async (req, res, next) => {
-        const ua = req.headers["user-agent"];
-        const uaStr = Array.isArray(ua) ? ua.join(" ") : (ua ?? "");
-        // Extract platform name from "Nativite/<platform>/1.0" UA token.
-        const match = uaStr.match(/Nativite\/([a-z0-9-]+)\//);
-        if (!match) return next();
+        const url = req.url ?? "/";
+        const requestPlatform = resolveNativeRequestPlatform(url, req.headers);
+        if (!requestPlatform) return next();
 
-        const platformEnv = server.environments[match[1]!];
+        const platformEnv = server.environments[requestPlatform];
         if (!platformEnv) return next(); // Unknown or unregistered platform.
 
-        const url = req.url ?? "/";
         const shouldTransform = shouldTransformNativeRequest(url, req.headers);
         if (!shouldTransform) {
-          const platform = environmentToPlatform.get(match[1]!) ?? match[1]!;
+          const platform = environmentToPlatform.get(requestPlatform) ?? requestPlatform;
           const htmlEntry = resolvePlatformIndexHtml(
             viteConfig.root,
             platform,
