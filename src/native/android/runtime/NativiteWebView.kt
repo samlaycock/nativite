@@ -36,7 +36,11 @@ fun createNativiteWebView(
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        settings.mixedContentMode = if (BuildConfig.DEBUG) {
+            WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        } else {
+            WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        }
         settings.allowFileAccess = false
         settings.allowContentAccess = false
         settings.userAgentString = settings.userAgentString + " Nativite/android/1.0"

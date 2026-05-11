@@ -17,13 +17,13 @@ fun createNativiteWebView(
 
 ### Configuration
 
-| Setting                       | Value                             | Purpose                                        |
-| ----------------------------- | --------------------------------- | ---------------------------------------------- |
-| `javaScriptEnabled`           | `true`                            | Required for web content                       |
-| `domStorageEnabled`           | `true`                            | localStorage / sessionStorage                  |
-| `mixedContentMode`            | `MIXED_CONTENT_ALWAYS_ALLOW`      | Dev server compatibility                       |
-| `algorithmicDarkeningAllowed` | `true` (SDK 33+)                  | Auto dark mode for web content                 |
-| User-Agent                    | `"Nativite/android/1.0"` appended | Platform identification for dev server routing |
+| Setting                       | Value                                                                         | Purpose                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `javaScriptEnabled`           | `true`                                                                        | Required for web content                                              |
+| `domStorageEnabled`           | `true`                                                                        | localStorage / sessionStorage                                         |
+| `mixedContentMode`            | `MIXED_CONTENT_ALWAYS_ALLOW` in debug, `MIXED_CONTENT_NEVER_ALLOW` in release | Dev server compatibility without weakening release transport security |
+| `algorithmicDarkeningAllowed` | `false` (SDK 33+)                                                             | Keeps CSS-controlled dark mode authoritative                          |
+| User-Agent                    | `"Nativite/android/1.0"` appended                                             | Platform identification for dev server routing                        |
 
 ### Asset Loading
 
