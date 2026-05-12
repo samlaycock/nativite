@@ -33,6 +33,7 @@ Technical reference for how nativite features are implemented on each native pla
 
 ## Shared / Cross-Platform
 
+- [Drop-In Quickstart](./shared/quickstart.md) — Shortest path from existing Vite app to native shell
 - [Chrome API](./shared/chrome-api.md) — JavaScript runtime for controlling native chrome
 - [Splash Screen Control](./shared/splash-screen.md) — Manual splash screen hide with `chrome.splash`
 - [Native Asset Pipeline](./shared/native-assets.md) — Icon and splash asset validation and platform output mapping

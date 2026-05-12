@@ -44,9 +44,17 @@ Android SDK, Java, and Gradle are machine prerequisites that should be installed
 and managed by the developer or their CI image. Nativite generates native project
 files and prints clear errors when required tooling is unavailable.
 
-## Quick Start
+## Quick Start: Vite App to Native Shell
 
-### 1. Initialize an existing Vite app
+This is the shortest drop-in path for an existing Vite app.
+
+### 1. Add Nativite
+
+```bash
+bun add nativite
+```
+
+### 2. Initialize native support
 
 Run the init command from your Vite project root:
 
@@ -66,13 +74,69 @@ By default, init keeps the first path narrow: it enables `ios` on macOS and
 bunx nativite init --platform ios --platform android
 ```
 
-Then build the configured native targets:
+### 3. Build native projects
 
 ```bash
 bunx nativite build
 ```
 
-### Manual setup
+This runs a production Vite build for each configured target, writes the web
+bundle, and creates or updates the matching native project under `.nativite/`.
+
+### 4. Open the native project
+
+Use the native IDE or simulator workflow you already use for the target platform:
+
+```bash
+open .nativite/ios/MyApp.xcodeproj
+open .nativite/android
+```
+
+Xcode and Android Studio own native build settings, signing, simulator/device
+selection, and launch. Nativite owns generating the native project code and the
+web bundles those projects embed.
+
+### 5. Use Vite during native debug runs
+
+Run your normal Vite dev server when you want the generated debug native project
+to load web code from Vite instead of the embedded production bundle.
+
+```bash
+bunx vite dev
+```
+
+Nativite's Vite plugin writes `.nativite/dev.json` with the resolved dev server
+URL so native debug builds can discover it.
+
+### Router and framework notes
+
+- Prefer history fallback routes that work from `index.html`; generated native
+  shells load the same app entry as Vite.
+- Use platform-specific files such as `Button.ios.tsx`,
+  `Button.android.tsx`, `Button.mobile.tsx`, or `Button.native.tsx` when a
+  route or component needs native-only behavior.
+- Add `/// <reference types="nativite/globals" />` to `vite-env.d.ts` before
+  using compile-time globals such as `__PLATFORM__` or `__IS_NATIVE__`.
+- Keep framework routing, state, and data loading in the web app. Reach for
+  `nativite/chrome` or native plugins only when the native shell needs to own a
+  native control or capability.
+
+### Troubleshooting the first run
+
+- `No platforms are configured.` Add at least one entry in `platforms`, or rerun
+  init with `--platform ios`, `--platform macos`, or `--platform android`.
+- iOS/macOS launch issues usually mean Xcode command line tools or simulators
+  are missing or unavailable.
+- Android generation requires Android Studio, Android SDK, Java, and a
+  `gradle` command on `PATH`.
+- If init cannot edit your Vite config safely, apply the import and plugin
+  changes it prints.
+
+For a fuller walkthrough, see the [drop-in quickstart](docs/shared/quickstart.md).
+Use the advanced chrome and plugin APIs after the generated native shell is
+running and you need native-owned UI or custom native capabilities.
+
+### Manual Setup
 
 If you prefer to configure the project by hand, create the files below.
 
@@ -104,7 +168,7 @@ export default defineConfig({
 });
 ```
 
-### 2. Prepare production native projects
+### Prepare production native projects
 
 ```bash
 bunx nativite build
@@ -129,35 +193,10 @@ Optional single-platform build:
 bunx nativite build --platform ios
 ```
 
-### 3. Open the generated native project
-
-Use the native IDE or simulator workflow you already use for the target platform:
-
-```bash
-open .nativite/ios/MyApp.xcodeproj
-open .nativite/android
-```
-
-Xcode and Android Studio own native build settings, signing, simulator/device
-selection, and launch. Nativite owns generating the native project code and the
-web bundles those projects embed.
-
 For app-store submission, archive or package the generated project with the
 native toolchain. `nativite build` does not create final signed artifacts such as
 `.ipa`, `.aab`, `.apk`, signed `.app`, or `.dmg`; those are produced by Xcode,
 Android Studio, Gradle, `xcodebuild`, or CI using your signing configuration.
-
-### 4. Optional web dev server
-
-Run your normal Vite dev server when you want the generated debug native project
-to load web code from Vite instead of the embedded production bundle.
-
-```bash
-bunx vite dev
-```
-
-Nativite's Vite plugin writes `.nativite/dev.json` with the resolved dev server
-URL so native debug builds can discover it.
 
 ## Configuration Overview
 
@@ -383,6 +422,7 @@ Deep technical docs are in [docs/README.md](docs/README.md).
 
 Suggested starting points:
 
+- [Drop-in quickstart](docs/shared/quickstart.md)
 - [Chrome API internals](docs/shared/chrome-api.md)
 - [Client bridge internals](docs/shared/client-bridge.md)
 - [Vite plugin internals](docs/shared/vite-plugin.md)
