@@ -1223,7 +1223,14 @@ private class NativiteTabBottomAccessoryController: UIViewController, WKNavigati
       return
     }
 
-    webView.load(URLRequest(url: absoluteURL))
+    webView.load(nativiteRequest(url: absoluteURL))
+  }
+
+  private func nativiteRequest(url: URL) -> URLRequest {
+    let nvPlatform = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "ios"
+    var request = URLRequest(url: url)
+    request.setValue(nvPlatform, forHTTPHeaderField: "x-nativite-platform")
+    return request
   }
 
   func receiveMessage(from sender: String, payload: Any?) {
