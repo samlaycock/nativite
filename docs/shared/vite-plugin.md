@@ -81,7 +81,20 @@ Behavior:
 
 ### Source Extensions
 
-The plugin probes these extensions: `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`.
+The plugin probes these extensions: `.tsx`, `.ts`, `.jsx`, `.js`, `.css`, `.svg`, `.json`.
+
+### Resolution Cache
+
+Platform-extension resolution results are cached per plugin instance by
+platform, importer, and import source. Both successful resolutions and misses
+are cached, so repeated imports in large Vite apps do not repeatedly perform
+synchronous filesystem probing for the same candidate files.
+
+During dev, the cache records every candidate path probed for a resolution and
+invalidates affected entries when Vite's watcher reports `add`, `change`, or
+`unlink` events for those files. This lets newly created platform variants take
+effect without restarting the dev server while preserving the fast path for
+unchanged imports.
 
 ## Dev Server
 
