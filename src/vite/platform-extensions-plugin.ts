@@ -185,7 +185,6 @@ export function platformExtensionsPlugin(platform: string, suffixes?: string[]):
       };
 
       server.watcher.on("add", invalidate);
-      server.watcher.on("change", invalidate);
       server.watcher.on("unlink", invalidate);
     },
 
