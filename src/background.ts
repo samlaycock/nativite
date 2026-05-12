@@ -27,12 +27,12 @@ export type BackgroundTaskDefinition<TPayload = unknown> = {
 export type BackgroundTaskManifestEntry = {
   readonly id: string;
   readonly bundle: string;
-  readonly platforms: Record<string, unknown>;
+  readonly platforms: Readonly<Record<string, unknown>>;
 };
 
 export type BackgroundTaskManifest = {
   readonly version: 1;
-  readonly tasks: BackgroundTaskManifestEntry[];
+  readonly tasks: readonly BackgroundTaskManifestEntry[];
 };
 
 export type BackgroundTaskRegistration = string | { readonly path: string };
