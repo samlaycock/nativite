@@ -70,6 +70,18 @@ The host must first send:
 The runtime does not send chrome documents until `shell.ready` has been received. The `areas` list is used as a capability filter, so unsupported areas are omitted from the compiled snapshot.
 `shell.ready` must include `platform`, `version`, and a string `areas` array; malformed readiness messages are ignored so the runtime does not negotiate against an invalid host capability set.
 
+App code can query the negotiated capability set after `shell.ready`:
+
+```javascript
+import { chrome, menuBar } from "nativite/chrome";
+
+if (chrome.supports("menuBar")) {
+  chrome(menuBar({ menus: [] }));
+}
+```
+
+`chrome.capabilities` returns a read-only `Set` snapshot of supported chrome areas. Named child webviews use plural capability names: `sheets`, `drawers`, `appWindows`, and `popovers`. Before `shell.ready`, `chrome.supports(...)` returns `false` and `chrome.capabilities` is empty. When app code configures an unsupported area after readiness has been negotiated, the runtime emits a one-time development warning and omits that area from the native snapshot.
+
 Chrome updates are sent as full snapshots:
 
 ```json
