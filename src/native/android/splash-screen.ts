@@ -7,7 +7,12 @@ export function splashScreenTemplate(config: NativiteConfig): string {
   return `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.${themeName}.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">${config.splash.backgroundColor}</item>
+        <item name="windowSplashScreenBackground">${config.splash.backgroundColor}</item>${
+          config.splash.image
+            ? `
+        <item name="windowSplashScreenAnimatedIcon">@drawable/nativite_splash</item>`
+            : ""
+        }
         <item name="postSplashScreenTheme">@style/Theme.${themeName}</item>
     </style>
 </resources>

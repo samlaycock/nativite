@@ -34,7 +34,12 @@ export function themesXmlTemplate(config: NativiteConfig): string {
         ? `
 
     <style name="Theme.${themeName}.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">${config.splash!.backgroundColor}</item>
+        <item name="windowSplashScreenBackground">${config.splash!.backgroundColor}</item>${
+          config.splash!.image
+            ? `
+        <item name="windowSplashScreenAnimatedIcon">@drawable/nativite_splash</item>`
+            : ""
+        }
         <item name="postSplashScreenTheme">@style/Theme.${themeName}</item>
     </style>`
         : ""

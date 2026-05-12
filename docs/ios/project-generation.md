@@ -47,7 +47,7 @@ workflows.
 
 ## Dirty-Check Optimization
 
-The generator computes a SHA256 hash of the normalised config, resolved plugin fingerprints, and generated Swift/template inputs. If the hash matches the stored `.hash-ios` or `.hash-macos` file from the previous generation, regeneration is skipped entirely.
+The generator computes a SHA256 hash of the normalised config, resolved plugin fingerprints, generated Swift/template inputs, and configured native asset fingerprints. If the hash matches the stored `.hash-ios` or `.hash-macos` file from the previous generation, regeneration is skipped entirely.
 
 A force regeneration is triggered when:
 
@@ -108,7 +108,11 @@ Uses Xcode 14+ single-image format:
 
 - One 1024x1024 universal entry in `Contents.json`
 - Xcode auto-generates all required sizes at build time
-- User-provided icon file is copied in if configured
+- User-provided PNG icon file is validated and copied as `AppIcon.png` if configured
+
+See [Native Asset Pipeline](../shared/native-assets.md) for shared validation
+rules, deterministic asset names, and opt-out behaviour for manually managed
+native assets.
 
 ## Launch Screen (iOS Only)
 
