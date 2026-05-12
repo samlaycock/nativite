@@ -86,3 +86,8 @@ The splash screen itself is configured in `nativite.config`:
 ```
 
 The `preventAutoHide` / `hide` API works regardless of splash configuration. If no splash is configured, both methods are effectively no-ops.
+
+Configured splash images are validated and copied into deterministic platform
+asset outputs during native project generation. See
+[Native Asset Pipeline](./native-assets.md) for supported formats and generated
+paths.

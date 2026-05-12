@@ -35,6 +35,7 @@ Technical reference for how nativite features are implemented on each native pla
 
 - [Chrome API](./shared/chrome-api.md) — JavaScript runtime for controlling native chrome
 - [Splash Screen Control](./shared/splash-screen.md) — Manual splash screen hide with `chrome.splash`
+- [Native Asset Pipeline](./shared/native-assets.md) — Icon and splash asset validation and platform output mapping
 - [Chrome Types](./shared/chrome-types.md) — Full type definitions for all chrome areas and events
 - [Client Bridge](./shared/client-bridge.md) — Low-level RPC and event subscription API
 - [CSS Variables Module](./shared/css-vars-module.md) — Observable access to `--nv-*` variables

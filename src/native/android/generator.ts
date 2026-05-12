@@ -1,14 +1,6 @@
 import { execSync } from "node:child_process";
-import {
-  copyFileSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { cpSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { NativitePluginMode } from "../../index.ts";
@@ -17,6 +9,13 @@ import type { NativiteConfig } from "../../index.ts";
 import { DEFAULT_ANDROID_MIN_SDK, DEFAULT_ANDROID_TARGET_SDK } from "../../index.ts";
 import { resolveConfigForPlatform } from "../../platforms/registry.ts";
 import { resolveNativitePlugins } from "../../plugins/resolve.ts";
+import {
+  inspectNativeAsset,
+  nativeAssetHashInput,
+  writeAndroidDefaultIcon,
+  writeAndroidIconAssets,
+  writeAndroidSplashAssets,
+} from "../assets.ts";
 import { androidManifestTemplate } from "./android-manifest.ts";
 import { appIconTemplate, appIconXmlTemplate } from "./app-icon.ts";
 import { buildGradleAppTemplate } from "./build-gradle-app.ts";
@@ -107,6 +106,7 @@ function generationHashInputs(
   resolvedPlugins: Awaited<ReturnType<typeof resolveNativitePlugins>>,
   pluginSourceDir: string,
   pluginResourceDir: string,
+  cwd: string,
 ) {
   const androidConfig = resolveConfigForPlatform(config, "android");
   const androidPlatform = (config.platforms ?? []).find((p) => p.platform === "android");
@@ -121,6 +121,8 @@ function generationHashInputs(
   );
 
   return [
+    nativeAssetHashInput(cwd, androidConfig.icon, "icon"),
+    nativeAssetHashInput(cwd, androidConfig.splash?.image, "splash"),
     { name: "settings.gradle.kts", content: settingsGradleTemplate(androidConfig.app.name) },
     { name: "build.gradle.kts", content: buildGradleRootTemplate() },
     { name: "gradle.properties", content: gradlePropertiesTemplate() },
@@ -161,7 +163,7 @@ function generationHashInputs(
       : []),
     { name: "ic_launcher.xml", content: appIconXmlTemplate() },
     { name: "ic_launcher_foreground.png", content: appIconTemplate() },
-  ];
+  ].filter((input) => input !== undefined);
 }
 
 export interface GenerateResult {
@@ -188,7 +190,7 @@ export async function generateProject(
   const hash = hashConfigForGeneration(
     config,
     resolvedPlugins,
-    generationHashInputs(config, resolvedPlugins, pluginSourceDir, pluginResourceDir),
+    generationHashInputs(config, resolvedPlugins, pluginSourceDir, pluginResourceDir, cwd),
   );
 
   // Ensure production/generate mode never packages stale dev server settings.
@@ -217,7 +219,6 @@ export async function generateProject(
   const javaDir = join(srcMainDir, "java", ...packagePath);
   const resDir = join(srcMainDir, "res");
   const valuesDir = join(resDir, "values");
-  const mipmapXxxhdpiDir = join(resDir, "mipmap-xxxhdpi");
   const mipmapAnydpiDir = join(resDir, "mipmap-anydpi-v26");
   const assetsDir = join(srcMainDir, "assets");
   const gradleWrapperDir = join(projectRoot, "gradle", "wrapper");
@@ -230,7 +231,7 @@ export async function generateProject(
     javaDir,
     resDir,
     valuesDir,
-    mipmapXxxhdpiDir,
+    join(resDir, "mipmap-xxxhdpi"),
     mipmapAnydpiDir,
     assetsDir,
     pluginSourceDir,
@@ -314,18 +315,22 @@ export async function generateProject(
   // Splash screen
   if (androidConfig.splash) {
     writeFileSync(join(valuesDir, "splash.xml"), splashScreenTemplate(androidConfig));
+    if (androidConfig.splash.image) {
+      await writeAndroidSplashAssets(
+        inspectNativeAsset(cwd, androidConfig.splash.image, "splash"),
+        resDir,
+      );
+    }
   }
 
   // App icon
   if (androidConfig.icon) {
-    const sourceIconPath = resolve(cwd, androidConfig.icon);
-    const iconFilename = basename(sourceIconPath);
-    copyFileSync(sourceIconPath, join(mipmapXxxhdpiDir, iconFilename));
+    await writeAndroidIconAssets(inspectNativeAsset(cwd, androidConfig.icon, "icon"), resDir);
     writeFileSync(join(mipmapAnydpiDir, "ic_launcher.xml"), appIconXmlTemplate());
   } else {
     writeFileSync(join(mipmapAnydpiDir, "ic_launcher.xml"), appIconXmlTemplate());
+    writeAndroidDefaultIcon(resDir);
   }
-  writeFileSync(join(mipmapXxxhdpiDir, "ic_launcher_foreground.png"), appIconTemplate());
 
   writeFileSync(hashFile, hash);
 

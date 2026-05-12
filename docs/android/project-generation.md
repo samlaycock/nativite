@@ -24,8 +24,10 @@ The generator creates a complete Android Gradle project from the user's configur
 │   │   │   │   ├── colors.xml
 │   │   │   │   ├── themes.xml
 │   │   │   │   └── splash.xml         (if splash configured)
-│   │   │   ├── mipmap-xxxhdpi/
-│   │   │   │   └── ic_launcher.png     (app icon)
+│   │   │   ├── drawable-{density}/      (if splash image configured)
+│   │   │   │   └── nativite_splash.png
+│   │   │   ├── mipmap-{density}/
+│   │   │   │   └── ic_launcher_foreground.png
 │   │   │   └── mipmap-anydpi-v26/
 │   │   │       └── ic_launcher.xml     (adaptive icon)
 │   │   ├── assets/
@@ -55,7 +57,7 @@ The generator creates a complete Android Gradle project from the user's configur
 5. Writes `AndroidManifest.xml`.
 6. Generates Kotlin source files.
 7. Writes resource XML files (strings, colours, themes).
-8. Optional: Writes splash screen XML and copies icon file.
+8. Optional: Validates configured icon/splash assets and writes deterministic Android resource outputs.
 9. In dev mode, copies `.nativite/dev.json` to `app/src/main/assets/dev.json` after normalizing loopback hosts to `10.0.2.2`.
 10. Writes `.hash-android` for dirty-check optimization.
 11. In non-dev generation modes, removes stale `assets/dev.json` so production builds do not carry dev server configuration.
@@ -74,7 +76,7 @@ Gradle wrapper operation.
 
 ## Dirty-Check Optimization
 
-Same as iOS: SHA256 hash of normalised config, resolved plugin fingerprints, and generated Kotlin/XML/Gradle template inputs. Skips regeneration if hash matches the stored `.hash-android` file.
+Same as iOS: SHA256 hash of normalised config, resolved plugin fingerprints, generated Kotlin/XML/Gradle template inputs, and configured native asset fingerprints. Skips regeneration if hash matches the stored `.hash-android` file.
 
 This means package upgrades regenerate Android projects when embedded runtime or template output changes, even when the user's config is unchanged.
 
@@ -190,4 +192,4 @@ android.nonTransitiveRClass=true
 </adaptive-icon>
 ```
 
-The user-provided icon is copied to `mipmap-xxxhdpi/ic_launcher.png` as the foreground layer. The adaptive icon wrapper ensures proper rendering across different device launcher mask shapes (round, squircle, teardrop, etc.).
+Configured PNG or SVG icons are validated before generation. Nativite rasterizes deterministic foreground files named `ic_launcher_foreground.png` into each `mipmap-{density}` bucket and writes the adaptive icon wrapper in `mipmap-anydpi-v26/ic_launcher.xml`. See [Native Asset Pipeline](../shared/native-assets.md) for validation rules and opt-out behaviour.

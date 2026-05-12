@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { NativiteConfig } from "../../index.ts";
@@ -7,6 +7,12 @@ import type { NativitePluginMode } from "../../index.ts";
 
 import { resolveConfigForPlatform } from "../../platforms/registry.ts";
 import { resolveNativitePlugins } from "../../plugins/resolve.ts";
+import {
+  inspectNativeAsset,
+  nativeAssetHashInput,
+  writeAppleIconAsset,
+  writeAppleSplashAsset,
+} from "../assets.ts";
 import { appDelegateTemplate } from "./app-delegate.ts";
 import { appIconContentsTemplate } from "./app-icon-contents.ts";
 import { hashConfigForGeneration } from "./hash.ts";
@@ -28,14 +34,19 @@ function generationHashInputs(
   resolvedPlugins: Awaited<ReturnType<typeof resolveNativitePlugins>>,
   targetPlatform: AppleTargetPlatform,
   projectRoot: string,
+  cwd: string,
 ) {
   const platformConfig = resolveConfigForPlatform(config, targetPlatform);
-  const appIconFilename = config.icon ? basename(resolve("", config.icon)) : undefined;
-  const splashImageFilename = config.splash?.image
-    ? basename(resolve("", config.splash.image))
+  const platformIcon = platformConfig.icon;
+  const platformSplashImage = platformConfig.splash?.image;
+  const appIconFilename = platformIcon ? "AppIcon.png" : undefined;
+  const splashImageFilename = platformSplashImage
+    ? `Splash.${inspectNativeAsset(cwd, platformSplashImage, "splash").format}`
     : undefined;
 
   return [
+    nativeAssetHashInput(cwd, platformIcon, "icon"),
+    nativeAssetHashInput(cwd, platformSplashImage, "splash"),
     {
       name: "NativiteApp.swift",
       content: mainEntryTemplate({ toolbarStyle: config.defaultChrome?.toolbar?.toolbarStyle }),
@@ -78,7 +89,7 @@ function generationHashInputs(
       name: "project.pbxproj",
       content: pbxprojTemplate(config, resolvedPlugins, projectRoot, targetPlatform),
     },
-  ];
+  ].filter((input) => input !== undefined);
 }
 
 function nativiteConfigTemplate(config: NativiteConfig): string {
@@ -159,7 +170,7 @@ export async function generateProject(
   const hash = hashConfigForGeneration(
     config,
     resolvedPlugins,
-    generationHashInputs(config, resolvedPlugins, targetPlatform, projectRoot),
+    generationHashInputs(config, resolvedPlugins, targetPlatform, projectRoot, cwd),
   );
 
   // Dirty check — skip if nothing has changed
@@ -212,13 +223,13 @@ export async function generateProject(
   if (targetPlatform === "ios" && config.splash) {
     writeFileSync(join(appDir, "LaunchScreen.storyboard"), launchScreenTemplate(config));
 
-    if (config.splash.image) {
+    if (platformConfig.splash?.image) {
       const splashImagesetDir = join(assetsDir, "Splash.imageset");
       mkdirSync(splashImagesetDir, { recursive: true });
-
-      const sourceImagePath = resolve(cwd, config.splash.image);
-      const imageFilename = basename(sourceImagePath);
-      copyFileSync(sourceImagePath, join(splashImagesetDir, imageFilename));
+      const imageFilename = await writeAppleSplashAsset(
+        inspectNativeAsset(cwd, platformConfig.splash.image, "splash"),
+        splashImagesetDir,
+      );
       writeFileSync(
         join(splashImagesetDir, "Contents.json"),
         splashImageContentsTemplate(imageFilename),
@@ -233,11 +244,12 @@ export async function generateProject(
     writeFileSync(join(appDir, "Info.plist"), infoPlistMacOSTemplate(platformConfig));
   }
 
-  // App icon — copy the user's 1024×1024 image into AppIcon.appiconset when configured.
-  if (config.icon) {
-    const sourceIconPath = resolve(cwd, config.icon);
-    const iconFilename = basename(sourceIconPath);
-    copyFileSync(sourceIconPath, join(appIconDir, iconFilename));
+  // App icon — normalize the configured source into AppIcon.appiconset when configured.
+  if (platformConfig.icon) {
+    const iconFilename = await writeAppleIconAsset(
+      inspectNativeAsset(cwd, platformConfig.icon, "icon"),
+      appIconDir,
+    );
     writeFileSync(join(appIconDir, "Contents.json"), appIconContentsTemplate(iconFilename));
   } else {
     writeFileSync(join(appIconDir, "Contents.json"), appIconContentsTemplate());
