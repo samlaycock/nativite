@@ -8,6 +8,7 @@ import type {
   AppWindowConfig,
   BarItem,
   ButtonItem,
+  ChromeCapabilityArea,
   ChromeElement,
   ChromeEvent,
   ChromeEventType,
@@ -93,7 +94,9 @@ function getIOSHandler(): WebKitHandler | undefined {
 let _androidPort: MessagePort | null = null;
 let _pendingNativeMessage: object | null = null;
 let _supportedAreas: ReadonlySet<string> | null = null;
+let _shellPlatform: string | null = null;
 let _revision = 0;
+const warnedUnsupportedAreas = new Set<string>();
 
 function setupChromeAndroidPortListener(): void {
   if (typeof window === "undefined") return;
@@ -154,6 +157,46 @@ const NAMED_AREAS: Readonly<Record<string, string>> = {
   appWindow: "appWindows",
   popover: "popovers",
 };
+
+const CHROME_CAPABILITY_AREAS = [
+  "titleBar",
+  "navigation",
+  "toolbar",
+  "sidebarPanel",
+  "statusBar",
+  "homeIndicator",
+  "keyboard",
+  "menuBar",
+  "tabBottomAccessory",
+  "sheets",
+  "drawers",
+  "appWindows",
+  "popovers",
+] as const satisfies readonly ChromeCapabilityArea[];
+
+function capabilityAreaForElement(el: ChromeElement): ChromeCapabilityArea {
+  return (NAMED_AREAS[el._area] ?? el._area) as ChromeCapabilityArea;
+}
+
+function supportsChromeArea(area: ChromeCapabilityArea): boolean {
+  return _supportedAreas?.has(area) ?? false;
+}
+
+function warnUnsupportedAreas(elements: readonly ChromeElement[]): void {
+  if (!_supportedAreas || typeof console === "undefined") return;
+  const warn = console.warn;
+  if (typeof warn !== "function") return;
+
+  for (const el of elements) {
+    const area = capabilityAreaForElement(el);
+    if (supportsChromeArea(area) || warnedUnsupportedAreas.has(area)) continue;
+    warnedUnsupportedAreas.add(area);
+    const platform = _shellPlatform ?? "current platform";
+    warn(
+      `[nativite] chrome.${area} is not supported by ${platform}; this configuration will be ignored.`,
+    );
+  }
+}
 
 function elementKey(el: ChromeElement): string {
   if ("_name" in el) return `${el._area}:${el._name}`;
@@ -703,6 +746,7 @@ function receiveNativeMessage(detail: unknown): void {
   const message = detail as { readonly type?: unknown; readonly nativite?: unknown };
   if (isShellReadyMessage(message)) {
     _supportedAreas = new Set(message.areas);
+    _shellPlatform = message.platform;
     if (layerStack.length > 0) scheduleFlush();
     return;
   }
@@ -824,10 +868,13 @@ interface ChromeFunction {
   readonly on: ChromeOnOverloads;
   readonly messaging: ChromeMessaging;
   readonly splash: ChromeSplash;
+  readonly capabilities: ReadonlySet<ChromeCapabilityArea>;
+  supports(area: ChromeCapabilityArea): boolean;
 }
 
 function chromeImpl(...elements: ChromeElement[]): Unsubscribe {
   ensureEventListener();
+  warnUnsupportedAreas(elements);
   const layer: Layer = new Map();
   for (const el of elements) {
     layer.set(elementKey(el), el);
@@ -911,10 +958,16 @@ const splash: ChromeSplash = {
   },
 };
 
-export const chrome = Object.assign(chromeImpl, {
-  on: chromeOn,
-  messaging,
-  splash,
+export const chrome = Object.defineProperties(chromeImpl, {
+  on: { value: chromeOn },
+  messaging: { value: messaging },
+  splash: { value: splash },
+  capabilities: {
+    get(): ReadonlySet<ChromeCapabilityArea> {
+      return new Set(CHROME_CAPABILITY_AREAS.filter((area) => supportsChromeArea(area)));
+    },
+  },
+  supports: { value: supportsChromeArea },
 }) as ChromeFunction;
 
 // ─── Chrome Area Factory Functions ───────────────────────────────────────────
@@ -1003,6 +1056,8 @@ export function _resetChromeState(): void {
   _flushGeneration++;
   _pendingNativeMessage = null;
   _supportedAreas = null;
+  _shellPlatform = null;
+  warnedUnsupportedAreas.clear();
   _revision = 0;
   _splashAutoHidePrevented = false;
   if (typeof window !== "undefined") {

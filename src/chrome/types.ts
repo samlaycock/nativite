@@ -106,6 +106,21 @@ export interface SidebarItem {
 
 // ─── Chrome Area Config Interfaces ────────────────────────────────────────────
 
+export type ChromeCapabilityArea =
+  | "titleBar"
+  | "navigation"
+  | "toolbar"
+  | "sidebarPanel"
+  | "statusBar"
+  | "homeIndicator"
+  | "keyboard"
+  | "menuBar"
+  | "tabBottomAccessory"
+  | "sheets"
+  | "drawers"
+  | "appWindows"
+  | "popovers";
+
 export interface SearchBarConfig {
   readonly placeholder?: string;
   readonly value?: string;

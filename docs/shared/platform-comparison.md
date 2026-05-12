@@ -32,6 +32,8 @@ A side-by-side comparison of how nativite features are implemented across iOS, A
 
 Android `shell.ready.areas` advertises only areas with active Compose renderers: `titleBar`, `navigation`, `toolbar`, `statusBar`, `homeIndicator`, `keyboard`, `tabBottomAccessory`, `sheets`, `drawers`, and `popovers`. Android does not advertise `sidebarPanel`, `menuBar`, or `appWindows`.
 
+App code can use `chrome.supports(area)` or `chrome.capabilities` to branch on this runtime capability matrix. Configuring an unsupported area after `shell.ready` produces a one-time development warning and the JavaScript runtime omits that area from `chrome.snapshot`.
+
 ## Bridge Transport
 
 | Aspect          | iOS                                                 | Android                                               |

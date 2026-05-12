@@ -539,6 +539,8 @@ describe("chrome()", () => {
     _resetChromeState();
     postMessage.mockClear();
     nativeMessages = [];
+    const originalWarn = console.warn;
+    console.warn = mock(() => {});
     _receiveNativeMessage({
       nativite: 2,
       type: "shell.ready",
@@ -547,12 +549,67 @@ describe("chrome()", () => {
       areas: ["titleBar"],
     });
 
-    chrome(titleBar({ title: "Inbox" }), statusBar({ style: "auto" }));
-    _drainFlush();
-    const snapshot = lastSnapshot();
-    const nodes = snapshot["nodes"] as Record<string, unknown>;
-    expect(nodes["titleBar"]).toBeDefined();
-    expect(nodes["statusBar"]).toBeUndefined();
+    try {
+      chrome(titleBar({ title: "Inbox" }), statusBar({ style: "auto" }));
+      _drainFlush();
+      const snapshot = lastSnapshot();
+      const nodes = snapshot["nodes"] as Record<string, unknown>;
+      expect(nodes["titleBar"]).toBeDefined();
+      expect(nodes["statusBar"]).toBeUndefined();
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("exposes the negotiated shell.ready capabilities", () => {
+    _resetChromeState();
+    _receiveNativeMessage({
+      nativite: 2,
+      type: "shell.ready",
+      platform: "android",
+      version: "test",
+      areas: ["titleBar", "drawers"],
+    });
+
+    expect(chrome.supports("titleBar")).toBe(true);
+    expect(chrome.supports("drawers")).toBe(true);
+    expect(chrome.supports("menuBar")).toBe(false);
+    expect([...chrome.capabilities]).toEqual(["titleBar", "drawers"]);
+  });
+
+  it("warns once for unsupported configured areas after shell.ready", () => {
+    _resetChromeState();
+    postMessage.mockClear();
+    nativeMessages = [];
+    const originalWarn = console.warn;
+    const warn = mock(() => {});
+    console.warn = warn;
+    try {
+      _receiveNativeMessage({
+        nativite: 2,
+        type: "shell.ready",
+        platform: "android",
+        version: "test",
+        areas: ["titleBar"],
+      });
+
+      chrome(menuBar({ menus: [] }), drawer("settings", { url: "/settings" }));
+      _drainFlush();
+      chrome(menuBar({ menus: [] }));
+      _drainFlush();
+
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenNthCalledWith(
+        1,
+        "[nativite] chrome.menuBar is not supported by android; this configuration will be ignored.",
+      );
+      expect(warn).toHaveBeenNthCalledWith(
+        2,
+        "[nativite] chrome.drawers is not supported by android; this configuration will be ignored.",
+      );
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   it("sends the declared chrome areas to native", () => {

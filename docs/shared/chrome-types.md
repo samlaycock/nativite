@@ -82,6 +82,27 @@ interface MenuItem {
 
 ## Chrome Area Configs
 
+### ChromeCapabilityArea
+
+```typescript
+type ChromeCapabilityArea =
+  | "titleBar"
+  | "navigation"
+  | "toolbar"
+  | "sidebarPanel"
+  | "statusBar"
+  | "homeIndicator"
+  | "keyboard"
+  | "menuBar"
+  | "tabBottomAccessory"
+  | "sheets"
+  | "drawers"
+  | "appWindows"
+  | "popovers";
+```
+
+This is the public area name accepted by `chrome.supports(area)` and returned by `chrome.capabilities`. Singular factory functions for named child webviews map to plural capability areas: `sheet()` → `sheets`, `drawer()` → `drawers`, `appWindow()` → `appWindows`, and `popover()` → `popovers`.
+
 ### TitleBarConfig
 
 ```typescript
