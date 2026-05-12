@@ -152,4 +152,6 @@ Reference docs:
 - [CLI Build Command](./cli-build.md)
 - [Vite Plugin](./vite-plugin.md)
 - [Chrome API](./chrome-api.md)
+- [Client Bridge](./client-bridge.md)
+- [CSS Variables](./css-vars-module.md)
 - [Plugin System](./plugin-system.md)
