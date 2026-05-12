@@ -57,6 +57,10 @@
       "types": "./dist/css-vars/index.d.ts",
       "import": "./dist/css-vars/index.mjs"
     },
+    "./background": {
+      "types": "./dist/background.d.ts",
+      "import": "./dist/background.mjs"
+    },
     "./globals": {
       "types": "./dist/globals.d.ts"
     }

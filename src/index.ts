@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { BackgroundTaskRegistration } from "./background.ts";
 import type { ChromeState } from "./chrome/types.ts";
 
 // ─── Plugin Types ────────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ export type NativiteRootConfigOverrides = {
     allowInsecureHTTP?: boolean;
   };
   plugins?: NativitePlugin[];
+  backgroundTasks?: BackgroundTaskRegistration[];
   defaultChrome?: ChromeState;
   icon?: string;
   splash?: {
@@ -433,6 +435,7 @@ type NormalizedNativiteConfig = {
     allowInsecureHTTP?: boolean;
   };
   plugins?: NativitePlugin[];
+  backgroundTasks?: BackgroundTaskRegistration[];
   defaultChrome?: ChromeState;
   icon?: string;
   splash?: {
@@ -497,6 +500,9 @@ const RootConfigOverridesSchema = z
           message: "Each plugin must be an object with a non-empty string `name`.",
         }),
       )
+      .optional(),
+    backgroundTasks: z
+      .array(z.union([z.string().min(1), z.object({ path: z.string().min(1) }).strict()]))
       .optional(),
     defaultChrome: z.custom<ChromeState>().optional(),
     icon: z.string().optional(),
@@ -598,6 +604,16 @@ export const NativiteConfigSchema = z
       .refine((arr) => new Set(arr.map((p) => p.name)).size === arr.length, {
         message: "Plugin names must be unique.",
       })
+      .optional(),
+    backgroundTasks: z
+      .array(z.union([z.string().min(1), z.object({ path: z.string().min(1) }).strict()]))
+      .refine(
+        (entries) => {
+          const paths = entries.map((entry) => (typeof entry === "string" ? entry : entry.path));
+          return new Set(paths).size === paths.length;
+        },
+        { message: "Background task paths must be unique." },
+      )
       .optional(),
     // z.custom is used here because ChromeState is a complex discriminated union
     // that would be expensive to duplicate in Zod. The TypeScript type annotation
@@ -752,6 +768,7 @@ export const NativiteConfigSchema = z
     if (config.signing) normalized.signing = config.signing;
     if (config.updates) normalized.updates = config.updates;
     if (config.plugins) normalized.plugins = config.plugins;
+    if (config.backgroundTasks) normalized.backgroundTasks = config.backgroundTasks;
     if (config.defaultChrome !== undefined) normalized.defaultChrome = config.defaultChrome;
     if (config.icon !== undefined) normalized.icon = config.icon;
     if (config.splash) normalized.splash = config.splash;

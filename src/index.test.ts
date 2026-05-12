@@ -252,6 +252,33 @@ describe("NativiteConfigSchema", () => {
     ).not.toThrow();
   });
 
+  it("accepts registered background task entrypoints", () => {
+    const result = NativiteConfigSchema.parse({
+      ...baseUserConfig,
+      backgroundTasks: [
+        "./src/background/sync-inbox.task.ts",
+        { path: "./src/background/refresh-session.task.ts" },
+      ],
+    });
+
+    expect(result.backgroundTasks).toEqual([
+      "./src/background/sync-inbox.task.ts",
+      { path: "./src/background/refresh-session.task.ts" },
+    ]);
+  });
+
+  it("rejects duplicate background task entrypoint paths", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        backgroundTasks: [
+          "./src/background/sync-inbox.task.ts",
+          { path: "./src/background/sync-inbox.task.ts" },
+        ],
+      }),
+    ).toThrow();
+  });
+
   it("rejects plugin entries with a non-function resolve field", () => {
     expect(() =>
       NativiteConfigSchema.parse({
