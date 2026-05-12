@@ -1,6 +1,6 @@
 {
   "name": "nativite",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Build native iOS, macOS, and Android shells around Vite apps.",
   "keywords": [
     "android",
