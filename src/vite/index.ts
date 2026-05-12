@@ -13,6 +13,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   statSync,
   watchFile,
   writeFileSync,
@@ -127,6 +128,19 @@ function toBundlePlatform(
 function platformOutDir(baseOutDir: string, platform: BundlePlatform): string {
   const normalizedBase = baseOutDir.replace(/[\\/]+$/, "");
   return `${normalizedBase}-${platform}`;
+}
+
+function normalizeNativeBuildHtmlOutput(distDir: string, targetPlatform: string): void {
+  const indexHtmlPath = join(distDir, "index.html");
+  if (existsSync(indexHtmlPath)) return;
+
+  for (const suffix of [targetPlatform, "mobile", "desktop", "native"]) {
+    const platformHtmlPath = join(distDir, `index.${suffix}.html`);
+    if (existsSync(platformHtmlPath)) {
+      renameSync(platformHtmlPath, indexHtmlPath);
+      return;
+    }
+  }
 }
 
 function environmentPlatformMap(
@@ -524,6 +538,10 @@ function nativiteCorePlugin(): Plugin {
           ? "./"
           : undefined;
       const nativeErrorOverlay = await resolveNativeErrorOverlay(userConfig, command);
+      const buildPlatformMetadata =
+        command === "build" && envPlatform && envPlatform !== "web"
+          ? platformMetadata[envPlatform]
+          : undefined;
       const hmrConfig = userConfig.server?.hmr;
       const serverConfig =
         command === "serve"
@@ -575,13 +593,14 @@ function nativiteCorePlugin(): Plugin {
       return {
         // Global defines default to web — nativeEnvironmentOptions overrides
         // __PLATFORM__, __IS_NATIVE__, __IS_MOBILE__, and __IS_DESKTOP__ for
-        // each native platform
-        // environment.
+        // each native platform environment. Production native builds run
+        // through Vite's client environment, so apply the selected platform's
+        // traits globally in that case.
         define: {
-          __PLATFORM__: JSON.stringify("web"),
-          __IS_NATIVE__: "false",
-          __IS_MOBILE__: "false",
-          __IS_DESKTOP__: "false",
+          __PLATFORM__: JSON.stringify(buildPlatformMetadata ? envPlatform : "web"),
+          __IS_NATIVE__: buildPlatformMetadata?.native ? "true" : "false",
+          __IS_MOBILE__: buildPlatformMetadata?.mobile ? "true" : "false",
+          __IS_DESKTOP__: buildPlatformMetadata?.desktop ? "true" : "false",
           __DEV__: devDefineValue(mode),
         },
         ...(serverConfig ? { server: serverConfig } : {}),
@@ -800,6 +819,7 @@ function nativiteCorePlugin(): Plugin {
 
     // ── Scope side-effects to native platform environments only ───────────
     applyToEnvironment(environment) {
+      if (buildPlatform && environment.name === "client") return true;
       return configuredNativeEnvironmentNames.has(environment.name);
     },
 
@@ -808,13 +828,16 @@ function nativiteCorePlugin(): Plugin {
 
       const distDir = viteConfig.build.outDir;
       if (!existsSync(distDir)) return;
+      const targetPlatform = process.env["NATIVITE_PLATFORM"];
+      if (targetPlatform) {
+        normalizeNativeBuildHtmlOutput(distDir, targetPlatform);
+      }
 
       const assets = createBuildManifestAssets(distDir);
       const hash = hashBuildManifestAssets(assets);
       const manifestPlatform =
         buildPlatform ?? toBundlePlatform(this.environment?.name, platformMetadata);
       if (!manifestPlatform) return;
-      const targetPlatform = process.env["NATIVITE_PLATFORM"];
       const targetConfig = targetPlatform
         ? resolveConfigForPlatform(config, targetPlatform)
         : config;

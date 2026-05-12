@@ -216,6 +216,20 @@ NATIVITE_DEV_ERROR_OVERLAY=false vite dev
 
 ## Build Output
 
+### Fixture Build Coverage
+
+`test/fixture-builds.test.ts` creates temporary Vite projects that import the
+local nativite source, configure real `nativite()` Vite plugins, and run the
+CLI build command against platform targets. The fixture apps include
+platform-specific HTML entries and source variants so the tests verify the full
+handoff from CLI environment variables through Vite's build pipeline, manifest
+generation, and generated native project output.
+
+The fixture build coverage currently targets iOS and macOS because those
+generators can produce project files without invoking external native build
+tooling. Android project generation remains covered by unit tests and the
+`bun run test:native:android` runtime compile harness, which requires Gradle.
+
 ### Manifest Generation
 
 After the build completes, the plugin generates `manifest.json` inside the
