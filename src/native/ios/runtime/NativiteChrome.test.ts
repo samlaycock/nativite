@@ -109,6 +109,17 @@ describe("NativiteChrome.swift", () => {
     it("dispatches navigation.itemPressed when the user selects a tab", () => {
       expect(swift).toContain('"navigation.itemPressed"');
     });
+
+    it("sends an explicit native platform header for tab accessory URL loads", () => {
+      const start = swift.indexOf("func loadURL(_ rawURL: String, relativeTo baseURL: URL?)");
+      expect(start).toBeGreaterThan(-1);
+      const end = swift.indexOf("\n  func receiveMessage", start);
+      const body = swift.slice(start, end);
+      expect(body).toContain("webView.load(nativiteRequest(url: absoluteURL))");
+      expect(body).toContain(
+        'request.setValue(nvPlatform, forHTTPHeaderField: "x-nativite-platform")',
+      );
+    });
   });
 
   describe("applyInitialState", () => {
