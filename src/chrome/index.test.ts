@@ -612,6 +612,65 @@ describe("chrome()", () => {
     }
   });
 
+  it("resets unsupported-area warning de-duplication on shell.ready renegotiation", () => {
+    _resetChromeState();
+    postMessage.mockClear();
+    nativeMessages = [];
+    const originalWarn = console.warn;
+    const warn = mock(() => {});
+    console.warn = warn;
+    try {
+      _receiveNativeMessage({
+        nativite: 2,
+        type: "shell.ready",
+        platform: "android",
+        version: "test",
+        areas: ["titleBar"],
+      });
+      chrome(menuBar({ menus: [] }));
+      _drainFlush();
+
+      _receiveNativeMessage({
+        nativite: 2,
+        type: "shell.ready",
+        platform: "android",
+        version: "test",
+        areas: ["navigation"],
+      });
+      chrome(menuBar({ menus: [] }));
+      _drainFlush();
+
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn).toHaveBeenLastCalledWith(
+        "[nativite] chrome.menuBar is not supported by android; this configuration will be ignored.",
+      );
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("keeps existing chrome API property descriptors writable and enumerable", () => {
+    const onDescriptor = Object.getOwnPropertyDescriptor(chrome, "on");
+    const messagingDescriptor = Object.getOwnPropertyDescriptor(chrome, "messaging");
+    const splashDescriptor = Object.getOwnPropertyDescriptor(chrome, "splash");
+
+    expect(onDescriptor).toMatchObject({
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+    expect(messagingDescriptor).toMatchObject({
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+    expect(splashDescriptor).toMatchObject({
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+  });
+
   it("sends the declared chrome areas to native", () => {
     chrome(titleBar({ title: "Inbox" }), statusBar({ style: "auto" }));
     _drainFlush();

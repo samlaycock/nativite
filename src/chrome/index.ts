@@ -747,6 +747,7 @@ function receiveNativeMessage(detail: unknown): void {
   if (isShellReadyMessage(message)) {
     _supportedAreas = new Set(message.areas);
     _shellPlatform = message.platform;
+    warnedUnsupportedAreas.clear();
     if (layerStack.length > 0) scheduleFlush();
     return;
   }
@@ -959,15 +960,17 @@ const splash: ChromeSplash = {
 };
 
 export const chrome = Object.defineProperties(chromeImpl, {
-  on: { value: chromeOn },
-  messaging: { value: messaging },
-  splash: { value: splash },
+  on: { value: chromeOn, configurable: true, enumerable: true, writable: true },
+  messaging: { value: messaging, configurable: true, enumerable: true, writable: true },
+  splash: { value: splash, configurable: true, enumerable: true, writable: true },
   capabilities: {
+    configurable: true,
+    enumerable: true,
     get(): ReadonlySet<ChromeCapabilityArea> {
       return new Set(CHROME_CAPABILITY_AREAS.filter((area) => supportsChromeArea(area)));
     },
   },
-  supports: { value: supportsChromeArea },
+  supports: { value: supportsChromeArea, configurable: true, enumerable: true, writable: true },
 }) as ChromeFunction;
 
 // ─── Chrome Area Factory Functions ───────────────────────────────────────────
