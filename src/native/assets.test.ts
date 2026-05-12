@@ -8,6 +8,7 @@ import {
   nativeAssetHashInput,
   writeAndroidIconAssets,
   writeAndroidSplashAssets,
+  writeAndroidDefaultIcon,
   writeAppleIconAsset,
   writeAppleSplashAsset,
 } from "./assets.ts";
@@ -127,6 +128,20 @@ describe("native asset pipeline", () => {
     ]);
     expect(existsSync(join(resDir, "mipmap-mdpi", "ic_launcher_foreground.png"))).toBe(true);
     expect(existsSync(join(resDir, "drawable-xxxhdpi", "nativite_splash.png"))).toBe(true);
+  });
+
+  it("writes a valid default Android foreground icon when no icon is configured", () => {
+    const cwd = makeTempDir();
+    const resDir = join(cwd, "res");
+    mkdirSync(join(resDir, "mipmap-xxxhdpi"), { recursive: true });
+
+    writeAndroidDefaultIcon(resDir);
+
+    const icon = readFileSync(join(resDir, "mipmap-xxxhdpi", "ic_launcher_foreground.png"));
+    expect(icon.length).toBeGreaterThan(24);
+    expect(icon.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
   });
 });
 
