@@ -1,5 +1,5 @@
 ---
-"nativite": major
+"nativite": minor
 ---
 
 Refactor `chrome` API to singleton instance API with named setters and explicit `on*` subscriptions.

@@ -1,5 +1,5 @@
 ---
-"nativite": major
+"nativite": minor
 ---
 
 Simplify the public API surface by removing redundant and internal exports.
