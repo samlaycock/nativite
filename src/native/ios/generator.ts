@@ -40,9 +40,7 @@ function generationHashInputs(
   const platformIcon = platformConfig.icon;
   const platformSplashImage = platformConfig.splash?.image;
   const appIconFilename = platformIcon ? "AppIcon.png" : undefined;
-  const splashImageFilename = platformSplashImage
-    ? `Splash.${inspectNativeAsset(cwd, platformSplashImage, "splash").format}`
-    : undefined;
+  const splashImageFilename = platformSplashImage ? "Splash.png" : undefined;
 
   return [
     nativeAssetHashInput(cwd, platformIcon, "icon"),
