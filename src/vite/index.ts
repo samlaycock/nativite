@@ -817,7 +817,10 @@ function nativiteCorePlugin(): Plugin {
       return [];
     },
 
-    // ── Scope side-effects to native platform environments only ───────────
+    // ── Scope side-effects to native build outputs ────────────────────────
+    // Dev/native environments run their own hooks, but production native
+    // builds use Vite's client environment. Include that client pass only
+    // when NATIVITE_PLATFORM selected a native build target.
     applyToEnvironment(environment) {
       if (buildPlatform && environment.name === "client") return true;
       return configuredNativeEnvironmentNames.has(environment.name);

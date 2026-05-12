@@ -159,7 +159,7 @@ describe("fixture app native builds", () => {
       expect(iosManifest.assets.map((asset) => asset.path)).toContain("index.html");
       expect(html).toContain("ios-entry");
       expect(js).toContain("ios");
-      expect(js).toContain("String(!0)");
+      expect(js).toMatch(/String\(!0\)|String\(true\)/);
       expect(existsSync(join(projectRoot, ".nativite", "ios", "FixtureApp.xcodeproj"))).toBe(true);
       expect(
         existsSync(join(projectRoot, ".nativite", "ios", "FixtureApp", "NativiteConfig.swift")),
