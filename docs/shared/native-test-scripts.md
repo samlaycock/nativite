@@ -13,6 +13,17 @@ bun run test:native:android
 bun run test:native
 ```
 
+## Continuous Integration
+
+The native runtime suites run in `.github/workflows/native-tests.yml`.
+
+The workflow keeps the iOS and Android suites in separate jobs because they
+require different host environments:
+
+- iOS runtime tests run on `macos-latest` with the active Xcode Swift toolchain.
+- Android runtime tests run on `ubuntu-latest` with Temurin Java 17 and Gradle
+  configured through `gradle/actions/setup-gradle`.
+
 ## iOS Runtime Tests
 
 `bun run test:native:ios` creates a temporary Swift package, copies
