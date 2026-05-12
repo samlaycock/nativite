@@ -127,4 +127,23 @@ describe("platformExtensionsPlugin", () => {
 
     expect(await resolveId(plugin, "./Button", importer)).toBeNull();
   });
+
+  it("keeps cached hits when a resolved platform file changes content", async () => {
+    const root = createTempRoot("nativite-platform-cache-change-");
+    mkdirSync(join(root, "src"));
+    const importer = join(root, "src", "App.tsx");
+    const platformFile = join(root, "src", "Button.ios.tsx");
+    writeFileSync(platformFile, "export function Button() { return 'before'; }");
+
+    const plugin = platformExtensionsPlugin("ios");
+    const watcher = configureWatcher(plugin);
+
+    expect(await resolveId(plugin, "./Button", importer)).toBe(platformFile);
+
+    writeFileSync(platformFile, "export function Button() { return 'after'; }");
+    watcher.emit("change", platformFile);
+    rmSync(platformFile);
+
+    expect(await resolveId(plugin, "./Button", importer)).toBe(platformFile);
+  });
 });
