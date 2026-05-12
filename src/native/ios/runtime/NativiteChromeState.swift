@@ -995,7 +995,7 @@ struct NativiteSheetModifier: ViewModifier {
   private func sheetContent(for sheet: NativiteChromeState.SheetState) -> some View {
     let resolvedURL = resolveSheetURL(sheet.url)
     NavigationStack {
-      NativiteChildWebView(
+      let webView = NativiteChildWebView(
         instanceName: sheet.id,
         url: resolvedURL,
         baseURL: chromeState.primaryWebView?.url,
@@ -1003,31 +1003,38 @@ struct NativiteSheetModifier: ViewModifier {
         chromeState: chromeState,
         backgroundColor: sheet.backgroundColor
       )
-      .navigationTitle(sheet.title ?? "")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar(sheetShowsHeader(sheet) ? .visible : .hidden, for: .navigationBar)
-      .toolbar {
-        ToolbarItemGroup(placement: .topBarLeading) {
-          ForEach(sheet.leadingItems) { item in
-            NativiteBarButton(
-              item: item,
-              eventName: "sheet.leadingItemPressed",
-              menuEventName: "sheet.leadingItemPressed",
-              onEvent: chromeState.onChromeEvent
-            )
+
+      #if os(iOS)
+      webView
+        .navigationTitle(sheet.title ?? "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(sheetShowsHeader(sheet) ? .visible : .hidden, for: .navigationBar)
+        .toolbar {
+          ToolbarItemGroup(placement: .topBarLeading) {
+            ForEach(sheet.leadingItems) { item in
+              NativiteBarButton(
+                item: item,
+                eventName: "sheet.leadingItemPressed",
+                menuEventName: "sheet.leadingItemPressed",
+                onEvent: chromeState.onChromeEvent
+              )
+            }
+          }
+          ToolbarItemGroup(placement: .topBarTrailing) {
+            ForEach(sheet.trailingItems) { item in
+              NativiteBarButton(
+                item: item,
+                eventName: "sheet.trailingItemPressed",
+                menuEventName: "sheet.trailingItemPressed",
+                onEvent: chromeState.onChromeEvent
+              )
+            }
           }
         }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-          ForEach(sheet.trailingItems) { item in
-            NativiteBarButton(
-              item: item,
-              eventName: "sheet.trailingItemPressed",
-              menuEventName: "sheet.trailingItemPressed",
-              onEvent: chromeState.onChromeEvent
-            )
-          }
-        }
-      }
+      #else
+      webView
+        .navigationTitle(sheet.title ?? "")
+      #endif
     }
     .presentationDetents(swiftUIDetents(from: sheet.detents))
     .presentationDragIndicator(sheet.grabberVisible ? .visible : .hidden)
@@ -1094,18 +1101,6 @@ extension View {
 // These modifiers render the navigation bar and bottom toolbar entirely in
 // SwiftUI, replacing the UIKit UINavigationItem / UIToolbar code path.
 // Applied inside a NavigationStack in NativiteRootView.
-
-#if os(iOS)
-
-extension NativiteChromeState.LargeTitleMode {
-  var displayMode: NavigationBarItem.TitleDisplayMode {
-    switch self {
-    case .large: return .large
-    case .inline: return .inline
-    case .automatic: return .automatic
-    }
-  }
-}
 
 // ── NativiteBarButton ──────────────────────────────────────────────────────
 // Reusable SwiftUI view that renders a single bar item — handles plain
@@ -1183,6 +1178,18 @@ struct NativiteBarButton: View {
       }
     }
     .disabled(menuItem.disabled)
+  }
+}
+
+#if os(iOS)
+
+extension NativiteChromeState.LargeTitleMode {
+  var displayMode: NavigationBarItem.TitleDisplayMode {
+    switch self {
+    case .large: return .large
+    case .inline: return .inline
+    case .automatic: return .automatic
+    }
   }
 }
 
