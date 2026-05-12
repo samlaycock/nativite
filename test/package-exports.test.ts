@@ -13,6 +13,7 @@ describe("package exports", () => {
       "./utils",
       "./chrome",
       "./css",
+      "./background",
       "./globals",
     ]);
   });
