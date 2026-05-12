@@ -452,4 +452,4 @@ MIT
 
 ---
 
-![Nativite](branding/poster.png)
+<img src="branding/poster.webp" alt="Nativite" style="width:400px; height:auto;">
