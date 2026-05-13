@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, extname, isAbsolute, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "vite";
 
 import type {
@@ -20,11 +20,24 @@ export const BACKGROUND_MANIFEST_RELATIVE_PATH = "nativite-background/manifest.j
 export const BACKGROUND_ASSET_DIRECTORY = "nativite-background";
 
 const backgroundRuntimeModuleId = "\0nativite-background-runtime";
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+const backgroundRuntimeImportIds = new Set([
+  "nativite/background",
+  resolve(moduleDir, "..", "background.ts"),
+  pathToFileURL(resolve(moduleDir, "..", "background.ts")).href,
+  resolve(moduleDir, "background.mjs"),
+  pathToFileURL(resolve(moduleDir, "background.mjs")).href,
+]);
 
 export type ResolvedBackgroundTaskEntry = {
   readonly registeredPath: string;
   readonly absolutePath: string;
   readonly manifestEntry: BackgroundTaskManifestEntry;
+};
+
+export type BackgroundTaskBundle = {
+  readonly bundle: string;
+  readonly code: string;
 };
 
 function stableBundleName(taskPath: string): string {
@@ -45,11 +58,7 @@ function isBackgroundTaskDefinition(value: unknown): value is BackgroundTaskDefi
 }
 
 function isBackgroundRuntimeImport(id: string): boolean {
-  return (
-    id === "nativite/background" ||
-    id.includes("/src/background.ts") ||
-    id.includes("/dist/background.mjs")
-  );
+  return backgroundRuntimeImportIds.has(id);
 }
 
 export async function resolveBackgroundTaskEntries(
@@ -123,26 +132,22 @@ export function createBackgroundTaskManifestFromEntries(
 }
 
 export function backgroundTaskHashInputs(
-  entries: readonly ResolvedBackgroundTaskEntry[],
+  bundles: readonly BackgroundTaskBundle[],
 ): { readonly name: string; readonly content: string }[] {
-  return entries.map((entry) => ({
-    name: `background-task:${entry.registeredPath}`,
-    content: readFileSync(entry.absolutePath, "utf-8"),
+  return bundles.map((bundle) => ({
+    name: `background-task-bundle:${bundle.bundle}`,
+    content: bundle.code,
   }));
 }
 
-export async function writeBackgroundTaskBundles(
+export async function buildBackgroundTaskBundles(
   entries: readonly ResolvedBackgroundTaskEntry[],
-  outputRoot: string,
   cwd: string,
-): Promise<string[]> {
-  const outputDir = join(outputRoot, BACKGROUND_ASSET_DIRECTORY);
-  mkdirSync(outputDir, { recursive: true });
-
-  const outputPaths: string[] = [];
+): Promise<BackgroundTaskBundle[]> {
+  const bundles: BackgroundTaskBundle[] = [];
   for (const entry of entries) {
     const bundle = entry.manifestEntry.bundle;
-    await build({
+    const result = await build({
       configFile: false,
       envFile: false,
       logLevel: "silent",
@@ -168,20 +173,59 @@ export async function writeBackgroundTaskBundles(
           formats: ["es"],
         },
         minify: false,
-        outDir: outputDir,
+        outDir: BACKGROUND_ASSET_DIRECTORY,
         sourcemap: false,
         target: "es2022",
+        write: false,
         rollupOptions: {
           output: {
-            chunkFileNames: "chunks/[name]-[hash].js",
+            inlineDynamicImports: true,
           },
         },
       },
     });
-    outputPaths.push(join(outputDir, bundle));
+
+    const rollupOutputs = (Array.isArray(result) ? result : [result]) as {
+      readonly output: readonly (
+        | { readonly type: "asset" }
+        | { readonly type: "chunk"; readonly code: string }
+      )[];
+    }[];
+    const outputs = rollupOutputs.flatMap((output) => output.output);
+    const chunks = outputs.filter((output) => output.type === "chunk");
+    const assets = outputs.filter((output) => output.type === "asset");
+
+    if (chunks.length !== 1 || assets.length > 0) {
+      throw new Error(
+        `Background task ${entry.registeredPath} must bundle to exactly one JavaScript file.`,
+      );
+    }
+    const [chunk] = chunks;
+    if (!chunk) {
+      throw new Error(`Background task ${entry.registeredPath} did not emit a JavaScript bundle.`);
+    }
+
+    bundles.push({
+      bundle,
+      code: chunk.code,
+    });
   }
 
-  return outputPaths;
+  return bundles;
+}
+
+export function writeBackgroundTaskBundles(
+  bundles: readonly BackgroundTaskBundle[],
+  outputRoot: string,
+): string[] {
+  const outputDir = join(outputRoot, BACKGROUND_ASSET_DIRECTORY);
+  mkdirSync(outputDir, { recursive: true });
+
+  return bundles.map((bundle) => {
+    const outputPath = join(outputDir, bundle.bundle);
+    writeFileSync(outputPath, bundle.code);
+    return outputPath;
+  });
 }
 
 export function serializeBackgroundTaskManifest(manifest: BackgroundTaskManifest): string {
