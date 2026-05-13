@@ -506,6 +506,15 @@ describe("NativiteConfigSchema", () => {
     ).toThrow();
   });
 
+  it("rejects android.minSdk below the runtime-supported API level", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platforms: [android({ minSdk: 25 })],
+      }),
+    ).toThrow(/minSdk must be at least 26/);
+  });
+
   // ── Inferred type ────────────────────────────────────────────────────────────
 
   it("returns the parsed value for valid input", () => {

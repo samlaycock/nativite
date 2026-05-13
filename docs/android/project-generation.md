@@ -117,6 +117,7 @@ Validation notes:
 
 - `android()` uses the default `minSdk` of `26` when omitted.
 - `minSdk` must be an integer when provided.
+- `minSdk` must be at least `26`, matching the generated runtime's Android API requirements.
 - `targetSdk` is optional, but must be an integer when provided.
 
 ## Gradle Configuration
