@@ -1,4 +1,5 @@
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -123,5 +124,32 @@ class NativiteBridgeTest {
         assertTrue(latch.await(1, TimeUnit.SECONDS))
         assertEquals("hello", captured)
         assertEquals("hello", completed)
+    }
+
+    @Test
+    fun backgroundScheduleHandlerCompletesWithFailureWhenManifestLoadFails() {
+        val bridge = object : NativiteBridge() {
+            override fun loadBackgroundTaskManifest(context: android.content.Context): List<NativiteBackgroundTask> {
+                throw IllegalStateException("manifest failed")
+            }
+        }
+        val bridgeClass = bridge.javaClass.superclass!!
+        val contextField = bridgeClass.getDeclaredField("applicationContext")
+        contextField.isAccessible = true
+        contextField.set(bridge, androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>())
+
+        val handlerField = bridgeClass.getDeclaredField("handlers")
+        handlerField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val handlers = handlerField.get(bridge) as MutableMap<String, NativiteHandler>
+        var completed: Result<Any?>? = null
+
+        handlers["__background__.schedule"]?.invoke(JSONObject().apply { put("id", "sync-inbox") }) { result ->
+            completed = result
+        }
+
+        val result = completed ?: throw AssertionError("Expected schedule handler to complete.")
+        assertFalse(result.isSuccess)
+        assertEquals("manifest failed", result.exceptionOrNull()?.message)
     }
 }
