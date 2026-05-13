@@ -124,9 +124,9 @@ object NativiteBackgroundWorkScheduler {
             result["version"] = persistedState.version
             result["runCount"] = persistedState.runCount
             result["retryCount"] = persistedState.retryCount
-            result["lastRunAt"] = persistedState.lastRunAt
-            result["lastResult"] = persistedState.lastResult?.let(::statusResultPayload)
-            result["lastError"] = persistedState.lastError
+            persistedState.lastRunAt?.let { result["lastRunAt"] = it }
+            persistedState.lastResult?.let { result["lastResult"] = statusResultPayload(it) }
+            persistedState.lastError?.let { result["lastError"] = it }
         }
         return result
     }
