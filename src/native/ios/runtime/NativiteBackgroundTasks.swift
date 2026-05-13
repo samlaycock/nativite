@@ -264,6 +264,7 @@ final class NativiteBackgroundTaskRuntime {
     context.setObject(log, forKeyedSubscript: "__nativiteLog" as NSString)
     context.evaluateScript("""
       globalThis.console = {
+        log: (...args) => __nativiteLog(args.map(String).join(' ')),
         debug: (...args) => __nativiteLog(args.map(String).join(' ')),
         error: (...args) => __nativiteLog(args.map(String).join(' ')),
         info: (...args) => __nativiteLog(args.map(String).join(' ')),

@@ -18,4 +18,12 @@ describe("NativiteBackgroundTasks.swift", () => {
     expect(swift).toContain("self?.releaseContext(id: executionID)");
     expect(swift).toContain("completion.complete(false)");
   });
+
+  it("installs console.log in the JavaScriptCore console shim", () => {
+    expect(swift).toContain("log: (...args) => __nativiteLog(args.map(String).join(' '))");
+    expect(swift).toContain("debug: (...args) => __nativiteLog(args.map(String).join(' '))");
+    expect(swift).toContain("error: (...args) => __nativiteLog(args.map(String).join(' '))");
+    expect(swift).toContain("info: (...args) => __nativiteLog(args.map(String).join(' '))");
+    expect(swift).toContain("warn: (...args) => __nativiteLog(args.map(String).join(' '))");
+  });
 });
