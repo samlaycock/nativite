@@ -20,6 +20,9 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
   private static let maxChromeSnapshotNodes = 500
   private static let maxChromeSnapshotChildren = 200
   private static let nclpLeafKinds: Set<String> = ["item", "title", "search", "separator", "spacer", "statusBar", "homeIndicator"]
+#if os(iOS)
+  private lazy var backgroundTaskScheduler = NativiteBackgroundTaskScheduler()
+#endif
 
   // Chrome handler — lazily wired to viewController after init
   lazy var chrome: NativiteChrome = {
@@ -301,6 +304,49 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
         completion(.success(status))
       }
     }
+
+#if os(iOS)
+    register(namespace: "__background__", method: "schedule") { [weak self] args, completion in
+      guard
+        let self,
+        let request = args as? [String: Any],
+        let taskId = request["id"] as? String
+      else {
+        completion(.failure(BridgeError.malformedArguments))
+        return
+      }
+      let payloadJSON = request["payload"] as? String
+      do {
+        completion(.success(try self.backgroundTaskScheduler.schedule(id: taskId, payloadJSON: payloadJSON)))
+      } catch {
+        completion(.failure(error))
+      }
+    }
+
+    register(namespace: "__background__", method: "cancel") { [weak self] args, completion in
+      guard
+        let self,
+        let request = args as? [String: Any],
+        let taskId = request["id"] as? String
+      else {
+        completion(.failure(BridgeError.malformedArguments))
+        return
+      }
+      completion(.success(self.backgroundTaskScheduler.cancel(id: taskId)))
+    }
+
+    register(namespace: "__background__", method: "getStatus") { [weak self] args, completion in
+      guard
+        let self,
+        let request = args as? [String: Any],
+        let taskId = request["id"] as? String
+      else {
+        completion(.failure(BridgeError.malformedArguments))
+        return
+      }
+      self.backgroundTaskScheduler.status(id: taskId, completion: completion)
+    }
+#endif
   }
 
   private static func legacyChromeState(fromSnapshot snapshot: [String: Any]) -> [String: Any] {
@@ -488,11 +534,14 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
 
 enum BridgeError: Error, LocalizedError {
   case unknownMethod(namespace: String, method: String)
+  case malformedArguments
 
   var errorDescription: String? {
     switch self {
     case .unknownMethod(let ns, let method):
       return "Unknown bridge method: \(ns).\(method)"
+    case .malformedArguments:
+      return "Malformed bridge arguments"
     }
   }
 }

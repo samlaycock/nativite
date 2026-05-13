@@ -41,8 +41,8 @@ object NativiteQuickJsBackgroundJavaScriptEngine : NativiteBackgroundJavaScriptE
 interface NativiteBackgroundTaskHostApi {
     fun preludeScript(task: NativiteBackgroundTask): String = ""
 
-    fun contextScript(task: NativiteBackgroundTask, payload: JSONObject?): String {
-        val payloadScript = payload?.toString() ?: "null"
+    fun contextScript(task: NativiteBackgroundTask, payloadJSON: String?): String {
+        val payloadScript = payloadJSON ?: "null"
         return """
             ({
                 task: {
@@ -87,25 +87,25 @@ class NativiteBackgroundTaskRuntime(
         manifest ?: NativiteBackgroundTasks.loadManifest(context)
     }
 
-    suspend fun run(taskId: String, payload: JSONObject? = null): NativiteBackgroundTaskResult {
+    suspend fun run(taskId: String, payloadJSON: String? = null): NativiteBackgroundTaskResult {
         val task = tasks.firstOrNull { it.id == taskId }
             ?: throw IllegalArgumentException("Unknown Nativite background task: $taskId")
         val bundle = NativiteBackgroundTasks.loadBundle(context, task)
 
-        return run(task, bundle, payload)
+        return run(task, bundle, payloadJSON)
     }
 
     suspend fun run(
         task: NativiteBackgroundTask,
         bundle: String,
-        payload: JSONObject? = null,
+        payloadJSON: String? = null,
     ): NativiteBackgroundTaskResult = withTimeout(timeoutMillis) {
         NativiteBackgroundTaskResult(
             taskId = task.id,
             value = engine.run(
                 preludeScript = hostApi.preludeScript(task),
                 bundleScript = bundle,
-                contextScript = hostApi.contextScript(task, payload),
+                contextScript = hostApi.contextScript(task, payloadJSON),
             ),
         )
     }

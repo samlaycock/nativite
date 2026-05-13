@@ -306,6 +306,63 @@ private final class CompletionOnce {
     callback(success)
   }
 }
+
+final class NativiteBackgroundTaskScheduler {
+  private let bundle: Bundle
+  private let scheduler: BGTaskScheduler
+
+  init(bundle: Bundle = .main, scheduler: BGTaskScheduler = .shared) {
+    self.bundle = bundle
+    self.scheduler = scheduler
+  }
+
+  func schedule(id taskId: String, payloadJSON: String? = nil) throws -> [String: Any] {
+    let task = try taskDefinition(id: taskId)
+    guard task.iOSKind == "app-refresh" else {
+      throw NSError(
+        domain: "NativiteBackgroundTasks",
+        code: 2,
+        userInfo: [NSLocalizedDescriptionKey: "Background task \(taskId) is not supported on iOS."]
+      )
+    }
+
+    if let payloadJSON, NativiteBackgroundTasks.contextScript(task: task, payloadJSON: payloadJSON) == nil {
+      throw NSError(
+        domain: "NativiteBackgroundTasks",
+        code: 3,
+        userInfo: [NSLocalizedDescriptionKey: "Background task payload must be JSON serializable."]
+      )
+    }
+
+    let request = BGAppRefreshTaskRequest(identifier: task.id)
+    try scheduler.submit(request)
+    return ["id": task.id, "state": "scheduled", "platform": "ios"]
+  }
+
+  func cancel(id taskId: String) -> [String: Any] {
+    scheduler.cancel(taskRequestWithIdentifier: taskId)
+    return ["id": taskId, "state": "cancelled", "platform": "ios"]
+  }
+
+  func status(id taskId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+    scheduler.getPendingTaskRequests { requests in
+      let state = requests.contains { $0.identifier == taskId } ? "scheduled" : "unknown"
+      completion(.success(["id": taskId, "state": state, "platform": "ios"]))
+    }
+  }
+
+  private func taskDefinition(id taskId: String) throws -> NativiteBackgroundTask {
+    let tasks = try NativiteBackgroundTasks.loadManifest(bundle: bundle)
+    if let task = NativiteBackgroundTasks.task(id: taskId, in: tasks) {
+      return task
+    }
+    throw NSError(
+      domain: "NativiteBackgroundTasks",
+      code: 1,
+      userInfo: [NSLocalizedDescriptionKey: "Unknown Nativite background task: \(taskId)"]
+    )
+  }
+}
 #endif
 
 struct AnyCodable: Decodable, Equatable {
