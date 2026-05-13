@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -104,6 +104,36 @@ export default defineBackgroundTask({ id: "duplicate", run() {} });
     } catch (err) {
       expect(err).toBeInstanceOf(Error);
       expect((err as Error).message).toContain('Duplicate background task id "duplicate"');
+    }
+  });
+
+  it("rejects duplicate bundle names across registered modules", async () => {
+    const cwd = makeTempDir();
+    writeFileSync(
+      join(cwd, "first.task.ts"),
+      `import { defineBackgroundTask } from "${join(process.cwd(), "src/background.ts")}";
+export default defineBackgroundTask({ id: "first", run() {} });
+`,
+    );
+    mkdirSync(join(cwd, "nested"), { recursive: true });
+    writeFileSync(
+      join(cwd, "nested", "first.task.ts"),
+      `import { defineBackgroundTask } from "${join(process.cwd(), "src/background.ts")}";
+export default defineBackgroundTask({ id: "second", run() {} });
+`,
+    );
+
+    const config: NativiteConfig = {
+      ...baseConfig,
+      backgroundTasks: ["./first.task.ts", "./nested/first.task.ts"],
+    };
+
+    expect.assertions(2);
+    try {
+      await resolveBackgroundTaskManifest(config, cwd);
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain('Duplicate background task bundle "first.task.js"');
     }
   });
 

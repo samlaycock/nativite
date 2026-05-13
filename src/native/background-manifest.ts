@@ -40,6 +40,7 @@ export async function resolveBackgroundTaskManifest(
 ): Promise<BackgroundTaskManifest> {
   const entries: BackgroundTaskManifestEntry[] = [];
   const taskIds = new Map<string, string>();
+  const bundleNames = new Map<string, string>();
 
   for (const registration of config.backgroundTasks ?? []) {
     const registeredPath = backgroundTaskPath(registration);
@@ -67,10 +68,18 @@ export async function resolveBackgroundTaskManifest(
       );
     }
 
+    const bundle = stableBundleName(registeredPath);
+    const existingBundlePath = bundleNames.get(bundle);
+    if (existingBundlePath) {
+      throw new Error(
+        `Duplicate background task bundle "${bundle}" from ${existingBundlePath} and ` +
+          `${registeredPath}. Use unique task filenames so generated bundle names do not collide.`,
+      );
+    }
+
     taskIds.set(module.default.id, registeredPath);
-    entries.push(
-      createBackgroundTaskManifestEntry(module.default, stableBundleName(registeredPath)),
-    );
+    bundleNames.set(bundle, registeredPath);
+    entries.push(createBackgroundTaskManifestEntry(module.default, bundle));
   }
 
   entries.sort((a, b) => a.id.localeCompare(b.id));

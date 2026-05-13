@@ -59,6 +59,35 @@ struct AnyCodable: Decodable, Equatable {
   }
 
   static func == (lhs: AnyCodable, rhs: AnyCodable) -> Bool {
-    String(describing: lhs.value) == String(describing: rhs.value)
+    valuesEqual(lhs.value, rhs.value)
+  }
+
+  private init(unchecked value: Any) {
+    self.value = value
+  }
+
+  private static func valuesEqual(_ lhs: Any, _ rhs: Any) -> Bool {
+    switch (lhs, rhs) {
+    case (is NSNull, is NSNull):
+      return true
+    case (let lhs as Bool, let rhs as Bool):
+      return lhs == rhs
+    case (let lhs as Int, let rhs as Int):
+      return lhs == rhs
+    case (let lhs as Double, let rhs as Double):
+      return lhs == rhs
+    case (let lhs as String, let rhs as String):
+      return lhs == rhs
+    case (let lhs as [Any], let rhs as [Any]):
+      guard lhs.count == rhs.count else { return false }
+      return zip(lhs, rhs).allSatisfy { valuesEqual($0, $1) }
+    case (let lhs as [String: Any], let rhs as [String: Any]):
+      guard lhs.count == rhs.count else { return false }
+      return lhs.allSatisfy { key, lhsValue in
+        rhs[key].map { valuesEqual(lhsValue, $0) } ?? false
+      }
+    default:
+      return false
+    }
   }
 }
