@@ -54,6 +54,10 @@ enum NativiteBackgroundTasks {
     "\(pendingPayloadKeyPrefix)\(taskId)"
   }
 
+  static func removePendingPayload(taskId: String, userDefaults: UserDefaults = .standard) {
+    userDefaults.removeObject(forKey: pendingPayloadKey(taskId: taskId))
+  }
+
   static func contextScript(task: NativiteBackgroundTask, payloadJSON: String? = nil) -> String? {
     guard let payload = payloadLiteral(payloadJSON) else { return nil }
     return """
@@ -177,6 +181,7 @@ final class NativiteBackgroundTaskRuntime {
       if let executionID {
         self?.releaseContext(id: executionID)
       }
+      NativiteBackgroundTasks.removePendingPayload(taskId: task.id, userDefaults: self?.userDefaults ?? .standard)
       completion.complete(false)
     }
 
@@ -184,6 +189,7 @@ final class NativiteBackgroundTaskRuntime {
       forKey: NativiteBackgroundTasks.pendingPayloadKey(taskId: task.id)
     )
     executionID = execute(task: task, payloadJSON: payloadJSON) { success in
+      NativiteBackgroundTasks.removePendingPayload(taskId: task.id, userDefaults: self.userDefaults)
       completion.complete(success)
     }
   }
@@ -363,7 +369,7 @@ final class NativiteBackgroundTaskScheduler {
 
   func cancel(id taskId: String) -> [String: Any] {
     scheduler.cancel(taskRequestWithIdentifier: taskId)
-    userDefaults.removeObject(forKey: NativiteBackgroundTasks.pendingPayloadKey(taskId: taskId))
+    NativiteBackgroundTasks.removePendingPayload(taskId: taskId, userDefaults: userDefaults)
     return ["id": taskId, "state": "cancelled", "platform": "ios"]
   }
 
