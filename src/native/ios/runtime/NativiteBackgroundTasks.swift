@@ -191,6 +191,7 @@ final class NativiteBackgroundTaskRuntime {
     execute(task: task, payloadJSON: payloadJSON, completion: completion)
   }
 
+  @discardableResult
   private func execute(
     task: NativiteBackgroundTask,
     payloadJSON: String? = nil,

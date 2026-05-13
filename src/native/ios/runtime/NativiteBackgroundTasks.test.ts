@@ -7,6 +7,7 @@ const swift = readFileSync(join(import.meta.dir, "NativiteBackgroundTasks.swift"
 describe("NativiteBackgroundTasks.swift", () => {
   it("retains JavaScriptCore contexts until asynchronous task completion", () => {
     expect(swift).toContain("private var activeContexts: [UUID: JSContext] = [:]");
+    expect(swift).toContain("@discardableResult");
     expect(swift).toContain("let contextID = retainContext(context)");
     expect(swift).toContain("self?.releaseContext(id: contextID)");
     expect(swift).toContain("JSValue(object: { finish(true) }, in: context)");
