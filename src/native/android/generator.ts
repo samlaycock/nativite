@@ -16,6 +16,12 @@ import {
   writeAndroidIconAssets,
   writeAndroidSplashAssets,
 } from "../assets.ts";
+import {
+  BACKGROUND_MANIFEST_RELATIVE_PATH,
+  resolveBackgroundTaskManifest,
+  serializeBackgroundTaskManifest,
+  writeBackgroundTaskManifest,
+} from "../background-manifest.ts";
 import { androidManifestTemplate } from "./android-manifest.ts";
 import { appIconTemplate, appIconXmlTemplate } from "./app-icon.ts";
 import { buildGradleAppTemplate } from "./build-gradle-app.ts";
@@ -107,6 +113,7 @@ function generationHashInputs(
   pluginSourceDir: string,
   pluginResourceDir: string,
   cwd: string,
+  backgroundTaskManifestJSON: string,
 ) {
   const androidConfig = resolveConfigForPlatform(config, "android");
   const androidPlatform = (config.platforms ?? []).find((p) => p.platform === "android");
@@ -146,6 +153,11 @@ function generationHashInputs(
     { name: "AndroidManifest.xml", content: androidManifestTemplate(androidConfig) },
     { name: "MainActivity.kt", content: mainActivityTemplate(androidConfig) },
     { name: "NativiteConfig.kt", content: nativiteConfigTemplate(pkg, config) },
+    {
+      name: "NativiteBackgroundTasks.kt",
+      content: readRuntimeFile(pkg, "NativiteBackgroundTasks.kt"),
+    },
+    { name: BACKGROUND_MANIFEST_RELATIVE_PATH, content: backgroundTaskManifestJSON },
     { name: "NativiteBridge.kt", content: readRuntimeFile(pkg, "NativiteBridge.kt") },
     { name: "NativiteChrome.kt", content: readRuntimeFile(pkg, "NativiteChrome.kt") },
     { name: "NativiteWebView.kt", content: readRuntimeFile(pkg, "NativiteWebView.kt") },
@@ -183,6 +195,8 @@ export async function generateProject(
   const projectRoot = join(nativiteDir, "android");
   const androidConfig = resolveConfigForPlatform(config, "android");
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
+  const backgroundTaskManifest = await resolveBackgroundTaskManifest(config, cwd);
+  const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
   const appDir = join(projectRoot, "app");
   const srcMainDir = join(appDir, "src", "main");
   const pluginSourceDir = join(srcMainDir, "generated", "nativite", "plugins", "java");
@@ -190,7 +204,14 @@ export async function generateProject(
   const hash = hashConfigForGeneration(
     config,
     resolvedPlugins,
-    generationHashInputs(config, resolvedPlugins, pluginSourceDir, pluginResourceDir, cwd),
+    generationHashInputs(
+      config,
+      resolvedPlugins,
+      pluginSourceDir,
+      pluginResourceDir,
+      cwd,
+      backgroundTaskManifestJSON,
+    ),
   );
 
   // Ensure production/generate mode never packages stale dev server settings.
@@ -297,6 +318,10 @@ export async function generateProject(
   const pkg = androidConfig.app.bundleId;
   writeFileSync(join(javaDir, "MainActivity.kt"), mainActivityTemplate(androidConfig));
   writeFileSync(join(javaDir, "NativiteConfig.kt"), nativiteConfigTemplate(pkg, config));
+  writeFileSync(
+    join(javaDir, "NativiteBackgroundTasks.kt"),
+    readRuntimeFile(pkg, "NativiteBackgroundTasks.kt"),
+  );
   writeFileSync(join(javaDir, "NativiteBridge.kt"), readRuntimeFile(pkg, "NativiteBridge.kt"));
   writeFileSync(join(javaDir, "NativiteChrome.kt"), readRuntimeFile(pkg, "NativiteChrome.kt"));
   writeFileSync(join(javaDir, "NativiteWebView.kt"), readRuntimeFile(pkg, "NativiteWebView.kt"));
@@ -306,6 +331,7 @@ export async function generateProject(
     join(javaDir, "NativitePluginRegistrant.kt"),
     `package ${pkg}\n\n${nativitePluginRegistrantTemplate(resolvedPlugins)}`,
   );
+  writeBackgroundTaskManifest(backgroundTaskManifest, assetsDir);
 
   // Resources
   writeFileSync(join(valuesDir, "strings.xml"), stringsXmlTemplate(androidConfig));

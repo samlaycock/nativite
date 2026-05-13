@@ -62,6 +62,10 @@ export default defineConfig({
 Task paths must be unique. Platform-specific task options are extensible through
 `BackgroundTaskPlatformOptions` module augmentation.
 
+During native project generation, Nativite resolves each path relative to the project root,
+imports the task module, and validates that its default export has a non-empty `id` and
+callable `run` function. Duplicate task ids fail generation even when the file paths differ.
+
 ## Manifest Shape
 
 `createBackgroundTaskManifestEntry()` and `createBackgroundTaskManifest()` produce versioned
@@ -86,3 +90,22 @@ metadata without including the executable `run` function:
 Native execution support still needs platform-specific bundling and runtime integration.
 The public API is designed so those implementations can load bundled task entrypoints by id
 instead of evaluating persisted source strings.
+
+## Generated Native Metadata
+
+Generated native projects include the manifest at a stable resource path:
+
+- Android: `.nativite/android/app/src/main/assets/nativite-background/manifest.json`
+- iOS: `.nativite/ios/<AppName>/nativite-background/manifest.json`
+- macOS: `.nativite/macos/<AppName>/nativite-background/manifest.json`
+
+The generated Android source includes `NativiteBackgroundTasks.kt`, whose
+`manifestAssetPath` constant points at the asset path and whose `loadManifest(context)` helper
+parses the task list.
+
+The generated Apple source includes `NativiteBackgroundTasks.swift`, whose
+`loadManifest(bundle:)` helper locates the bundled `nativite-background/manifest.json`
+resource and decodes the task list.
+
+Generation dirty-checking includes the serialized manifest, so changing task registrations or
+platform metadata invalidates the generated native project hash.

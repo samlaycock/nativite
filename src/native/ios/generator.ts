@@ -13,6 +13,12 @@ import {
   writeAppleIconAsset,
   writeAppleSplashAsset,
 } from "../assets.ts";
+import {
+  BACKGROUND_MANIFEST_RELATIVE_PATH,
+  resolveBackgroundTaskManifest,
+  serializeBackgroundTaskManifest,
+  writeBackgroundTaskManifest,
+} from "../background-manifest.ts";
 import { appDelegateTemplate } from "./app-delegate.ts";
 import { appIconContentsTemplate } from "./app-icon-contents.ts";
 import { hashConfigForGeneration } from "./hash.ts";
@@ -35,6 +41,7 @@ function generationHashInputs(
   targetPlatform: AppleTargetPlatform,
   projectRoot: string,
   cwd: string,
+  backgroundTaskManifestJSON: string,
 ) {
   const platformConfig = resolveConfigForPlatform(config, targetPlatform);
   const platformIcon = platformConfig.icon;
@@ -51,6 +58,11 @@ function generationHashInputs(
     },
     { name: "AppDelegate.swift", content: appDelegateTemplate(config) },
     { name: "NativiteConfig.swift", content: nativiteConfigTemplate(config) },
+    {
+      name: "NativiteBackgroundTasks.swift",
+      content: readRuntimeFile("NativiteBackgroundTasks.swift"),
+    },
+    { name: BACKGROUND_MANIFEST_RELATIVE_PATH, content: backgroundTaskManifestJSON },
     { name: "ViewController.swift", content: readRuntimeFile("ViewController.swift") },
     { name: "NativiteBridge.swift", content: readRuntimeFile("NativiteBridge.swift") },
     {
@@ -165,10 +177,19 @@ export async function generateProject(
   const appName = config.app.name;
   const platformConfig = resolveConfigForPlatform(config, targetPlatform);
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
+  const backgroundTaskManifest = await resolveBackgroundTaskManifest(config, cwd);
+  const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
   const hash = hashConfigForGeneration(
     config,
     resolvedPlugins,
-    generationHashInputs(config, resolvedPlugins, targetPlatform, projectRoot, cwd),
+    generationHashInputs(
+      config,
+      resolvedPlugins,
+      targetPlatform,
+      projectRoot,
+      cwd,
+      backgroundTaskManifestJSON,
+    ),
   );
 
   // Dirty check — skip if nothing has changed
@@ -202,6 +223,10 @@ export async function generateProject(
   );
   writeFileSync(join(appDir, "AppDelegate.swift"), appDelegateTemplate(config));
   writeFileSync(join(appDir, "NativiteConfig.swift"), nativiteConfigTemplate(config));
+  writeFileSync(
+    join(appDir, "NativiteBackgroundTasks.swift"),
+    readRuntimeFile("NativiteBackgroundTasks.swift"),
+  );
   writeFileSync(join(appDir, "ViewController.swift"), readRuntimeFile("ViewController.swift"));
   writeFileSync(join(appDir, "NativiteBridge.swift"), readRuntimeFile("NativiteBridge.swift"));
   writeFileSync(
@@ -216,6 +241,7 @@ export async function generateProject(
   writeFileSync(join(appDir, "NativiteVars.swift"), readRuntimeFile("NativiteVars.swift"));
   writeFileSync(join(appDir, "NativiteKeyboard.swift"), readRuntimeFile("NativiteKeyboard.swift"));
   writeFileSync(join(appDir, "OTAUpdater.swift"), readRuntimeFile("OTAUpdater.swift"));
+  writeBackgroundTaskManifest(backgroundTaskManifest, appDir);
 
   // iOS-only: LaunchScreen storyboard and splash image
   if (targetPlatform === "ios" && config.splash) {

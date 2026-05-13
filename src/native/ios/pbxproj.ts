@@ -80,6 +80,8 @@ const UUID = {
   pluginRegistrantFile: "AA000000000000000000000C",
   mainEntryFile: "AA000000000000000000000D",
   chromeStateFile: "AA000000000000000000000E",
+  backgroundTasksFile: "AA000000000000000000000F",
+  backgroundManifestFolder: "AA0000000000000000000010",
   appDelegateBuildFile: "BB0000000000000000000001",
   viewControllerBuildFile: "BB0000000000000000000002",
   bridgeBuildFile: "BB0000000000000000000003",
@@ -92,6 +94,8 @@ const UUID = {
   pluginRegistrantBuildFile: "BB0000000000000000000012",
   mainEntryBuildFile: "BB0000000000000000000013",
   chromeStateBuildFile: "BB0000000000000000000014",
+  backgroundTasksBuildFile: "BB0000000000000000000015",
+  backgroundManifestBuildFile: "BB0000000000000000000016",
   webKitFileRef: "CC0000000000000000000001",
   webKitBuildFile: "CC0000000000000000000002",
   sourcesBuildPhase: "DD0000000000000000000001",
@@ -207,6 +211,7 @@ export function pbxprojTemplate(
     `\t\t${UUID.pluginRegistrantBuildFile} /* NativitePluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.pluginRegistrantFile} /* NativitePluginRegistrant.swift */; };`,
     `\t\t${UUID.chromeBuildFile} /* NativiteChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.chromeFile} /* NativiteChrome.swift */; };`,
     `\t\t${UUID.chromeStateBuildFile} /* NativiteChromeState.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.chromeStateFile} /* NativiteChromeState.swift */; };`,
+    `\t\t${UUID.backgroundTasksBuildFile} /* NativiteBackgroundTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.backgroundTasksFile} /* NativiteBackgroundTasks.swift */; };`,
     `\t\t${UUID.varsBuildFile} /* NativiteVars.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.varsFile} /* NativiteVars.swift */; };`,
     `\t\t${UUID.keyboardBuildFile} /* NativiteKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.keyboardFile} /* NativiteKeyboard.swift */; };`,
     ...(hasOta
@@ -231,6 +236,7 @@ export function pbxprojTemplate(
     `\t\t${UUID.pluginRegistrantFile} /* NativitePluginRegistrant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativitePluginRegistrant.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.chromeFile} /* NativiteChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteChrome.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.chromeStateFile} /* NativiteChromeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteChromeState.swift; sourceTree = "<group>"; };`,
+    `\t\t${UUID.backgroundTasksFile} /* NativiteBackgroundTasks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteBackgroundTasks.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.varsFile} /* NativiteVars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteVars.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.keyboardFile} /* NativiteKeyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteKeyboard.swift; sourceTree = "<group>"; };`,
     ...(hasOta
@@ -253,12 +259,14 @@ export function pbxprojTemplate(
     UUID.pluginRegistrantFile,
     UUID.chromeFile,
     UUID.chromeStateFile,
+    UUID.backgroundTasksFile,
     UUID.varsFile,
     UUID.keyboardFile,
     ...(hasOta ? [UUID.otaUpdaterFile] : []),
     ...(hasSplash ? [UUID.launchScreenFile] : []),
     UUID.infoPlistFile,
     UUID.assetsFile,
+    UUID.backgroundManifestFolder,
     ...[...pluginFileRefsByPath.values()].map((ref) => ref.id),
   ]
     .map((id) => `\t\t\t\t${id},`)
@@ -274,6 +282,7 @@ export function pbxprojTemplate(
     UUID.pluginRegistrantBuildFile,
     UUID.chromeBuildFile,
     UUID.chromeStateBuildFile,
+    UUID.backgroundTasksBuildFile,
     UUID.varsBuildFile,
     UUID.keyboardBuildFile,
     ...(hasOta ? [UUID.otaUpdaterBuildFile] : []),
@@ -333,6 +342,7 @@ export function pbxprojTemplate(
 
   const resourcePhaseFiles = [
     `\t\t\t\t${UUID.assetsBuildFile} /* Assets.xcassets in Resources */,`,
+    `\t\t\t\t${UUID.backgroundManifestBuildFile} /* nativite-background in Resources */,`,
     ...(hasSplash
       ? [`\t\t\t\t${UUID.launchScreenBuildFile} /* LaunchScreen.storyboard in Resources */,`]
       : []),
@@ -398,6 +408,7 @@ ${targetPlatformSettings}
 /* Begin PBXBuildFile section */
 ${sourcesBuildFiles}
 \t\t${UUID.assetsBuildFile} /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ${UUID.assetsFile} /* Assets.xcassets */; };
+\t\t${UUID.backgroundManifestBuildFile} /* nativite-background in Resources */ = {isa = PBXBuildFile; fileRef = ${UUID.backgroundManifestFolder} /* nativite-background */; };
 ${hasSplash ? `\t\t${UUID.launchScreenBuildFile} /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = ${UUID.launchScreenFile} /* LaunchScreen.storyboard */; };` : ""}
 \n${pluginResourceBuildFiles.join("\n")}
 \t\t${UUID.webKitBuildFile} /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.webKitFileRef} /* WebKit.framework */; };
@@ -409,6 +420,7 @@ ${frameworkBuildFiles.length > 0 ? `\n${frameworkBuildFiles.join("\n")}` : ""}
 ${sourceFileRefs}
 \t\t${UUID.infoPlistFile} /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 \t\t${UUID.assetsFile} /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+\t\t${UUID.backgroundManifestFolder} /* nativite-background */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "nativite-background"; sourceTree = "<group>"; };
 ${hasSplash ? `\t\t${UUID.launchScreenFile} /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };` : ""}
 \t\t${UUID.webKitFileRef} /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 ${frameworkFileRefs.length > 0 ? frameworkFileRefs.join("\n") : ""}

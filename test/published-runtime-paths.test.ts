@@ -33,6 +33,7 @@ type NativiteConfigFixture = {
     readonly buildNumber: number;
   };
   readonly platforms: ReadonlyArray<{ readonly platform: string; readonly minSdk?: number }>;
+  readonly backgroundTasks?: readonly string[];
 };
 
 type RegistryChunk = {
@@ -82,6 +83,19 @@ describe("published runtime template paths", () => {
       const registry = (await import(
         `${pathToFileURL(join(process.cwd(), registryChunk!)).href}?runtime-paths`
       )) as RegistryChunk;
+      const taskRoot = makeTempDir("nativite-published-background-task-");
+      const taskPath = join(taskRoot, "sync.task.mjs");
+      writeFileSync(
+        taskPath,
+        `import { defineBackgroundTask } from "${pathToFileURL(join(process.cwd(), "dist/background.mjs")).href}";
+export default defineBackgroundTask({
+  id: "sync-inbox",
+  ios: { kind: "app-refresh" },
+  android: { kind: "periodic-work" },
+  run() {},
+});
+`,
+      );
 
       const config: NativiteConfigFixture = {
         app: {
@@ -91,18 +105,22 @@ describe("published runtime template paths", () => {
           buildNumber: 1,
         },
         platforms: [{ platform: "ios" }, { platform: "macos" }, { platform: "android" }],
+        backgroundTasks: [taskPath],
       };
       const logger = { info() {}, warn() {}, error() {} };
       const runtimes = registry.r(config);
+      const projectRoots = new Map<string, string>();
 
       for (const platformId of ["ios", "macos", "android"]) {
         const runtime = runtimes.find((entry) => entry.id === platformId);
         expect(runtime?.plugin.generate).toBeFunction();
+        const projectRoot = makeTempDir(`nativite-published-${platformId}-`);
+        projectRoots.set(platformId, projectRoot);
 
         await runtime!.plugin.generate!({
           rootConfig: config,
           config,
-          projectRoot: makeTempDir(`nativite-published-${platformId}-`),
+          projectRoot,
           platform: runtime!.config,
           force: true,
           mode: "generate",
@@ -112,6 +130,45 @@ describe("published runtime template paths", () => {
 
       expect(existsSync("dist/runtime/ViewController.swift")).toBe(true);
       expect(existsSync("dist/runtime/NativiteWebView.kt")).toBe(true);
+      expect(
+        existsSync(
+          join(
+            projectRoots.get("ios")!,
+            ".nativite",
+            "ios",
+            "TestApp",
+            "nativite-background",
+            "manifest.json",
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        existsSync(
+          join(
+            projectRoots.get("macos")!,
+            ".nativite",
+            "macos",
+            "TestApp",
+            "nativite-background",
+            "manifest.json",
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        existsSync(
+          join(
+            projectRoots.get("android")!,
+            ".nativite",
+            "android",
+            "app",
+            "src",
+            "main",
+            "assets",
+            "nativite-background",
+            "manifest.json",
+          ),
+        ),
+      ).toBe(true);
     },
     { timeout: 30_000 },
   );
