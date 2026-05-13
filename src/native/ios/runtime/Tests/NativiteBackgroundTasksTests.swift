@@ -31,6 +31,17 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     )
   }
 
+  func testRemovePendingPayloadClearsNamespacedPayload() throws {
+    let userDefaults = try XCTUnwrap(UserDefaults(suiteName: "NativiteBackgroundTasksTests"))
+    userDefaults.removePersistentDomain(forName: "NativiteBackgroundTasksTests")
+    let key = NativiteBackgroundTasks.pendingPayloadKey(taskId: "sync-inbox")
+    userDefaults.set(#"{"reason":"manual"}"#, forKey: key)
+
+    NativiteBackgroundTasks.removePendingPayload(taskId: "sync-inbox", userDefaults: userDefaults)
+
+    XCTAssertNil(userDefaults.string(forKey: key))
+  }
+
   func testContextScriptInjectsConstrainedHostContext() throws {
     let task = try XCTUnwrap(NativiteBackgroundTasks.loadManifest(bundle: .module).first)
     let script = try XCTUnwrap(
