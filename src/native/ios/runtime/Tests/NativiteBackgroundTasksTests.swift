@@ -26,13 +26,21 @@ final class NativiteBackgroundTasksTests: XCTestCase {
 
   func testContextScriptInjectsConstrainedHostContext() throws {
     let task = try XCTUnwrap(NativiteBackgroundTasks.loadManifest(bundle: .module).first)
-    let script = NativiteBackgroundTasks.contextScript(task: task, payloadJSON: #"{"reason":"test"}"#)
+    let script = try XCTUnwrap(
+      NativiteBackgroundTasks.contextScript(task: task, payloadJSON: #"{"reason":"test"}"#)
+    )
 
     XCTAssertTrue(script.contains(#"taskId: "sync-inbox""#))
     XCTAssertTrue(script.contains(#"payload: {"reason":"test"}"#))
     XCTAssertTrue(script.contains("storage:"))
     XCTAssertTrue(script.contains("fetch: globalThis.fetch"))
     XCTAssertTrue(script.contains("log:"))
+  }
+
+  func testContextScriptRejectsInvalidPayloadJSON() throws {
+    let task = try XCTUnwrap(NativiteBackgroundTasks.loadManifest(bundle: .module).first)
+
+    XCTAssertNil(NativiteBackgroundTasks.contextScript(task: task, payloadJSON: #"; alert(1);"#))
   }
 
   func testExecutableBundleSourceExposesBundledDefaultExport() throws {

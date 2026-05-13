@@ -1,6 +1,13 @@
 import type { BackgroundTaskManifest } from "../../background.ts";
 import type { NativiteConfig } from "../../index.ts";
 
+function isSupportedIOSBackgroundTask(task: BackgroundTaskManifest["tasks"][number]): boolean {
+  const ios = task.platforms.ios;
+  return Boolean(
+    ios && typeof ios === "object" && (ios as { kind?: unknown }).kind === "app-refresh",
+  );
+}
+
 export function infoPlistMacOSTemplate(config: NativiteConfig): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -51,7 +58,10 @@ export function infoPlistTemplate(
     ? `<key>UILaunchStoryboardName</key>\n  <string>LaunchScreen</string>`
     : `<key>UILaunchScreen</key>\n  <dict/>`;
   const backgroundTaskIdentifiers = [
-    ...new Set(backgroundTaskManifest?.tasks.map((task) => task.id) ?? []),
+    ...new Set(
+      backgroundTaskManifest?.tasks.filter(isSupportedIOSBackgroundTask).map((task) => task.id) ??
+        [],
+    ),
   ].sort();
   const backgroundTasksXml =
     backgroundTaskIdentifiers.length > 0

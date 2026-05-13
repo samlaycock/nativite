@@ -129,6 +129,27 @@ describe("infoPlistTemplate", () => {
     expect(output).toContain("<string>fetch</string>");
   });
 
+  it("excludes tasks without supported iOS metadata from scheduler identifiers", () => {
+    const output = infoPlistTemplate(baseConfig, {
+      version: 1,
+      tasks: [
+        {
+          id: "android-only",
+          bundle: "android-only.js",
+          platforms: { android: { kind: "periodic-work" } },
+        },
+        {
+          id: "sync-inbox",
+          bundle: "sync-inbox.js",
+          platforms: { ios: { kind: "app-refresh" } },
+        },
+      ],
+    });
+
+    expect(output).toContain("<string>sync-inbox</string>");
+    expect(output).not.toContain("<string>android-only</string>");
+  });
+
   // ── Config variations don't affect Info.plist content (only splash matters) ──
 
   it("produces the same launch screen section regardless of OTA config", () => {
