@@ -206,6 +206,7 @@ class NativiteBackgroundTasksTest {
     @Test
     fun run_loadsBundledTaskAndInvokesInjectedEngine() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        NativiteBackgroundTaskSharedPreferencesHostApi.preferences(context).edit().clear().commit()
         val engine = RecordingBackgroundJavaScriptEngine()
         val result = NativiteBackgroundTaskRuntime(
             context = context,
@@ -218,6 +219,30 @@ class NativiteBackgroundTasksTest {
         assertTrue(engine.contextScript.contains("sync-inbox"))
         assertTrue(engine.contextScript.contains("storage:"))
         assertTrue(engine.contextScript.contains("signal:"))
+    }
+
+    @Test
+    fun run_persistsVersionedTaskStateAfterExecution() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val preferences = NativiteBackgroundTaskSharedPreferencesHostApi.preferences(context)
+        preferences.edit().clear().commit()
+        val engine = RecordingBackgroundJavaScriptEngine(
+            """{"result":{"status":"retry","output":{"reason":"offline"}},"storage":{}}""",
+        )
+
+        NativiteBackgroundTaskRuntime(
+            context = context,
+            engine = engine,
+        ).run("sync-inbox")
+
+        val state = NativiteBackgroundTaskSharedPreferencesHostApi(preferences)
+            .readPersistedState("sync-inbox")!!
+        assertEquals("failed", state.scheduleState)
+        assertEquals(1, state.runCount)
+        assertEquals(1, state.retryCount)
+        assertEquals("retry", state.lastResult?.getString("status"))
+        assertEquals("offline", state.lastResult?.getJSONObject("output")?.getString("reason"))
+        assertTrue(state.lastRunAt?.contains("T") == true)
     }
 
     @Test
@@ -261,7 +286,9 @@ class NativiteBackgroundTasksTest {
     }
 }
 
-private class RecordingBackgroundJavaScriptEngine : NativiteBackgroundJavaScriptEngine {
+private class RecordingBackgroundJavaScriptEngine(
+    private val response: String = """{"result":"ok","storage":{"cursor":"abc"}}""",
+) : NativiteBackgroundJavaScriptEngine {
     var bundleScript: String = ""
     var contextScript: String = ""
 
@@ -272,6 +299,6 @@ private class RecordingBackgroundJavaScriptEngine : NativiteBackgroundJavaScript
     ): String {
         this.bundleScript = bundleScript
         this.contextScript = contextScript
-        return """{"result":"ok","storage":{"cursor":"abc"}}"""
+        return response
     }
 }

@@ -118,5 +118,6 @@ and synchronously written back after completion under `dev.nativite.background`.
 Task ids and storage keys are encoded in native storage keys so dotted task ids
 and dotted storage keys cannot collide.
 
-Android also defines a versioned persisted task-state model containing schedule
-state, run/retry counters, last run time, last result, and last error metadata.
+Android also records a versioned persisted task-state model containing schedule
+state, run/retry counters, last run time, last result, and last error metadata
+after each runtime execution.

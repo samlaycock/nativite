@@ -2,6 +2,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.dokar.quickjs.evaluate
 import com.dokar.quickjs.quickJs
+import java.time.Instant
 import java.util.Base64
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
@@ -172,6 +173,17 @@ class NativiteBackgroundTaskSharedPreferencesHostApi(
         editor.commit()
     }
 
+    fun readPersistedState(taskId: String): NativiteBackgroundTaskPersistedState? {
+        val stored = preferences.getString(stateKey(taskId), null) ?: return null
+        return NativiteBackgroundTaskPersistedState.fromJson(JSONObject(stored))
+    }
+
+    fun persistState(state: NativiteBackgroundTaskPersistedState) {
+        preferences.edit()
+            .putString(stateKey(state.taskId), state.toJson().toString())
+            .commit()
+    }
+
     companion object {
         const val preferencesName: String = "dev.nativite.background"
 
@@ -181,6 +193,8 @@ class NativiteBackgroundTaskSharedPreferencesHostApi(
         fun storageKey(taskId: String, key: String): String = "${storageKeyPrefix(taskId)}${keyComponent(key)}"
 
         fun storageKeyPrefix(taskId: String): String = "storage.${keyComponent(taskId)}."
+
+        fun stateKey(taskId: String): String = "state.${keyComponent(taskId)}"
 
         private fun keyComponent(value: String): String =
             Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
@@ -231,21 +245,66 @@ class NativiteBackgroundTaskRuntime(
         task: NativiteBackgroundTask,
         bundle: String,
         payloadJSON: String? = null,
-    ): NativiteBackgroundTaskResult = withTimeout(timeoutMillis) {
-        val envelope = JSONObject(
-            engine.run(
-                preludeScript = hostApi.preludeScript(task),
-                bundleScript = bundle,
-                contextScript = hostApi.contextScript(task, payloadJSON),
+    ): NativiteBackgroundTaskResult =
+        try {
+            withTimeout(timeoutMillis) {
+                val envelope = JSONObject(
+                    engine.run(
+                        preludeScript = hostApi.preludeScript(task),
+                        bundleScript = bundle,
+                        contextScript = hostApi.contextScript(task, payloadJSON),
+                    ),
+                )
+                val taskResult = envelope.opt("result")
+                if (hostApi is NativiteBackgroundTaskSharedPreferencesHostApi) {
+                    hostApi.persistStorage(task.id, envelope.optJSONObject("storage") ?: JSONObject())
+                    recordTaskState(task.id, taskResultState(taskResult), null)
+                }
+                NativiteBackgroundTaskResult(
+                    taskId = task.id,
+                    value = taskResult,
+                )
+            }
+        } catch (err: Throwable) {
+            if (hostApi is NativiteBackgroundTaskSharedPreferencesHostApi) {
+                recordTaskState(task.id, null, err.message ?: err::class.java.simpleName)
+            }
+            throw err
+        }
+
+    private fun recordTaskState(taskId: String, result: JSONObject?, error: String?) {
+        val host = hostApi as? NativiteBackgroundTaskSharedPreferencesHostApi ?: return
+        val previous = host.readPersistedState(taskId)
+        val status = result?.optString("status")?.takeIf { it.isNotEmpty() }
+        val retryCount = if (status == "retry") {
+            (previous?.retryCount ?: 0) + 1
+        } else {
+            previous?.retryCount ?: 0
+        }
+        host.persistState(
+            NativiteBackgroundTaskPersistedState(
+                taskId = taskId,
+                scheduleState = if (error == null && status != "failure" && status != "retry") {
+                    "completed"
+                } else {
+                    "failed"
+                },
+                runCount = (previous?.runCount ?: 0) + 1,
+                retryCount = retryCount,
+                lastRunAt = Instant.now().toString(),
+                lastResult = result,
+                lastError = error,
             ),
         )
-        if (hostApi is NativiteBackgroundTaskSharedPreferencesHostApi) {
-            hostApi.persistStorage(task.id, envelope.optJSONObject("storage") ?: JSONObject())
-        }
-        NativiteBackgroundTaskResult(
-            taskId = task.id,
-            value = envelope.opt("result"),
-        )
+    }
+
+    private fun taskResultState(value: Any?): JSONObject? {
+        if (value == null || value == JSONObject.NULL) return null
+        if (value is JSONObject) return value
+        if (value is String) return JSONObject().put("status", value)
+        return JSONObject()
+            .put("status", "success")
+            .put("output", value)
     }
 }
 

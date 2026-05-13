@@ -115,7 +115,7 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     )
 
     XCTAssertEqual(result.status, "retry")
-    XCTAssertEqual(result.outputJSON, #"{"reason":"offline"}"#)
+    XCTAssertEqual(result.output?.value as? [String: String], ["reason": "offline"])
     XCTAssertFalse(NativiteBackgroundTasks.resultSucceeded(result))
   }
 
@@ -127,7 +127,7 @@ final class NativiteBackgroundTasksTests: XCTestCase {
       runCount: 2,
       retryCount: 1,
       lastRunAt: "2026-05-13T12:00:00Z",
-      lastResult: NativiteBackgroundTaskResultState(status: "success", outputJSON: #"{"count":2}"#),
+      lastResult: NativiteBackgroundTaskResultState(status: "success", output: AnyCodable(["count": 2])),
       lastError: nil
     )
 
@@ -156,6 +156,31 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     XCTAssertEqual(object["lastRunAt"] as? String, "2026-05-13T12:00:00Z")
   }
 
+  func testPersistedStateEncodesLastResultOutputUnderPublicContractKey() throws {
+    let state = NativiteBackgroundTaskPersistedState(
+      version: 1,
+      taskId: "sync-inbox",
+      scheduleState: "failed",
+      runCount: 1,
+      retryCount: 1,
+      lastRunAt: "2026-05-13T12:00:00Z",
+      lastResult: NativiteBackgroundTaskResultState(
+        status: "retry",
+        output: AnyCodable(["reason": "offline"])
+      ),
+      lastError: nil
+    )
+    let encoded = try JSONEncoder().encode(state)
+    let object = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    let lastResult = try XCTUnwrap(object["lastResult"] as? [String: Any])
+    let output = try XCTUnwrap(lastResult["output"] as? [String: String])
+
+    XCTAssertEqual(output, ["reason": "offline"])
+    XCTAssertNil(lastResult["outputJSON"])
+  }
+
   func testPersistedStateWritesToEncodedTaskStateKey() throws {
     let userDefaults = try XCTUnwrap(UserDefaults(suiteName: "NativiteBackgroundTasksStateTests"))
     userDefaults.removePersistentDomain(forName: "NativiteBackgroundTasksStateTests")
@@ -166,7 +191,7 @@ final class NativiteBackgroundTasksTests: XCTestCase {
       runCount: 1,
       retryCount: 1,
       lastRunAt: nil,
-      lastResult: NativiteBackgroundTaskResultState(status: "retry", outputJSON: nil),
+      lastResult: NativiteBackgroundTaskResultState(status: "retry", output: nil),
       lastError: nil
     )
 
