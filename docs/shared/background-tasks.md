@@ -114,9 +114,9 @@ collisions.
 The generated Android source includes `NativiteBackgroundTasks.kt`, whose
 `manifestAssetPath` constant points at the asset path and whose `loadManifest(context)` helper
 parses the task list. When background tasks are configured, generated Android projects also
-include the QuickJS runtime dependency and `NativiteBackgroundTaskRuntime`, a minimal adapter
-that loads a task bundle asset, exposes a host API injection seam, invokes the task's default
-`run(ctx)` function, and bounds execution with a coroutine timeout.
+include the QuickJS catalog entry, runtime dependency, and `NativiteBackgroundTaskRuntime`, a
+minimal adapter that loads a task bundle asset, exposes a host API injection seam, invokes the
+task's default `run(ctx)` function, and bounds execution with a coroutine timeout.
 
 The generated Apple source includes `NativiteBackgroundTasks.swift`, whose
 `loadManifest(bundle:)` helper locates the bundled `nativite-background/manifest.json`

@@ -130,6 +130,15 @@ function generationHashInputs(
   const pluginDependencies = resolvedPlugins.platforms.android.dependencies.filter(
     (dependency) => dependency.kind === "gradle",
   );
+  const hasBackgroundTasks = (config.backgroundTasks ?? []).length > 0;
+  const backgroundTaskRuntimeInput = hasBackgroundTasks
+    ? [
+        {
+          name: "NativiteBackgroundTaskRuntime.kt",
+          content: readRuntimeFile(pkg, "NativiteBackgroundTaskRuntime.kt"),
+        },
+      ]
+    : [];
 
   return [
     nativeAssetHashInput(cwd, androidConfig.icon, "icon"),
@@ -141,7 +150,10 @@ function generationHashInputs(
       name: "gradle/wrapper/gradle-wrapper.properties",
       content: gradleWrapperPropertiesTemplate(),
     },
-    { name: "gradle/libs.versions.toml", content: versionCatalogTemplate() },
+    {
+      name: "gradle/libs.versions.toml",
+      content: versionCatalogTemplate({ includeQuickJs: hasBackgroundTasks }),
+    },
     {
       name: "app/build.gradle.kts",
       content: buildGradleAppTemplate(androidConfig, minSdk, targetSdk, {
@@ -161,6 +173,7 @@ function generationHashInputs(
       name: "NativiteBackgroundTasks.kt",
       content: readRuntimeFile(pkg, "NativiteBackgroundTasks.kt"),
     },
+    ...backgroundTaskRuntimeInput,
     { name: BACKGROUND_MANIFEST_RELATIVE_PATH, content: backgroundTaskManifestJSON },
     { name: "NativiteBridge.kt", content: readRuntimeFile(pkg, "NativiteBridge.kt") },
     { name: "NativiteChrome.kt", content: readRuntimeFile(pkg, "NativiteChrome.kt") },
@@ -200,6 +213,7 @@ export async function generateProject(
   const androidConfig = resolveConfigForPlatform(config, "android");
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
   const backgroundTaskEntries = await resolveBackgroundTaskEntries(config, cwd);
+  const hasBackgroundTasks = backgroundTaskEntries.length > 0;
   const backgroundTaskManifest = createBackgroundTaskManifestFromEntries(backgroundTaskEntries);
   const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
   const backgroundTaskBundles = await buildBackgroundTaskBundles(backgroundTaskEntries, cwd);
@@ -291,7 +305,10 @@ export async function generateProject(
   // Version catalog
   const gradleDir = join(projectRoot, "gradle");
   mkdirSync(gradleDir, { recursive: true });
-  writeFileSync(join(gradleDir, "libs.versions.toml"), versionCatalogTemplate());
+  writeFileSync(
+    join(gradleDir, "libs.versions.toml"),
+    versionCatalogTemplate({ includeQuickJs: hasBackgroundTasks }),
+  );
 
   const pluginSourceDirs = copyPluginInputs(
     resolvedPlugins.platforms.android.sources,
@@ -327,6 +344,12 @@ export async function generateProject(
     join(javaDir, "NativiteBackgroundTasks.kt"),
     readRuntimeFile(pkg, "NativiteBackgroundTasks.kt"),
   );
+  if (hasBackgroundTasks) {
+    writeFileSync(
+      join(javaDir, "NativiteBackgroundTaskRuntime.kt"),
+      readRuntimeFile(pkg, "NativiteBackgroundTaskRuntime.kt"),
+    );
+  }
   writeFileSync(join(javaDir, "NativiteBridge.kt"), readRuntimeFile(pkg, "NativiteBridge.kt"));
   writeFileSync(join(javaDir, "NativiteChrome.kt"), readRuntimeFile(pkg, "NativiteChrome.kt"));
   writeFileSync(join(javaDir, "NativiteWebView.kt"), readRuntimeFile(pkg, "NativiteWebView.kt"));
