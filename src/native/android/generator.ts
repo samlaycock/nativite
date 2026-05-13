@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { BackgroundTaskManifest } from "../../background.ts";
 import type { NativitePluginMode } from "../../index.ts";
 import type { NativiteConfig } from "../../index.ts";
 
@@ -42,6 +43,9 @@ import { splashScreenTemplate } from "./splash-screen.ts";
 import { versionCatalogTemplate } from "./version-catalog.ts";
 
 const runtimeDir = join(dirname(fileURLToPath(import.meta.url)), "runtime");
+const supportedAndroidBackgroundTaskKinds = new Set(["one-off-work", "periodic-work"]);
+const supportedAndroidNetworkRequirements = new Set(["connected", "unmetered", "not-roaming"]);
+const supportedAndroidBackoffPolicies = new Set(["linear", "exponential"]);
 
 function safePluginDirName(pluginName: string): string {
   return pluginName.replace(/[^A-Za-z0-9_.-]/g, "_");
@@ -137,6 +141,10 @@ function generationHashInputs(
           name: "NativiteBackgroundTaskRuntime.kt",
           content: readRuntimeFile(pkg, "NativiteBackgroundTaskRuntime.kt"),
         },
+        {
+          name: "NativiteBackgroundWorker.kt",
+          content: readRuntimeFile(pkg, "NativiteBackgroundWorker.kt"),
+        },
       ]
     : [];
 
@@ -152,7 +160,10 @@ function generationHashInputs(
     },
     {
       name: "gradle/libs.versions.toml",
-      content: versionCatalogTemplate({ includeQuickJs: hasBackgroundTasks }),
+      content: versionCatalogTemplate({
+        includeQuickJs: hasBackgroundTasks,
+        includeWorkManager: hasBackgroundTasks,
+      }),
     },
     {
       name: "app/build.gradle.kts",
@@ -201,6 +212,75 @@ export interface GenerateResult {
   readonly hash: string;
 }
 
+function assertBooleanOption(taskId: string, key: string, value: unknown): void {
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new Error(
+      `Invalid Android background task option for "${taskId}". android.${key} must be a boolean.`,
+    );
+  }
+}
+
+function assertNumberOption(taskId: string, key: string, value: unknown): void {
+  if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value))) {
+    throw new Error(
+      `Invalid Android background task option for "${taskId}". android.${key} must be a finite number.`,
+    );
+  }
+}
+
+function validateAndroidBackgroundTaskManifest(
+  backgroundTaskManifest: BackgroundTaskManifest,
+): void {
+  for (const task of backgroundTaskManifest.tasks) {
+    const androidMetadata = task.platforms.android;
+    if (!androidMetadata || typeof androidMetadata !== "object" || Array.isArray(androidMetadata))
+      continue;
+
+    const metadata = androidMetadata as Record<string, unknown>;
+    const kind = metadata.kind;
+    if (typeof kind !== "string" || !supportedAndroidBackgroundTaskKinds.has(kind)) {
+      throw new Error(
+        `Unsupported Android background task kind for "${task.id}". Nativite currently supports android.kind: "one-off-work" and "periodic-work".`,
+      );
+    }
+
+    assertBooleanOption(task.id, "requiresCharging", metadata.requiresCharging);
+    assertNumberOption(task.id, "initialDelayMinutes", metadata.initialDelayMinutes);
+    assertNumberOption(task.id, "backoffDelayMinutes", metadata.backoffDelayMinutes);
+
+    const network = metadata.requiresNetwork;
+    if (
+      network !== undefined &&
+      typeof network !== "boolean" &&
+      (typeof network !== "string" || !supportedAndroidNetworkRequirements.has(network))
+    ) {
+      throw new Error(
+        `Invalid Android background task option for "${task.id}". android.requiresNetwork must be boolean, "connected", "unmetered", or "not-roaming".`,
+      );
+    }
+
+    const backoffPolicy = metadata.backoffPolicy;
+    if (
+      backoffPolicy !== undefined &&
+      (typeof backoffPolicy !== "string" || !supportedAndroidBackoffPolicies.has(backoffPolicy))
+    ) {
+      throw new Error(
+        `Invalid Android background task option for "${task.id}". android.backoffPolicy must be "linear" or "exponential".`,
+      );
+    }
+
+    if (kind === "periodic-work") {
+      assertNumberOption(task.id, "repeatIntervalMinutes", metadata.repeatIntervalMinutes);
+      const repeatIntervalMinutes = metadata.repeatIntervalMinutes;
+      if (typeof repeatIntervalMinutes === "number" && repeatIntervalMinutes < 15) {
+        throw new Error(
+          `Invalid Android background task option for "${task.id}". android.repeatIntervalMinutes must be at least 15 for periodic work.`,
+        );
+      }
+    }
+  }
+}
+
 export async function generateProject(
   config: NativiteConfig,
   cwd: string,
@@ -215,6 +295,7 @@ export async function generateProject(
   const backgroundTaskEntries = await resolveBackgroundTaskEntries(config, cwd);
   const hasBackgroundTasks = backgroundTaskEntries.length > 0;
   const backgroundTaskManifest = createBackgroundTaskManifestFromEntries(backgroundTaskEntries);
+  validateAndroidBackgroundTaskManifest(backgroundTaskManifest);
   const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
   const backgroundTaskBundles = await buildBackgroundTaskBundles(backgroundTaskEntries, cwd);
   const appDir = join(projectRoot, "app");
@@ -307,7 +388,10 @@ export async function generateProject(
   mkdirSync(gradleDir, { recursive: true });
   writeFileSync(
     join(gradleDir, "libs.versions.toml"),
-    versionCatalogTemplate({ includeQuickJs: hasBackgroundTasks }),
+    versionCatalogTemplate({
+      includeQuickJs: hasBackgroundTasks,
+      includeWorkManager: hasBackgroundTasks,
+    }),
   );
 
   const pluginSourceDirs = copyPluginInputs(
@@ -348,6 +432,10 @@ export async function generateProject(
     writeFileSync(
       join(javaDir, "NativiteBackgroundTaskRuntime.kt"),
       readRuntimeFile(pkg, "NativiteBackgroundTaskRuntime.kt"),
+    );
+    writeFileSync(
+      join(javaDir, "NativiteBackgroundWorker.kt"),
+      readRuntimeFile(pkg, "NativiteBackgroundWorker.kt"),
     );
   }
   writeFileSync(join(javaDir, "NativiteBridge.kt"), readRuntimeFile(pkg, "NativiteBridge.kt"));

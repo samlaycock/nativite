@@ -32,9 +32,10 @@ describe("buildGradleAppTemplate", () => {
     const output = buildGradleAppTemplate(androidConfig, 26, 36);
 
     expect(output).not.toContain("libs.quickjs.kt.android");
+    expect(output).not.toContain("libs.androidx.work.runtime.ktx");
   });
 
-  it("includes the Android background JavaScript runtime when background tasks are configured", () => {
+  it("includes Android background execution dependencies when background tasks are configured", () => {
     const output = buildGradleAppTemplate(
       {
         ...androidConfig,
@@ -45,6 +46,7 @@ describe("buildGradleAppTemplate", () => {
     );
 
     expect(output).toContain("implementation(libs.quickjs.kt.android)");
+    expect(output).toContain("implementation(libs.androidx.work.runtime.ktx)");
   });
 
   it("enables Compose build feature", () => {

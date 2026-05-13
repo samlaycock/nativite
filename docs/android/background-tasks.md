@@ -1,7 +1,8 @@
 # Android Background Tasks
 
 > Maps to: `src/native/android/runtime/NativiteBackgroundTasks.kt`,
-> `src/native/android/runtime/NativiteBackgroundTaskRuntime.kt`
+> `src/native/android/runtime/NativiteBackgroundTaskRuntime.kt`,
+> `src/native/android/runtime/NativiteBackgroundWorker.kt`
 
 Android background task execution uses QuickJS through
 `io.github.dokar3:quickjs-kt-android`.
@@ -33,10 +34,11 @@ Rejected alternatives:
 
 ## Generated Dependency
 
-Generated Android projects include the `libs.quickjs.kt.android` version catalog
-entry, dependency, and runtime adapter source only when `backgroundTasks` are
-configured. Apps without background tasks keep the same Gradle dependency set as
-before and only generate the manifest parsing helper.
+Generated Android projects include the `libs.quickjs.kt.android` and
+`libs.androidx.work.runtime.ktx` version catalog entries, dependencies, and
+runtime/worker sources only when `backgroundTasks` are configured. Apps without
+background tasks keep the same Gradle dependency set as before and only generate
+the manifest parsing helper.
 
 Nativite pins `quickjs-kt-android` to `1.0.5`. The generated Android project
 uses AGP 8.13.2, Kotlin 2.3.20, and SDK 36 so the QuickJS AAR metadata is
@@ -64,6 +66,36 @@ The runtime delegates JavaScript evaluation through `NativiteBackgroundJavaScrip
 Generated apps use `NativiteQuickJsBackgroundJavaScriptEngine` by default, while
 native source tests can inject a recording engine because QuickJS's Android
 native library is not loadable in local Robolectric JVM tests.
+
+## WorkManager Execution
+
+`NativiteBackgroundWorker` is a generated `CoroutineWorker`. WorkManager passes
+the task id in `nativite.taskId`; the worker loads the manifest, resolves the
+matching bundle asset, runs it through `NativiteBackgroundTaskRuntime`, and maps
+results to WorkManager states:
+
+- Returned `"retry"` or `{ "status": "retry" }` maps to `Result.retry()`.
+- Returned `"failure"` or `{ "status": "failure" }` maps to `Result.failure()`.
+- Any other successful return maps to `Result.success()`.
+- Unknown task ids fail and unexpected runtime errors request retry.
+
+`NativiteBackgroundWorkScheduler.scheduleRegisteredWork(context)` loads the
+manifest and schedules supported Android tasks by id. Periodic tasks use
+`enqueueUniquePeriodicWork(..., UPDATE, ...)`; one-off tasks use
+`enqueueUniqueWork(..., REPLACE, ...)`. The generated helper also exposes
+`schedule(context, task, payload)` and `cancel(context, taskId)` for native
+startup code or plugins that need explicit scheduling control.
+
+Supported Android task kinds are:
+
+- `periodic-work` with `repeatIntervalMinutes` of at least 15.
+- `one-off-work` with optional `initialDelayMinutes`.
+
+Supported WorkManager constraints/options are:
+
+- `requiresNetwork: true`, `"connected"`, `"unmetered"`, or `"not-roaming"`.
+- `requiresCharging: boolean`.
+- `backoffPolicy: "linear"` or `"exponential"` with `backoffDelayMinutes`.
 
 ## Host API Seam
 

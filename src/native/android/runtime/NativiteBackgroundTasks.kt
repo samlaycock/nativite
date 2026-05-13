@@ -5,7 +5,33 @@ data class NativiteBackgroundTask(
     val id: String,
     val bundle: String,
     val platforms: JSONObject,
-)
+) {
+    val androidOptions: NativiteAndroidBackgroundTaskOptions?
+        get() = platforms.optJSONObject("android")?.let(NativiteAndroidBackgroundTaskOptions::fromJson)
+}
+
+data class NativiteAndroidBackgroundTaskOptions(
+    val kind: String,
+    val repeatIntervalMinutes: Long?,
+    val initialDelayMinutes: Long?,
+    val requiresNetwork: Any?,
+    val requiresCharging: Boolean,
+    val backoffPolicy: String?,
+    val backoffDelayMinutes: Long?,
+) {
+    companion object {
+        fun fromJson(json: JSONObject): NativiteAndroidBackgroundTaskOptions =
+            NativiteAndroidBackgroundTaskOptions(
+                kind = json.getString("kind"),
+                repeatIntervalMinutes = json.optionalLong("repeatIntervalMinutes"),
+                initialDelayMinutes = json.optionalLong("initialDelayMinutes"),
+                requiresNetwork = json.optionalNetworkRequirement(),
+                requiresCharging = json.optBoolean("requiresCharging", false),
+                backoffPolicy = json.optString("backoffPolicy").ifEmpty { null },
+                backoffDelayMinutes = json.optionalLong("backoffDelayMinutes"),
+            )
+    }
+}
 
 object NativiteBackgroundTasks {
     const val manifestAssetPath: String = "nativite-background/manifest.json"
@@ -33,4 +59,17 @@ object NativiteBackgroundTasks {
         context.assets.open(bundleAssetPath(task)).bufferedReader().use { reader ->
             reader.readText()
         }
+}
+
+private fun JSONObject.optionalLong(key: String): Long? =
+    if (has(key) && !isNull(key)) getLong(key) else null
+
+private fun JSONObject.optionalNetworkRequirement(): Any? {
+    if (!has("requiresNetwork") || isNull("requiresNetwork")) return null
+    val value = get("requiresNetwork")
+    return when (value) {
+        is Boolean -> value
+        is String -> value
+        else -> null
+    }
 }

@@ -196,6 +196,54 @@ describe("generateProject", () => {
     { timeout: 60_000 },
   );
 
+  it("rejects unsupported Android background task kinds", async () => {
+    const cwd = makeTempDir();
+    writeFileSync(
+      join(cwd, "refresh.task.ts"),
+      `import { defineBackgroundTask } from "${join(process.cwd(), "src/background.ts")}";
+
+export default defineBackgroundTask({
+  id: "refresh",
+  android: { kind: "foreground-service" },
+  run() {},
+});
+`,
+    );
+
+    try {
+      await generateProject({ ...androidConfig, backgroundTasks: ["./refresh.task.ts"] }, cwd);
+      throw new Error("Expected Android background task validation to fail.");
+    } catch (err) {
+      expect((err as Error).message).toContain(
+        'Unsupported Android background task kind for "refresh". Nativite currently supports android.kind: "one-off-work" and "periodic-work".',
+      );
+    }
+  });
+
+  it("rejects invalid Android periodic intervals", async () => {
+    const cwd = makeTempDir();
+    writeFileSync(
+      join(cwd, "sync.task.ts"),
+      `import { defineBackgroundTask } from "${join(process.cwd(), "src/background.ts")}";
+
+export default defineBackgroundTask({
+  id: "sync",
+  android: { kind: "periodic-work", repeatIntervalMinutes: 10 },
+  run() {},
+});
+`,
+    );
+
+    try {
+      await generateProject({ ...androidConfig, backgroundTasks: ["./sync.task.ts"] }, cwd);
+      throw new Error("Expected Android background task validation to fail.");
+    } catch (err) {
+      expect((err as Error).message).toContain(
+        'Invalid Android background task option for "sync". android.repeatIntervalMinutes must be at least 15 for periodic work.',
+      );
+    }
+  });
+
   it.skip(
     "generates gradlew.bat",
     async () => {

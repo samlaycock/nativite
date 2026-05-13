@@ -114,9 +114,13 @@ collisions.
 The generated Android source includes `NativiteBackgroundTasks.kt`, whose
 `manifestAssetPath` constant points at the asset path and whose `loadManifest(context)` helper
 parses the task list. When background tasks are configured, generated Android projects also
-include the QuickJS catalog entry, runtime dependency, and `NativiteBackgroundTaskRuntime`, a
-minimal adapter that loads a task bundle asset, exposes a host API injection seam, invokes the
-task's default `run(ctx)` function, and bounds execution with a coroutine timeout.
+include the QuickJS and WorkManager catalog entries, runtime dependencies,
+`NativiteBackgroundTaskRuntime`, and `NativiteBackgroundWorker`. The runtime adapter loads a
+task bundle asset, exposes a host API injection seam, invokes the task's default `run(ctx)`
+function, and bounds execution with a coroutine timeout. The WorkManager helper schedules
+`android.kind: "periodic-work"` and `"one-off-work"` tasks by task id, applies supported
+constraints, and maps task return values of `"retry"`/`"failure"` or matching status objects to
+WorkManager result states.
 
 The generated iOS source includes `NativiteBackgroundTasks.swift`, whose
 `loadManifest(bundle:)` helper locates the bundled `nativite-background/manifest.json`
