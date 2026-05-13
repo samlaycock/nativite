@@ -126,7 +126,7 @@ final class NativiteBackgroundTasksTests: XCTestCase {
       scheduleState: "completed",
       runCount: 2,
       retryCount: 1,
-      lastRunAt: Date(timeIntervalSince1970: 1_778_673_600),
+      lastRunAt: "2026-05-13T12:00:00Z",
       lastResult: NativiteBackgroundTaskResultState(status: "success", outputJSON: #"{"count":2}"#),
       lastError: nil
     )
@@ -135,6 +135,25 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     let decoded = try JSONDecoder().decode(NativiteBackgroundTaskPersistedState.self, from: encoded)
 
     XCTAssertEqual(decoded, state)
+  }
+
+  func testPersistedStateEncodesLastRunAtAsString() throws {
+    let state = NativiteBackgroundTaskPersistedState(
+      version: 1,
+      taskId: "sync-inbox",
+      scheduleState: "completed",
+      runCount: 1,
+      retryCount: 0,
+      lastRunAt: "2026-05-13T12:00:00Z",
+      lastResult: nil,
+      lastError: nil
+    )
+    let encoded = try JSONEncoder().encode(state)
+    let object = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+
+    XCTAssertEqual(object["lastRunAt"] as? String, "2026-05-13T12:00:00Z")
   }
 
   func testPersistedStateWritesToEncodedTaskStateKey() throws {
