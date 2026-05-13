@@ -98,6 +98,11 @@ Supported Android task kinds are:
 - `periodic-work` with `repeatIntervalMinutes` of at least 15.
 - `one-off-work` with optional `initialDelayMinutes`.
 
+Periodic work uses WorkManager's platform minimum interval. Nativite validates configured
+`repeatIntervalMinutes` values below 15 minutes as invalid. WorkManager may still delay work for
+battery, Doze, network constraints, app standby, and quota. One-off work supports initial delay,
+network constraints, charging constraints, and retry backoff metadata where configured.
+
 Supported WorkManager constraints/options are:
 
 - `requiresNetwork: true`, `"connected"`, `"unmetered"`, or `"not-roaming"`.
@@ -124,3 +129,7 @@ after each runtime execution. The persisted JSON uses the same public keys as
 `BackgroundTaskStatus` (`id`, `state`, `version`, `runCount`, `retryCount`,
 `lastRunAt`, `lastResult`, and `lastError`) so `getStatus` can forward stored
 metadata without translating private native field names.
+
+Use Logcat and filter for `nativite-background` while testing. A scheduled WorkManager request
+does not imply immediate execution; inspect WorkManager state through `background.getStatus()` and
+native logs when diagnosing delayed work.

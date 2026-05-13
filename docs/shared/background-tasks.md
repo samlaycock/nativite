@@ -79,6 +79,23 @@ the native bridge, so native platforms receive the same JSON string regardless o
 transport quirks. Unsupported task ids and platform/task-kind combinations reject with native
 bridge errors.
 
+## End-to-End Workflow
+
+1. Define one task module per background entrypoint with `defineBackgroundTask()`. Keep the
+   runner independent from `window`, `document`, and other WebView-only globals.
+2. Register those modules in `backgroundTasks` in `nativite.config.ts`.
+3. Generate or build each native target with `bun run nativite build --platform ios` or
+   `bun run nativite build --platform android`.
+4. Check the generated native output for `nativite-background/manifest.json` and one `.js`
+   bundle for each registered task.
+5. Schedule tasks from WebView app code with `background.schedule(taskId, { payload })`.
+6. Observe scheduling and latest persisted execution state with `background.getStatus(taskId)`.
+7. Inspect native logs for lines prefixed with `[nativite-background]` while testing on a
+   simulator, emulator, or device.
+
+The `examples/background-tasks` directory contains a complete fixture with a periodic sync task,
+a one-off session refresh task, config registration, and WebView scheduling code.
+
 ## Config Registration
 
 Register task entrypoints in `nativite.config.ts`:
@@ -187,3 +204,35 @@ not schedule or execute background tasks.
 Generation dirty-checking includes the serialized manifest and emitted task bundle contents, so
 changing task registrations, platform metadata, task source, or imported task dependencies
 invalidates the generated native project hash.
+
+## Semantics and Troubleshooting
+
+Payloads are copied into native scheduler state as JSON. Passing functions, symbols, cyclic
+objects, or other non-JSON values fails before the bridge call is sent. Treat payloads as small
+trigger metadata, not as durable application data.
+
+`ctx.storage` is task-scoped durable string storage. Use it for cursors, timestamps, and compact
+retry metadata. It is not shared with WebView storage and should not store secrets unless the
+host app adds its own native protection around the storage backend.
+
+Returning `"success"` or `undefined` records a successful run. Returning `"failure"` records a
+terminal failed run. Returning `"retry"` asks the platform worker layer to retry when the platform
+supports retry. Object results such as `{ status: "retry", output: { reason: "offline" } }`
+persist structured output alongside the latest result.
+
+Cancellation is best-effort. `background.cancel(taskId)` cancels pending platform scheduler work
+and removes pending payload metadata where the platform exposes it. If a task is already running,
+the host may only be able to stop future invocations or terminate execution at the native runtime
+boundary.
+
+Common issues:
+
+- Unsupported task kind: iOS currently accepts `ios.kind: "app-refresh"` only. Android accepts
+  `android.kind: "periodic-work"` and `"one-off-work"` only.
+- Invalid payload: ensure `background.schedule()` receives JSON-serializable data.
+- Missing bundle or manifest: regenerate the native project after changing `backgroundTasks` or
+  task source files.
+- Task never runs immediately: iOS `BGTaskScheduler` and Android WorkManager are OS-managed and
+  may delay work for battery, network, quota, or minimum interval reasons.
+- Duplicate bundles: use unique task filenames because native bundle filenames are derived from
+  the registered entrypoint basename.

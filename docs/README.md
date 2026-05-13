@@ -53,3 +53,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Plugin System](./shared/plugin-system.md) — Third-party native capability registration
 - [Platform Comparison](./shared/platform-comparison.md) — Side-by-side feature comparison across platforms
 - [Package Exports](./shared/package-exports.md) — Published import and require entrypoint contract
+
+## Examples
+
+- [`examples/background-tasks`](../examples/background-tasks/README.md) — End-to-end background task definitions, registration, and scheduling
