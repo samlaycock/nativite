@@ -1,6 +1,7 @@
 # Android Background Tasks
 
-> Maps to: `src/native/android/runtime/NativiteBackgroundTasks.kt`
+> Maps to: `src/native/android/runtime/NativiteBackgroundTasks.kt`,
+> `src/native/android/runtime/NativiteBackgroundTaskRuntime.kt`
 
 Android background task execution uses QuickJS through
 `io.github.dokar3:quickjs-kt-android`.
@@ -32,9 +33,10 @@ Rejected alternatives:
 
 ## Generated Dependency
 
-Generated Android projects include `libs.quickjs.kt.android` only when
-`backgroundTasks` are configured. Apps without background tasks keep the same
-Gradle dependency set as before.
+Generated Android projects include the `libs.quickjs.kt.android` version catalog
+entry, dependency, and runtime adapter source only when `backgroundTasks` are
+configured. Apps without background tasks keep the same Gradle dependency set as
+before and only generate the manifest parsing helper.
 
 Nativite pins `quickjs-kt-android` to `1.0.5`. The generated Android project
 uses AGP 8.13.2, Kotlin 2.3.20, and SDK 36 so the QuickJS AAR metadata is
@@ -57,6 +59,11 @@ expectations.
 The default execution timeout is 30 seconds. Later WorkManager integration can
 construct the runtime with a different timeout if Android scheduling constraints
 require it.
+
+The runtime delegates JavaScript evaluation through `NativiteBackgroundJavaScriptEngine`.
+Generated apps use `NativiteQuickJsBackgroundJavaScriptEngine` by default, while
+native source tests can inject a recording engine because QuickJS's Android
+native library is not loadable in local Robolectric JVM tests.
 
 ## Host API Seam
 

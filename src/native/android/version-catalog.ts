@@ -1,4 +1,13 @@
-export function versionCatalogTemplate(): string {
+export interface AndroidVersionCatalogOptions {
+  readonly includeQuickJs?: boolean;
+}
+
+export function versionCatalogTemplate(options: AndroidVersionCatalogOptions = {}): string {
+  const quickJsVersionEntry = options.includeQuickJs ? '\nquickjsKt = "1.0.5"' : "";
+  const quickJsLibraryEntry = options.includeQuickJs
+    ? '\nquickjs-kt-android = { group = "io.github.dokar3", name = "quickjs-kt-android", version.ref = "quickjsKt" }'
+    : "";
+
   return `[versions]
 agp = "8.13.2"
 kotlin = "2.3.20"
@@ -7,8 +16,7 @@ lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.9.3"
 composeBom = "2024.12.01"
 webkit = "1.12.1"
-splashscreen = "1.0.1"
-quickjsKt = "1.0.5"
+splashscreen = "1.0.1"${quickJsVersionEntry}
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -19,8 +27,7 @@ androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
-androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
-quickjs-kt-android = { group = "io.github.dokar3", name = "quickjs-kt-android", version.ref = "quickjsKt" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }${quickJsLibraryEntry}
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
