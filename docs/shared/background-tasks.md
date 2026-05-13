@@ -37,6 +37,32 @@ export default defineBackgroundTask({
 The runner receives a constrained context containing task metadata, storage, `fetch`, logging,
 and an optional cancellation signal. It should not depend on WebView globals.
 
+## WebView Scheduling API
+
+App code running in the main WebView can schedule, cancel, and query registered background
+tasks through the same `nativite/background` entrypoint:
+
+```ts
+import { background } from "nativite/background";
+
+await background.schedule("refresh-session", {
+  payload: { reason: "manual" },
+});
+
+await background.cancel("refresh-session");
+const status = await background.getStatus("refresh-session");
+```
+
+Scheduling is separate from task definition: `defineBackgroundTask()` declares and bundles a
+task at build time, while `background.schedule()` controls an already-registered task by id at
+runtime. The WebView API sends bridge calls to the built-in `__background__` namespace using
+the `schedule`, `cancel`, and `getStatus` methods.
+
+Payloads must be JSON-serializable values. Nativite serializes the payload before it crosses
+the native bridge, so native platforms receive the same JSON string regardless of WebView
+transport quirks. Unsupported task ids and platform/task-kind combinations reject with native
+bridge errors.
+
 ## Config Registration
 
 Register task entrypoints in `nativite.config.ts`:
@@ -87,9 +113,8 @@ metadata without including the executable `run` function:
 }
 ```
 
-Native execution support still needs platform-specific scheduling and runtime invocation.
-Generated projects do include compiled JavaScript task bundles so native implementations can
-load bundled task entrypoints by id instead of evaluating persisted source strings.
+Generated projects include compiled JavaScript task bundles so native implementations can load
+bundled task entrypoints by id instead of evaluating persisted source strings.
 
 ## Generated Native Metadata
 

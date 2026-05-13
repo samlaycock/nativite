@@ -83,8 +83,14 @@ results to WorkManager states:
 manifest and schedules supported Android tasks by id. Periodic tasks use
 `enqueueUniquePeriodicWork(..., UPDATE, ...)`; one-off tasks use
 `enqueueUniqueWork(..., REPLACE, ...)`. The generated helper also exposes
-`schedule(context, task, payload)` and `cancel(context, taskId)` for native
-startup code or plugins that need explicit scheduling control.
+`schedule(context, task, payloadJSON)`, `cancel(context, taskId)`, and
+`status(context, taskId)` for native startup code, bridge handlers, or plugins
+that need explicit scheduling control.
+
+The Android bridge registers `__background__.schedule`, `__background__.cancel`,
+and `__background__.getStatus` when a WebView is attached. Scheduling validates
+the id against `nativite-background/manifest.json`, rejects tasks without
+Android metadata, and routes supported task kinds to WorkManager.
 
 Supported Android task kinds are:
 
@@ -101,7 +107,7 @@ Supported WorkManager constraints/options are:
 
 `NativiteBackgroundTaskHostApi` provides the placeholder injection seam for
 native APIs. Its `preludeScript(task)` hook can install global JavaScript
-helpers before task evaluation, and `contextScript(task, payload)` returns the
+helpers before task evaluation, and `contextScript(task, payloadJSON)` returns the
 JavaScript object passed to `run(ctx)`.
 
 The default context currently contains task metadata, optional payload, and

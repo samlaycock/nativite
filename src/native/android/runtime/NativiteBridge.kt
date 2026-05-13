@@ -1,3 +1,4 @@
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
@@ -17,6 +18,7 @@ class NativiteBridge {
     val splashKeepOnScreen: MutableState<Boolean> = mutableStateOf(false)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val handlers = mutableMapOf<String, NativiteHandler>()
+    private var applicationContext: Context? = null
 
     private var primaryWebView: WebView? = null
     private var primaryPort: WebMessagePortCompat? = null
@@ -51,9 +53,52 @@ class NativiteBridge {
         register(namespace = "__nativite__", method = "__ota_check__") { _, completion ->
             completion(Result.success(mapOf("available" to false)))
         }
+
+        register(namespace = "__background__", method = "schedule") { args, completion ->
+            val context = applicationContext
+            val request = args as? JSONObject
+            val taskId = request?.optString("id") ?: ""
+            if (context == null) {
+                completion(Result.failure(IllegalStateException("Nativite background scheduler is not attached to a WebView context.")))
+                return@register
+            }
+            val task = NativiteBackgroundTasks.loadManifest(context).firstOrNull { it.id == taskId }
+            if (task == null) {
+                completion(Result.failure(IllegalArgumentException("Unknown Nativite background task: $taskId")))
+                return@register
+            }
+            if (task.androidOptions == null) {
+                completion(Result.failure(IllegalArgumentException("Background task $taskId is not supported on Android.")))
+                return@register
+            }
+            NativiteBackgroundWorkScheduler.schedule(context, task, request?.optString("payload", "null"))
+            completion(Result.success(mapOf("id" to taskId, "state" to "scheduled", "platform" to "android")))
+        }
+
+        register(namespace = "__background__", method = "cancel") { args, completion ->
+            val context = applicationContext
+            val taskId = (args as? JSONObject)?.optString("id") ?: ""
+            if (context == null) {
+                completion(Result.failure(IllegalStateException("Nativite background scheduler is not attached to a WebView context.")))
+                return@register
+            }
+            NativiteBackgroundWorkScheduler.cancel(context, taskId)
+            completion(Result.success(mapOf("id" to taskId, "state" to "cancelled", "platform" to "android")))
+        }
+
+        register(namespace = "__background__", method = "getStatus") { args, completion ->
+            val context = applicationContext
+            val taskId = (args as? JSONObject)?.optString("id") ?: ""
+            if (context == null) {
+                completion(Result.failure(IllegalStateException("Nativite background scheduler is not attached to a WebView context.")))
+                return@register
+            }
+            completion(Result.success(NativiteBackgroundWorkScheduler.status(context, taskId)))
+        }
     }
 
     fun attachWebView(webView: WebView, instanceName: String = "main") {
+        applicationContext = webView.context.applicationContext
         if (instanceName == "main") {
             primaryWebView = webView
             primaryVars = NativiteVars(webView, this).also { it.startObserving() }

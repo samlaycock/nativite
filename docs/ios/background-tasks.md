@@ -48,7 +48,20 @@ The initial JavaScriptCore context injects a constrained host object:
 - `log.debug`, `log.error`, `log.info`, and `log.warn`
 
 Persistent storage, richer fetch bridging, retry/result persistence, and WebView-originated
-scheduling APIs are intentionally left for later runtime work.
+scheduling state persistence are intentionally left for later runtime work.
+
+## WebView Scheduling
+
+`NativiteBridge` registers built-in `__background__` handlers on iOS:
+
+- `schedule` validates the task id against the bundled manifest, rejects non-`app-refresh`
+  tasks, and submits a `BGAppRefreshTaskRequest`.
+- `cancel` calls `BGTaskScheduler.cancel(taskRequestWithIdentifier:)`.
+- `getStatus` maps pending `BGTaskScheduler` requests to `{ state: "scheduled" }`, otherwise
+  returning `{ state: "unknown" }`.
+
+Payloads arrive from the JavaScript API as a serialized JSON string and are passed to the
+JavaScriptCore host context when the task executes.
 
 ## Completion And Expiration
 
