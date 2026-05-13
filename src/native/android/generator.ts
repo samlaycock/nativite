@@ -274,7 +274,7 @@ export async function generateProject(
     join(projectRoot, "settings.gradle.kts"),
     settingsGradleTemplate(androidConfig.app.name),
   );
-  execSync("gradle wrapper --gradle-version 8.11.1 --no-daemon", {
+  execSync("gradle wrapper --gradle-version 8.13 --no-daemon", {
     cwd: projectRoot,
     stdio: "pipe",
     timeout: 60_000,

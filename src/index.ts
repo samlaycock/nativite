@@ -107,7 +107,7 @@ export type NativitePlugin<
 export const DEFAULT_IOS_MINIMUM_VERSION = "17.0";
 export const DEFAULT_MACOS_MINIMUM_VERSION = "14.0";
 export const DEFAULT_ANDROID_MIN_SDK = 26;
-export const DEFAULT_ANDROID_TARGET_SDK = 35;
+export const DEFAULT_ANDROID_TARGET_SDK = 36;
 
 export type NativiteRootConfigOverrides = {
   app?: Partial<{

@@ -69,7 +69,7 @@ describe("NativiteConfigSchema", () => {
     expect(minimumVersionFor(result, "macos")).toBe("14.0");
     expect(result.platforms?.find((entry) => entry.platform === "android")).toMatchObject({
       minSdk: 26,
-      targetSdk: 35,
+      targetSdk: 36,
     });
   });
 
@@ -83,7 +83,7 @@ describe("NativiteConfigSchema", () => {
     expect(minimumVersionFor(result, "macos")).toBe("14.0");
     expect(result.platforms?.find((entry) => entry.platform === "android")).toMatchObject({
       minSdk: 26,
-      targetSdk: 35,
+      targetSdk: 36,
     });
   });
 

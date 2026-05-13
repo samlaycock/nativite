@@ -5,41 +5,60 @@ import { buildGradleAppTemplate } from "./build-gradle-app.ts";
 
 describe("buildGradleAppTemplate", () => {
   it("sets applicationId from bundleId", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
     expect(output).toContain('applicationId = "com.example.testapp"');
   });
 
   it("sets minSdk and targetSdk", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
     expect(output).toContain("minSdk = 26");
-    expect(output).toContain("targetSdk = 35");
+    expect(output).toContain("targetSdk = 36");
   });
 
   it("sets versionCode and versionName from config", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
     expect(output).toContain("versionCode = 1");
     expect(output).toContain('versionName = "1.0.0"');
   });
 
   it("includes Compose and WebKit dependencies", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
     expect(output).toContain("libs.androidx.compose.material3");
     expect(output).toContain("libs.androidx.webkit");
     expect(output).toContain("libs.androidx.activity.compose");
   });
 
+  it("does not include the Android background JavaScript runtime without background tasks", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
+
+    expect(output).not.toContain("libs.quickjs.kt.android");
+  });
+
+  it("includes the Android background JavaScript runtime when background tasks are configured", () => {
+    const output = buildGradleAppTemplate(
+      {
+        ...androidConfig,
+        backgroundTasks: ["./sync.task.ts"],
+      },
+      26,
+      36,
+    );
+
+    expect(output).toContain("implementation(libs.quickjs.kt.android)");
+  });
+
   it("enables Compose build feature", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
     expect(output).toContain("compose = true");
   });
 
   it("enables BuildConfig generation", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
     expect(output).toContain("buildConfig = true");
   });
 
   it("copies the Android production web bundle into generated assets for release builds", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
 
     expect(output).toContain(
       'val nativiteWebBundleDir = rootProject.layout.projectDirectory.dir("../../dist-android")',
@@ -54,7 +73,7 @@ describe("buildGradleAppTemplate", () => {
   });
 
   it("fails release asset merging clearly when the Android web bundle is missing", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
 
     expect(output).toContain(
       'throw GradleException("Missing Android web bundle at ${bundlePath.path}. Run `bunx nativite build --platform android` before building release.")',
@@ -64,7 +83,7 @@ describe("buildGradleAppTemplate", () => {
   });
 
   it("removes stale dev metadata before release assets are merged", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35);
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
 
     expect(output).toContain(
       'val nativiteDevMetadataFile = layout.projectDirectory.file("src/main/assets/dev.json")',
@@ -75,7 +94,7 @@ describe("buildGradleAppTemplate", () => {
   });
 
   it("includes Android plugin source dirs, resource dirs, and Gradle dependencies", () => {
-    const output = buildGradleAppTemplate(androidConfig, 26, 35, {
+    const output = buildGradleAppTemplate(androidConfig, 26, 36, {
       sourceDirs: ["/tmp/plugin/java"],
       resourceDirs: ["/tmp/plugin/res"],
       dependencies: [

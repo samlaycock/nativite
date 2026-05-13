@@ -1,13 +1,14 @@
 export function versionCatalogTemplate(): string {
   return `[versions]
-agp = "8.7.3"
-kotlin = "2.1.0"
+agp = "8.13.2"
+kotlin = "2.3.20"
 coreKtx = "1.15.0"
 lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.9.3"
 composeBom = "2024.12.01"
 webkit = "1.12.1"
 splashscreen = "1.0.1"
+quickjsKt = "1.0.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -19,6 +20,7 @@ androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graph
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
+quickjs-kt-android = { group = "io.github.dokar3", name = "quickjs-kt-android", version.ref = "quickjsKt" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
