@@ -135,6 +135,14 @@ class NativiteBackgroundTasksTest {
     }
 
     @Test
+    fun backgroundWorker_statusResultUsesStableBridgeShape() {
+        assertEquals(
+            mapOf("id" to "sync-inbox", "state" to "unknown", "platform" to "android"),
+            NativiteBackgroundWorkScheduler.statusResult("sync-inbox", "unknown"),
+        )
+    }
+
+    @Test
     fun backgroundWorker_retriesTimedOutTasks() = runBlocking {
         val result = runNativiteBackgroundWork {
             withTimeout(1) {
