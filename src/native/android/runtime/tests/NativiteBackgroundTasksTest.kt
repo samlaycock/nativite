@@ -254,6 +254,28 @@ class NativiteBackgroundTasksTest {
     }
 
     @Test
+    fun run_recoversFromCorruptedPersistedState() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val preferences = NativiteBackgroundTaskSharedPreferencesHostApi.preferences(context)
+        preferences.edit()
+            .clear()
+            .putString(NativiteBackgroundTaskSharedPreferencesHostApi.stateKey("sync-inbox"), "{")
+            .commit()
+
+        val result = NativiteBackgroundTaskRuntime(
+            context = context,
+            engine = RecordingBackgroundJavaScriptEngine(),
+        ).run("sync-inbox")
+
+        val state = NativiteBackgroundTaskSharedPreferencesHostApi(preferences)
+            .readPersistedState("sync-inbox")!!
+        assertEquals("ok", result.value)
+        assertEquals("completed", state.scheduleState)
+        assertEquals(1, state.runCount)
+        assertEquals(0, state.retryCount)
+    }
+
+    @Test
     fun hostApi_defaultPreludeInstallsNoopConsoleForInheritedContextScript() {
         val task = NativiteBackgroundTask("sync-inbox", "sync-inbox.js", org.json.JSONObject())
         val hostApi = object : NativiteBackgroundTaskHostApi {}

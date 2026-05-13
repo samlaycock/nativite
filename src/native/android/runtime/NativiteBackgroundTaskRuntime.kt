@@ -180,7 +180,11 @@ class NativiteBackgroundTaskSharedPreferencesHostApi(
 
     fun readPersistedState(taskId: String): NativiteBackgroundTaskPersistedState? {
         val stored = preferences.getString(stateKey(taskId), null) ?: return null
-        return NativiteBackgroundTaskPersistedState.fromJson(JSONObject(stored))
+        return try {
+            NativiteBackgroundTaskPersistedState.fromJson(JSONObject(stored))
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun persistState(state: NativiteBackgroundTaskPersistedState) {
