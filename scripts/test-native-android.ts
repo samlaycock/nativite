@@ -98,6 +98,7 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.test:core:1.6.1")
     testImplementation("org.robolectric:robolectric:4.14.1")
 }
 `,
@@ -134,6 +135,30 @@ object NativiteConfig {
   );
 }
 
+function writeTestAssets(projectDir: string): void {
+  const assetsDir = join(projectDir, "src", "test", "assets", "nativite-background");
+  mkdirSync(assetsDir, { recursive: true });
+  writeFileSync(
+    join(assetsDir, "manifest.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        tasks: [
+          {
+            id: "sync-inbox",
+            bundle: "sync-inbox.js",
+            platforms: {
+              android: { kind: "periodic-work" },
+            },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+}
+
 function runGradleTests(projectDir: string): number {
   const result = spawnSync("gradle", ["testDebugUnitTest", "--no-daemon"], {
     cwd: projectDir,
@@ -150,6 +175,7 @@ try {
   writeGradleProperties(projectDir);
   writeManifest(projectDir);
   writeGeneratedConfig(projectDir);
+  writeTestAssets(projectDir);
 
   const mainDir = join(projectDir, "src", "main", "java", ...packageName.split("."));
   const testDir = join(projectDir, "src", "test", "java", ...packageName.split("."));
