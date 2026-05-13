@@ -12,7 +12,7 @@ import org.json.JSONObject
 
 typealias NativiteHandler = (args: Any?, completion: (Result<Any?>) -> Unit) -> Unit
 
-class NativiteBridge {
+open class NativiteBridge {
     val chromeState: MutableState<Map<String, Any?>> = mutableStateOf(emptyMap())
     /** Controls the Android splash screen keep-on-screen condition. */
     val splashKeepOnScreen: MutableState<Boolean> = mutableStateOf(false)
@@ -62,7 +62,13 @@ class NativiteBridge {
                 completion(Result.failure(IllegalStateException("Nativite background scheduler is not attached to a WebView context.")))
                 return@register
             }
-            val task = NativiteBackgroundTasks.loadManifest(context).firstOrNull { it.id == taskId }
+            val tasks = try {
+                loadBackgroundTaskManifest(context)
+            } catch (err: Exception) {
+                completion(Result.failure(err))
+                return@register
+            }
+            val task = tasks.firstOrNull { it.id == taskId }
             if (task == null) {
                 completion(Result.failure(IllegalArgumentException("Unknown Nativite background task: $taskId")))
                 return@register
@@ -99,6 +105,9 @@ class NativiteBridge {
             }
         }
     }
+
+    internal open fun loadBackgroundTaskManifest(context: Context): List<NativiteBackgroundTask> =
+        NativiteBackgroundTasks.loadManifest(context)
 
     fun attachWebView(webView: WebView, instanceName: String = "main") {
         applicationContext = webView.context.applicationContext
