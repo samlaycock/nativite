@@ -67,7 +67,8 @@ class NativiteBridge {
                 completion(Result.failure(IllegalArgumentException("Unknown Nativite background task: $taskId")))
                 return@register
             }
-            if (task.androidOptions == null) {
+            val android = task.androidOptions
+            if (android == null || !android.isSchedulable) {
                 completion(Result.failure(IllegalArgumentException("Background task $taskId is not supported on Android.")))
                 return@register
             }

@@ -63,6 +63,9 @@ object NativiteBackgroundWorkScheduler {
 
     fun schedule(context: Context, task: NativiteBackgroundTask, payloadJSON: String? = null) {
         val android = task.androidOptions ?: return
+        require(android.isSchedulable) {
+            "Background task ${task.id} is not supported on Android."
+        }
         val workManager = WorkManager.getInstance(context)
         val workName = uniqueWorkName(task)
 
