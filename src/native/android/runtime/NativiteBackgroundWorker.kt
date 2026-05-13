@@ -14,6 +14,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkRequest
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import org.json.JSONObject
 
 class NativiteBackgroundWorker(
@@ -24,13 +26,8 @@ class NativiteBackgroundWorker(
         val taskId = inputData.getString(taskIdInputKey) ?: return Result.failure()
         val payload = inputData.getString(payloadInputKey)?.let { JSONObject(it) }
 
-        return try {
-            val result = NativiteBackgroundTaskRuntime(applicationContext).run(taskId, payload)
-            result.toWorkResult()
-        } catch (_: IllegalArgumentException) {
-            Result.failure()
-        } catch (_: Throwable) {
-            Result.retry()
+        return runNativiteBackgroundWork {
+            NativiteBackgroundTaskRuntime(applicationContext).run(taskId, payload)
         }
     }
 
@@ -39,6 +36,21 @@ class NativiteBackgroundWorker(
         const val payloadInputKey: String = "nativite.payload"
     }
 }
+
+internal suspend fun runNativiteBackgroundWork(
+    runner: suspend () -> NativiteBackgroundTaskResult,
+): androidx.work.ListenableWorker.Result =
+    try {
+        runner().toWorkResult()
+    } catch (_: IllegalArgumentException) {
+        androidx.work.ListenableWorker.Result.failure()
+    } catch (_: TimeoutCancellationException) {
+        androidx.work.ListenableWorker.Result.retry()
+    } catch (err: CancellationException) {
+        throw err
+    } catch (_: Throwable) {
+        androidx.work.ListenableWorker.Result.retry()
+    }
 
 object NativiteBackgroundWorkScheduler {
     fun scheduleRegisteredWork(context: Context) {

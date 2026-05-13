@@ -268,6 +268,11 @@ function validateAndroidBackgroundTaskManifest(
         `Invalid Android background task option for "${task.id}". android.backoffPolicy must be "linear" or "exponential".`,
       );
     }
+    if (backoffPolicy !== undefined && metadata.backoffDelayMinutes === undefined) {
+      throw new Error(
+        `Invalid Android background task option for "${task.id}". android.backoffPolicy requires android.backoffDelayMinutes.`,
+      );
+    }
 
     if (kind === "periodic-work") {
       assertNumberOption(task.id, "repeatIntervalMinutes", metadata.repeatIntervalMinutes);
