@@ -173,7 +173,10 @@ class NativiteBackgroundTaskSharedPreferencesHostApi(
             if (key.startsWith(prefix)) editor.remove(key)
         }
         for (key in storage.keys()) {
-            editor.putString(storageKey(taskId, key), storage.getString(key))
+            val value = storage.opt(key)
+            if (value is String) {
+                editor.putString(storageKey(taskId, key), value)
+            }
         }
         editor.commit()
     }

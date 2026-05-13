@@ -144,6 +144,26 @@ class NativiteBackgroundTasksTest {
     }
 
     @Test
+    fun backgroundWorker_statusResultOmitsAbsentOptionalMetadata() {
+        val status = NativiteBackgroundWorkScheduler.statusResult(
+            taskId = "sync-inbox",
+            state = "unknown",
+            persistedState = NativiteBackgroundTaskPersistedState(
+                id = "sync-inbox",
+                state = "completed",
+            ),
+        )
+
+        assertEquals("completed", status["state"])
+        assertEquals(1, status["version"])
+        assertEquals(0, status["runCount"])
+        assertEquals(0, status["retryCount"])
+        assertFalse(status.containsKey("lastRunAt"))
+        assertFalse(status.containsKey("lastResult"))
+        assertFalse(status.containsKey("lastError"))
+    }
+
+    @Test
     fun backgroundWorker_statusResultMergesPersistedStatusMetadata() {
         val status = NativiteBackgroundWorkScheduler.statusResult(
             taskId = "sync-inbox",
@@ -171,6 +191,7 @@ class NativiteBackgroundTasksTest {
         assertEquals("success", lastResult["status"])
         assertEquals(2, output["count"])
         assertEquals(listOf("inbox", null), output["labels"])
+        assertFalse(status.containsKey("lastError"))
         assertFalse(status.containsKey("taskId"))
         assertFalse(status.containsKey("scheduleState"))
     }
@@ -295,6 +316,42 @@ class NativiteBackgroundTasksTest {
         assertEquals("retry", state.lastResult?.getString("status"))
         assertEquals("offline", state.lastResult?.getJSONObject("output")?.getString("reason"))
         assertTrue(state.lastRunAt?.contains("T") == true)
+    }
+
+    @Test
+    fun sharedPreferencesHostApi_persistStorageIgnoresNonStringSnapshotValues() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val preferences = NativiteBackgroundTaskSharedPreferencesHostApi.preferences(context)
+        preferences.edit().clear().commit()
+        val hostApi = NativiteBackgroundTaskSharedPreferencesHostApi(preferences)
+
+        hostApi.persistStorage(
+            "sync-inbox",
+            org.json.JSONObject("""{"cursor":"abc","count":2,"deleted":null,"nested":{"ok":true}}"""),
+        )
+
+        assertEquals(
+            "abc",
+            preferences.getString(
+                NativiteBackgroundTaskSharedPreferencesHostApi.storageKey("sync-inbox", "cursor"),
+                null,
+            ),
+        )
+        assertFalse(
+            preferences.contains(
+                NativiteBackgroundTaskSharedPreferencesHostApi.storageKey("sync-inbox", "count"),
+            ),
+        )
+        assertFalse(
+            preferences.contains(
+                NativiteBackgroundTaskSharedPreferencesHostApi.storageKey("sync-inbox", "deleted"),
+            ),
+        )
+        assertFalse(
+            preferences.contains(
+                NativiteBackgroundTaskSharedPreferencesHostApi.storageKey("sync-inbox", "nested"),
+            ),
+        )
     }
 
     @Test
