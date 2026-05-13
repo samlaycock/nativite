@@ -67,19 +67,24 @@ object NativiteQuickJsBackgroundJavaScriptEngine : NativiteBackgroundJavaScriptE
 
             evaluate<Any?>(prepareBackgroundTaskBundleForEvaluation(bundleScript))
             evaluate<Any?>("globalThis.$contextGlobalName = $contextScript;")
-            result = evaluate<String>(
-                """
-                JSON.stringify(await (async () => {
-                    const result = await globalThis.$taskGlobalName.run(globalThis.$contextGlobalName);
-                    return { result, storage: globalThis.$contextGlobalName.__storageSnapshot() };
-                })());
-                """.trimIndent(),
-            )
+            result = evaluate<String>(backgroundTaskInvocationScript())
         }
 
         return result
     }
 }
+
+internal fun backgroundTaskInvocationScript(): String =
+    """
+    JSON.stringify(await (async () => {
+        const context = globalThis.$contextGlobalName;
+        const result = await globalThis.$taskGlobalName.run(context);
+        const storage = typeof context.__storageSnapshot === "function"
+            ? context.__storageSnapshot()
+            : {};
+        return { result, storage };
+    })());
+    """.trimIndent()
 
 interface NativiteBackgroundTaskHostApi {
     fun preludeScript(task: NativiteBackgroundTask): String =
