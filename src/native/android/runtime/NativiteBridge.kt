@@ -93,7 +93,9 @@ class NativiteBridge {
                 completion(Result.failure(IllegalStateException("Nativite background scheduler is not attached to a WebView context.")))
                 return@register
             }
-            completion(Result.success(NativiteBackgroundWorkScheduler.status(context, taskId)))
+            NativiteBackgroundWorkScheduler.status(context, taskId) { status ->
+                completion(Result.success(status))
+            }
         }
     }
 

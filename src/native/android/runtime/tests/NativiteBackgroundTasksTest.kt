@@ -1,6 +1,7 @@
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
+import androidx.work.WorkInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -74,6 +75,17 @@ class NativiteBackgroundTasksTest {
             "nativite-background-sync-inbox",
             NativiteBackgroundWorkScheduler.uniqueWorkName("sync-inbox"),
         )
+    }
+
+    @Test
+    fun backgroundWorker_mapsWorkInfoStatesToBackgroundStates() {
+        assertEquals("scheduled", WorkInfo.State.ENQUEUED.toNativiteBackgroundState())
+        assertEquals("scheduled", WorkInfo.State.BLOCKED.toNativiteBackgroundState())
+        assertEquals("running", WorkInfo.State.RUNNING.toNativiteBackgroundState())
+        assertEquals("cancelled", WorkInfo.State.CANCELLED.toNativiteBackgroundState())
+        assertEquals("completed", WorkInfo.State.SUCCEEDED.toNativiteBackgroundState())
+        assertEquals("failed", WorkInfo.State.FAILED.toNativiteBackgroundState())
+        assertEquals("unknown", null.toNativiteBackgroundState())
     }
 
     @Test

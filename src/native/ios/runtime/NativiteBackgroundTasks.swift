@@ -19,6 +19,7 @@ enum NativiteBackgroundTasks {
   static let manifestResourceName = "manifest"
   static let manifestResourceExtension = "json"
   static let manifestSubdirectory = "nativite-background"
+  static let pendingPayloadKeyPrefix = "dev.nativite.background.pendingPayload."
 
   static func loadManifest(bundle: Bundle = .main) throws -> [NativiteBackgroundTask] {
     guard let url = bundle.url(
@@ -47,6 +48,10 @@ enum NativiteBackgroundTasks {
       withExtension: nil,
       subdirectory: manifestSubdirectory
     )
+  }
+
+  static func pendingPayloadKey(taskId: String) -> String {
+    "\(pendingPayloadKeyPrefix)\(taskId)"
   }
 
   static func contextScript(task: NativiteBackgroundTask, payloadJSON: String? = nil) -> String? {
@@ -128,12 +133,14 @@ enum NativiteBackgroundTasks {
 #if os(iOS)
 final class NativiteBackgroundTaskRuntime {
   private let bundle: Bundle
+  private let userDefaults: UserDefaults
   private let tasks: [NativiteBackgroundTask]
   private let activeContextLock = NSLock()
   private var activeContexts: [UUID: JSContext] = [:]
 
-  init(bundle: Bundle = .main) throws {
+  init(bundle: Bundle = .main, userDefaults: UserDefaults = .standard) throws {
     self.bundle = bundle
+    self.userDefaults = userDefaults
     self.tasks = try NativiteBackgroundTasks.loadManifest(bundle: bundle)
   }
 
@@ -173,7 +180,10 @@ final class NativiteBackgroundTaskRuntime {
       completion.complete(false)
     }
 
-    executionID = execute(task: task) { success in
+    let payloadJSON = userDefaults.string(
+      forKey: NativiteBackgroundTasks.pendingPayloadKey(taskId: task.id)
+    )
+    executionID = execute(task: task, payloadJSON: payloadJSON) { success in
       completion.complete(success)
     }
   }
@@ -310,10 +320,16 @@ private final class CompletionOnce {
 final class NativiteBackgroundTaskScheduler {
   private let bundle: Bundle
   private let scheduler: BGTaskScheduler
+  private let userDefaults: UserDefaults
 
-  init(bundle: Bundle = .main, scheduler: BGTaskScheduler = .shared) {
+  init(
+    bundle: Bundle = .main,
+    scheduler: BGTaskScheduler = .shared,
+    userDefaults: UserDefaults = .standard
+  ) {
     self.bundle = bundle
     self.scheduler = scheduler
+    self.userDefaults = userDefaults
   }
 
   func schedule(id taskId: String, payloadJSON: String? = nil) throws -> [String: Any] {
@@ -336,11 +352,18 @@ final class NativiteBackgroundTaskScheduler {
 
     let request = BGAppRefreshTaskRequest(identifier: task.id)
     try scheduler.submit(request)
+    let payloadKey = NativiteBackgroundTasks.pendingPayloadKey(taskId: task.id)
+    if let payloadJSON {
+      userDefaults.set(payloadJSON, forKey: payloadKey)
+    } else {
+      userDefaults.removeObject(forKey: payloadKey)
+    }
     return ["id": task.id, "state": "scheduled", "platform": "ios"]
   }
 
   func cancel(id taskId: String) -> [String: Any] {
     scheduler.cancel(taskRequestWithIdentifier: taskId)
+    userDefaults.removeObject(forKey: NativiteBackgroundTasks.pendingPayloadKey(taskId: taskId))
     return ["id": taskId, "state": "cancelled", "platform": "ios"]
   }
 
