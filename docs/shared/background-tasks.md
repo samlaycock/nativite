@@ -106,7 +106,8 @@ Each manifest `bundle` value points at a JavaScript file emitted next to the man
 - macOS: `.nativite/macos/<AppName>/nativite-background/<task>.js`
 
 Task bundles are built as isolated Vite entries and are kept separate from the main WebView
-application bundle. Bundle filenames are deterministic and derived from the registered task
+application bundle. Dynamic imports are inlined so each registered task emits a single native
+JavaScript asset. Bundle filenames are deterministic and derived from the registered task
 entrypoint filename, so two tasks with the same basename are rejected to avoid native asset
 collisions.
 
@@ -118,6 +119,6 @@ The generated Apple source includes `NativiteBackgroundTasks.swift`, whose
 `loadManifest(bundle:)` helper locates the bundled `nativite-background/manifest.json`
 resource and decodes the task list.
 
-Generation dirty-checking includes the serialized manifest and registered task entrypoint source,
-so changing task registrations, platform metadata, or task source invalidates the generated
-native project hash.
+Generation dirty-checking includes the serialized manifest and emitted task bundle contents, so
+changing task registrations, platform metadata, task source, or imported task dependencies
+invalidates the generated native project hash.

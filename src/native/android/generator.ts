@@ -19,6 +19,7 @@ import {
 import {
   BACKGROUND_MANIFEST_RELATIVE_PATH,
   backgroundTaskHashInputs,
+  buildBackgroundTaskBundles,
   createBackgroundTaskManifestFromEntries,
   serializeBackgroundTaskManifest,
   resolveBackgroundTaskEntries,
@@ -201,6 +202,7 @@ export async function generateProject(
   const backgroundTaskEntries = await resolveBackgroundTaskEntries(config, cwd);
   const backgroundTaskManifest = createBackgroundTaskManifestFromEntries(backgroundTaskEntries);
   const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
+  const backgroundTaskBundles = await buildBackgroundTaskBundles(backgroundTaskEntries, cwd);
   const appDir = join(projectRoot, "app");
   const srcMainDir = join(appDir, "src", "main");
   const pluginSourceDir = join(srcMainDir, "generated", "nativite", "plugins", "java");
@@ -214,7 +216,7 @@ export async function generateProject(
       cwd,
       backgroundTaskManifestJSON,
     ),
-    ...backgroundTaskHashInputs(backgroundTaskEntries),
+    ...backgroundTaskHashInputs(backgroundTaskBundles),
   ]);
 
   // Ensure production/generate mode never packages stale dev server settings.
@@ -335,7 +337,7 @@ export async function generateProject(
     `package ${pkg}\n\n${nativitePluginRegistrantTemplate(resolvedPlugins)}`,
   );
   writeBackgroundTaskManifest(backgroundTaskManifest, assetsDir);
-  await writeBackgroundTaskBundles(backgroundTaskEntries, assetsDir, cwd);
+  writeBackgroundTaskBundles(backgroundTaskBundles, assetsDir);
 
   // Resources
   writeFileSync(join(valuesDir, "strings.xml"), stringsXmlTemplate(androidConfig));

@@ -16,6 +16,7 @@ import {
 import {
   BACKGROUND_MANIFEST_RELATIVE_PATH,
   backgroundTaskHashInputs,
+  buildBackgroundTaskBundles,
   createBackgroundTaskManifestFromEntries,
   resolveBackgroundTaskEntries,
   serializeBackgroundTaskManifest,
@@ -183,6 +184,7 @@ export async function generateProject(
   const backgroundTaskEntries = await resolveBackgroundTaskEntries(config, cwd);
   const backgroundTaskManifest = createBackgroundTaskManifestFromEntries(backgroundTaskEntries);
   const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
+  const backgroundTaskBundles = await buildBackgroundTaskBundles(backgroundTaskEntries, cwd);
   const hash = hashConfigForGeneration(config, resolvedPlugins, [
     ...generationHashInputs(
       config,
@@ -192,7 +194,7 @@ export async function generateProject(
       cwd,
       backgroundTaskManifestJSON,
     ),
-    ...backgroundTaskHashInputs(backgroundTaskEntries),
+    ...backgroundTaskHashInputs(backgroundTaskBundles),
   ]);
 
   // Dirty check — skip if nothing has changed
@@ -245,7 +247,7 @@ export async function generateProject(
   writeFileSync(join(appDir, "NativiteKeyboard.swift"), readRuntimeFile("NativiteKeyboard.swift"));
   writeFileSync(join(appDir, "OTAUpdater.swift"), readRuntimeFile("OTAUpdater.swift"));
   writeBackgroundTaskManifest(backgroundTaskManifest, appDir);
-  await writeBackgroundTaskBundles(backgroundTaskEntries, appDir, cwd);
+  writeBackgroundTaskBundles(backgroundTaskBundles, appDir);
 
   // iOS-only: LaunchScreen storyboard and splash image
   if (targetPlatform === "ios" && config.splash) {
