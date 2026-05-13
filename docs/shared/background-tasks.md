@@ -70,6 +70,10 @@ task at build time, while `background.schedule()` controls an already-registered
 runtime. The WebView API sends bridge calls to the built-in `__background__` namespace using
 the `schedule`, `cancel`, and `getStatus` methods.
 
+`getStatus()` returns the public `BackgroundTaskStatus` shape. Native persisted status metadata
+uses the same keys as TypeScript callers consume: `id`, `state`, `version`, `runCount`,
+`retryCount`, `lastRunAt`, `lastResult`, and `lastError`.
+
 Payloads must be JSON-serializable values. Nativite serializes the payload before it crosses
 the native bridge, so native platforms receive the same JSON string regardless of WebView
 transport quirks. Unsupported task ids and platform/task-kind combinations reject with native

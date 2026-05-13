@@ -57,7 +57,10 @@ iOS also defines a versioned persisted task-state model containing schedule
 state, run/retry counters, last run time, last result, and last error metadata.
 Resolved task return values of `"failure"`, `"retry"`, or matching status
 objects are captured into this state model and mark the `BGTask` completion as
-unsuccessful.
+unsuccessful. Persisted status JSON uses the same public keys as
+`BackgroundTaskStatus` (`id`, `state`, `version`, `runCount`, `retryCount`,
+`lastRunAt`, `lastResult`, and `lastError`) so native status responses do not
+expose private model names to TypeScript callers.
 
 ## WebView Scheduling
 
@@ -67,7 +70,7 @@ unsuccessful.
   tasks, and submits a `BGAppRefreshTaskRequest`.
 - `cancel` calls `BGTaskScheduler.cancel(taskRequestWithIdentifier:)`.
 - `getStatus` maps pending `BGTaskScheduler` requests to `{ state: "scheduled" }`, otherwise
-  returning `{ state: "unknown" }`.
+  returning the last persisted completed/failed state when present or `{ state: "unknown" }`.
 
 Payloads arrive from the JavaScript API as a serialized JSON string and are passed to the
 JavaScriptCore host context when the task executes.

@@ -91,21 +91,44 @@ object NativiteBackgroundWorkScheduler {
         val workName = uniqueWorkName(taskId)
         val future = WorkManager.getInstance(context).getWorkInfosForUniqueWork(workName)
         future.addListener({
+            val schedulerState = try {
+                future.get().firstOrNull()?.state.toNativiteBackgroundState()
+            } catch (_: Exception) {
+                "unknown"
+            }
+            val persistedState = NativiteBackgroundTaskSharedPreferencesHostApi(
+                NativiteBackgroundTaskSharedPreferencesHostApi.preferences(context),
+            ).readPersistedState(taskId)
             completion(
                 statusResult(
                     taskId = taskId,
-                    state = try {
-                        future.get().firstOrNull()?.state.toNativiteBackgroundState()
-                    } catch (_: Exception) {
-                        "unknown"
-                    },
+                    state = schedulerState,
+                    persistedState = persistedState,
                 ),
             )
         }, directExecutor)
     }
 
-    internal fun statusResult(taskId: String, state: String): Map<String, Any?> =
-        mapOf("id" to taskId, "state" to state, "platform" to "android")
+    internal fun statusResult(
+        taskId: String,
+        state: String,
+        persistedState: NativiteBackgroundTaskPersistedState? = null,
+    ): Map<String, Any?> {
+        val result = mutableMapOf<String, Any?>(
+            "id" to taskId,
+            "state" to if (state == "unknown") persistedState?.state ?: state else state,
+            "platform" to "android",
+        )
+        if (persistedState != null) {
+            result["version"] = persistedState.version
+            result["runCount"] = persistedState.runCount
+            result["retryCount"] = persistedState.retryCount
+            result["lastRunAt"] = persistedState.lastRunAt
+            result["lastResult"] = persistedState.lastResult
+            result["lastError"] = persistedState.lastError
+        }
+        return result
+    }
 
     internal fun uniqueWorkName(task: NativiteBackgroundTask): String = uniqueWorkName(task.id)
 

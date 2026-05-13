@@ -169,7 +169,7 @@ enum NativiteBackgroundTasks {
     userDefaults: UserDefaults = .standard
   ) {
     guard let data = try? JSONEncoder().encode(state) else { return }
-    userDefaults.set(data, forKey: stateKey(taskId: state.taskId))
+    userDefaults.set(data, forKey: stateKey(taskId: state.id))
   }
 
   static func resultState(from envelopeJSON: String?) -> NativiteBackgroundTaskResultState? {
@@ -221,13 +221,72 @@ struct NativiteBackgroundTaskResultState: Codable, Equatable {
 
 struct NativiteBackgroundTaskPersistedState: Codable, Equatable {
   let version: Int
-  let taskId: String
-  let scheduleState: String
+  let id: String
+  let state: String
   let runCount: Int
   let retryCount: Int
   let lastRunAt: String?
   let lastResult: NativiteBackgroundTaskResultState?
   let lastError: String?
+
+  init(
+    version: Int,
+    id: String,
+    state: String,
+    runCount: Int,
+    retryCount: Int,
+    lastRunAt: String?,
+    lastResult: NativiteBackgroundTaskResultState?,
+    lastError: String?
+  ) {
+    self.version = version
+    self.id = id
+    self.state = state
+    self.runCount = runCount
+    self.retryCount = retryCount
+    self.lastRunAt = lastRunAt
+    self.lastResult = lastResult
+    self.lastError = lastError
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+    id = try container.decodeIfPresent(String.self, forKey: .id)
+      ?? container.decode(String.self, forKey: .taskId)
+    state = try container.decodeIfPresent(String.self, forKey: .state)
+      ?? container.decode(String.self, forKey: .scheduleState)
+    runCount = try container.decodeIfPresent(Int.self, forKey: .runCount) ?? 0
+    retryCount = try container.decodeIfPresent(Int.self, forKey: .retryCount) ?? 0
+    lastRunAt = try container.decodeIfPresent(String.self, forKey: .lastRunAt)
+    lastResult = try container.decodeIfPresent(NativiteBackgroundTaskResultState.self, forKey: .lastResult)
+    lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(version, forKey: .version)
+    try container.encode(id, forKey: .id)
+    try container.encode(state, forKey: .state)
+    try container.encode(runCount, forKey: .runCount)
+    try container.encode(retryCount, forKey: .retryCount)
+    try container.encodeIfPresent(lastRunAt, forKey: .lastRunAt)
+    try container.encodeIfPresent(lastResult, forKey: .lastResult)
+    try container.encodeIfPresent(lastError, forKey: .lastError)
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case version
+    case id
+    case state
+    case taskId
+    case scheduleState
+    case runCount
+    case retryCount
+    case lastRunAt
+    case lastResult
+    case lastError
+  }
 }
 
 #if os(iOS)
@@ -387,8 +446,8 @@ final class NativiteBackgroundTaskRuntime {
     NativiteBackgroundTasks.writePersistedState(
       NativiteBackgroundTaskPersistedState(
         version: 1,
-        taskId: taskId,
-        scheduleState: success ? "completed" : "failed",
+        id: taskId,
+        state: success ? "completed" : "failed",
         runCount: (previous?.runCount ?? 0) + 1,
         retryCount: retryCount,
         lastRunAt: ISO8601DateFormatter().string(from: Date()),
@@ -528,9 +587,42 @@ final class NativiteBackgroundTaskScheduler {
 
   func status(id taskId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
     scheduler.getPendingTaskRequests { requests in
-      let state = requests.contains { $0.identifier == taskId } ? "scheduled" : "unknown"
-      completion(.success(["id": taskId, "state": state, "platform": "ios"]))
+      let schedulerState = requests.contains { $0.identifier == taskId } ? "scheduled" : "unknown"
+      let persistedState = NativiteBackgroundTasks.readPersistedState(taskId: taskId, userDefaults: self.userDefaults)
+      completion(.success(self.statusResult(taskId: taskId, state: schedulerState, persistedState: persistedState)))
     }
+  }
+
+  private func statusResult(
+    taskId: String,
+    state: String,
+    persistedState: NativiteBackgroundTaskPersistedState?
+  ) -> [String: Any] {
+    var result: [String: Any] = [
+      "id": taskId,
+      "state": state == "unknown" ? persistedState?.state ?? state : state,
+      "platform": "ios",
+    ]
+    if let persistedState {
+      result["version"] = persistedState.version
+      result["runCount"] = persistedState.runCount
+      result["retryCount"] = persistedState.retryCount
+      result["lastRunAt"] = persistedState.lastRunAt
+      result["lastResult"] = persistedState.lastResult.map(Self.statusResultPayload)
+      result["lastError"] = persistedState.lastError
+    }
+    return result
+  }
+
+  private static func statusResultPayload(_ result: NativiteBackgroundTaskResultState) -> [String: Any] {
+    var payload: [String: Any] = [:]
+    if let status = result.status {
+      payload["status"] = status
+    }
+    if let output = result.output?.value {
+      payload["output"] = output
+    }
+    return payload
   }
 
   private func taskDefinition(id taskId: String) throws -> NativiteBackgroundTask {

@@ -120,4 +120,7 @@ and dotted storage keys cannot collide.
 
 Android also records a versioned persisted task-state model containing schedule
 state, run/retry counters, last run time, last result, and last error metadata
-after each runtime execution.
+after each runtime execution. The persisted JSON uses the same public keys as
+`BackgroundTaskStatus` (`id`, `state`, `version`, `runCount`, `retryCount`,
+`lastRunAt`, `lastResult`, and `lastError`) so `getStatus` can forward stored
+metadata without translating private native field names.

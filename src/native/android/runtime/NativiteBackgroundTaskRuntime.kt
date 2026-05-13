@@ -17,8 +17,8 @@ data class NativiteBackgroundTaskResult(
 
 data class NativiteBackgroundTaskPersistedState(
     val version: Int = 1,
-    val taskId: String,
-    val scheduleState: String,
+    val id: String,
+    val state: String,
     val runCount: Int = 0,
     val retryCount: Int = 0,
     val lastRunAt: String? = null,
@@ -27,8 +27,8 @@ data class NativiteBackgroundTaskPersistedState(
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("version", version)
-        .put("taskId", taskId)
-        .put("scheduleState", scheduleState)
+        .put("id", id)
+        .put("state", state)
         .put("runCount", runCount)
         .put("retryCount", retryCount)
         .put("lastRunAt", lastRunAt)
@@ -39,8 +39,8 @@ data class NativiteBackgroundTaskPersistedState(
         fun fromJson(json: JSONObject): NativiteBackgroundTaskPersistedState =
             NativiteBackgroundTaskPersistedState(
                 version = json.optInt("version", 1),
-                taskId = json.getString("taskId"),
-                scheduleState = json.getString("scheduleState"),
+                id = json.optString("id").takeIf { it.isNotEmpty() } ?: json.getString("taskId"),
+                state = json.optString("state").takeIf { it.isNotEmpty() } ?: json.getString("scheduleState"),
                 runCount = json.optInt("runCount", 0),
                 retryCount = json.optInt("retryCount", 0),
                 lastRunAt = json.optNullableString("lastRunAt"),
@@ -189,7 +189,7 @@ class NativiteBackgroundTaskSharedPreferencesHostApi(
 
     fun persistState(state: NativiteBackgroundTaskPersistedState) {
         preferences.edit()
-            .putString(stateKey(state.taskId), state.toJson().toString())
+            .putString(stateKey(state.id), state.toJson().toString())
             .commit()
     }
 
@@ -292,8 +292,8 @@ class NativiteBackgroundTaskRuntime(
         }
         host.persistState(
             NativiteBackgroundTaskPersistedState(
-                taskId = taskId,
-                scheduleState = if (error == null && status != "failure" && status != "retry") {
+                id = taskId,
+                state = if (error == null && status != "failure" && status != "retry") {
                     "completed"
                 } else {
                     "failed"

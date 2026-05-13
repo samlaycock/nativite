@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -143,6 +144,34 @@ class NativiteBackgroundTasksTest {
     }
 
     @Test
+    fun backgroundWorker_statusResultMergesPersistedStatusMetadata() {
+        val status = NativiteBackgroundWorkScheduler.statusResult(
+            taskId = "sync-inbox",
+            state = "unknown",
+            persistedState = NativiteBackgroundTaskPersistedState(
+                id = "sync-inbox",
+                state = "completed",
+                runCount = 2,
+                retryCount = 1,
+                lastRunAt = "2026-05-13T12:00:00Z",
+                lastResult = org.json.JSONObject("""{"status":"success","output":{"count":2}}"""),
+                lastError = null,
+            ),
+        )
+
+        assertEquals("sync-inbox", status["id"])
+        assertEquals("completed", status["state"])
+        assertEquals("android", status["platform"])
+        assertEquals(1, status["version"])
+        assertEquals(2, status["runCount"])
+        assertEquals(1, status["retryCount"])
+        assertEquals("2026-05-13T12:00:00Z", status["lastRunAt"])
+        assertEquals("success", (status["lastResult"] as org.json.JSONObject).getString("status"))
+        assertFalse(status.containsKey("taskId"))
+        assertFalse(status.containsKey("scheduleState"))
+    }
+
+    @Test
     fun backgroundWorker_retriesTimedOutTasks() = runBlocking {
         val result = runNativiteBackgroundWork {
             withTimeout(1) {
@@ -245,7 +274,7 @@ class NativiteBackgroundTasksTest {
 
         val state = NativiteBackgroundTaskSharedPreferencesHostApi(preferences)
             .readPersistedState("sync-inbox")!!
-        assertEquals("failed", state.scheduleState)
+        assertEquals("failed", state.state)
         assertEquals(1, state.runCount)
         assertEquals(1, state.retryCount)
         assertEquals("retry", state.lastResult?.getString("status"))
@@ -270,7 +299,7 @@ class NativiteBackgroundTasksTest {
         val state = NativiteBackgroundTaskSharedPreferencesHostApi(preferences)
             .readPersistedState("sync-inbox")!!
         assertEquals("ok", result.value)
-        assertEquals("completed", state.scheduleState)
+        assertEquals("completed", state.state)
         assertEquals(1, state.runCount)
         assertEquals(0, state.retryCount)
     }
@@ -295,8 +324,8 @@ class NativiteBackgroundTasksTest {
     @Test
     fun persistedState_roundTripsVersionedTaskState() {
         val state = NativiteBackgroundTaskPersistedState(
-            taskId = "sync-inbox",
-            scheduleState = "completed",
+            id = "sync-inbox",
+            state = "completed",
             runCount = 2,
             retryCount = 1,
             lastRunAt = "2026-05-13T12:00:00Z",
@@ -307,12 +336,38 @@ class NativiteBackgroundTasksTest {
         val roundTripped = NativiteBackgroundTaskPersistedState.fromJson(state.toJson())
 
         assertEquals(1, roundTripped.version)
-        assertEquals("sync-inbox", roundTripped.taskId)
-        assertEquals("completed", roundTripped.scheduleState)
+        assertEquals("sync-inbox", roundTripped.id)
+        assertEquals("completed", roundTripped.state)
         assertEquals(2, roundTripped.runCount)
         assertEquals(1, roundTripped.retryCount)
         assertEquals("success", roundTripped.lastResult?.getString("status"))
         assertEquals(null, roundTripped.lastError)
+        assertEquals("sync-inbox", roundTripped.toJson().getString("id"))
+        assertEquals("completed", roundTripped.toJson().getString("state"))
+        assertFalse(roundTripped.toJson().has("taskId"))
+        assertFalse(roundTripped.toJson().has("scheduleState"))
+    }
+
+    @Test
+    fun persistedState_readsLegacyTaskIdAndScheduleStateKeys() {
+        val roundTripped = NativiteBackgroundTaskPersistedState.fromJson(
+            org.json.JSONObject(
+                """
+                {
+                  "version": 1,
+                  "taskId": "sync-inbox",
+                  "scheduleState": "completed",
+                  "runCount": 2,
+                  "retryCount": 1
+                }
+                """.trimIndent(),
+            ),
+        )
+
+        assertEquals("sync-inbox", roundTripped.id)
+        assertEquals("completed", roundTripped.state)
+        assertEquals(2, roundTripped.runCount)
+        assertEquals(1, roundTripped.retryCount)
     }
 }
 
