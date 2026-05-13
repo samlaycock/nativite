@@ -97,6 +97,7 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("io.github.dokar3:quickjs-kt-android:1.0.5")
+    implementation("androidx.work:work-runtime-ktx:2.10.5")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test:core:1.6.1")

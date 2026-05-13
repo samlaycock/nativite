@@ -49,7 +49,7 @@ export function buildGradleAppTemplate(
   const pluginSourceSetEntries = `${sourceSetEntries("java.srcDirs", pluginInputs.sourceDirs)}${sourceSetEntries("res.srcDirs", pluginInputs.resourceDirs)}`;
   const pluginDependencyLines = pluginDependencyEntries(pluginInputs.dependencies);
   const backgroundRuntimeDependencyLine = hasBackgroundTasks(config)
-    ? "\n    implementation(libs.quickjs.kt.android)"
+    ? "\n    implementation(libs.quickjs.kt.android)\n    implementation(libs.androidx.work.runtime.ktx)"
     : "";
 
   return `plugins {

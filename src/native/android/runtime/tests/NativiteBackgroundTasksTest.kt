@@ -34,6 +34,45 @@ class NativiteBackgroundTasksTest {
     }
 
     @Test
+    fun androidOptions_parseWorkManagerSchedulingMetadata() {
+        val task = NativiteBackgroundTask(
+            id = "sync-inbox",
+            bundle = "sync-inbox.js",
+            platforms = org.json.JSONObject(
+                """
+                {
+                  "android": {
+                    "kind": "periodic-work",
+                    "repeatIntervalMinutes": 15,
+                    "requiresNetwork": "unmetered",
+                    "requiresCharging": true,
+                    "backoffPolicy": "linear",
+                    "backoffDelayMinutes": 5
+                  }
+                }
+                """.trimIndent(),
+            ),
+        )
+
+        val android = task.androidOptions!!
+
+        assertEquals("periodic-work", android.kind)
+        assertEquals(15L, android.repeatIntervalMinutes)
+        assertEquals("unmetered", android.requiresNetwork)
+        assertEquals(true, android.requiresCharging)
+        assertEquals("linear", android.backoffPolicy)
+        assertEquals(5L, android.backoffDelayMinutes)
+    }
+
+    @Test
+    fun backgroundWorker_mapsTaskIdsToUniqueWorkNames() {
+        assertEquals(
+            "nativite-background-sync-inbox",
+            NativiteBackgroundWorkScheduler.uniqueWorkName("sync-inbox"),
+        )
+    }
+
+    @Test
     fun prepareBackgroundTaskBundleForEvaluation_exposesNamedDefaultExportOnGlobalThis() {
         val prepared = prepareBackgroundTaskBundleForEvaluation(
             """
