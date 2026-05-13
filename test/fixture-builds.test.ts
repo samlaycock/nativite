@@ -100,6 +100,59 @@ document.body.dataset.native = String(__IS_NATIVE__);
   );
 }
 
+function writeBackgroundTaskFixture(projectRoot: string): void {
+  writeFileSync(
+    join(projectRoot, "nativite.config.ts"),
+    `import { defineConfig, ios, macos } from ${JSON.stringify(nativiteEntry)};
+
+export default defineConfig({
+  app: {
+    name: "FixtureApp",
+    bundleId: "com.example.fixture",
+    version: "2.3.4",
+    buildNumber: 42,
+  },
+  platforms: [ios(), macos()],
+  backgroundTasks: [
+    "./src/background/periodic-sync.task.ts",
+    "./src/background/refresh-session.task.ts",
+  ],
+});
+`,
+  );
+  mkdirSync(join(projectRoot, "src", "background"), { recursive: true });
+  writeFileSync(
+    join(projectRoot, "src", "background", "periodic-sync.task.ts"),
+    `import { defineBackgroundTask } from ${JSON.stringify(join(repoRoot, "src", "background.ts"))};
+
+export default defineBackgroundTask({
+  id: "periodic-sync",
+  ios: { kind: "app-refresh", earliestBeginAfterMinutes: 15 },
+  android: { kind: "periodic-work", repeatIntervalMinutes: 15, requiresNetwork: "connected" },
+  async run(ctx) {
+    const cursor = await ctx.storage.get("cursor");
+    await ctx.storage.set("cursor", cursor ?? "initial");
+    return { status: "success", output: { cursor: cursor ?? null } };
+  },
+});
+`,
+  );
+  writeFileSync(
+    join(projectRoot, "src", "background", "refresh-session.task.ts"),
+    `import { defineBackgroundTask } from ${JSON.stringify(join(repoRoot, "src", "background.ts"))};
+
+export default defineBackgroundTask({
+  id: "refresh-session",
+  android: { kind: "one-off-work", requiresNetwork: true },
+  async run(ctx) {
+    await ctx.storage.set("reason", String(ctx.payload?.reason ?? "manual"));
+    return "success";
+  },
+});
+`,
+  );
+}
+
 function readJson<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf-8")) as T;
 }
@@ -200,6 +253,57 @@ describe("fixture app native builds", () => {
       expect(js).toContain("macos");
       expect(existsSync(join(projectRoot, ".nativite", "macos", "FixtureApp.xcodeproj"))).toBe(
         true,
+      );
+    },
+    { timeout: 60_000 },
+  );
+
+  it(
+    "generates background task manifests, bundles, and runtime files from fixture tasks",
+    async () => {
+      const projectRoot = makeTempProject();
+      writeBackgroundTaskFixture(projectRoot);
+      process.chdir(projectRoot);
+
+      const exitCode = await runBuildCommand(
+        { platform: "ios" },
+        {
+          cwd: () => projectRoot,
+          loadConfig,
+          resolveConfiguredPlatformRuntimes,
+          serializePlatformRuntimeMetadata,
+          loadViteApi: async () => import("vite"),
+          createLogger: createNativiteLogger,
+        },
+      );
+
+      expect(exitCode).toBe(0);
+
+      const appDir = join(projectRoot, ".nativite", "ios", "FixtureApp");
+      const manifest = readJson<{
+        readonly tasks: readonly {
+          readonly id: string;
+          readonly bundle: string;
+          readonly platforms: Record<string, unknown>;
+        }[];
+      }>(join(appDir, "nativite-background", "manifest.json"));
+      const taskIds = manifest.tasks.map((task) => task.id);
+
+      expect(taskIds).toEqual(["periodic-sync", "refresh-session"]);
+      expect(manifest.tasks.find((task) => task.id === "periodic-sync")?.platforms.ios).toEqual({
+        kind: "app-refresh",
+        earliestBeginAfterMinutes: 15,
+      });
+      expect(existsSync(join(appDir, "nativite-background", "periodic-sync.task.js"))).toBe(true);
+      expect(
+        readFileSync(join(appDir, "nativite-background", "periodic-sync.task.js"), "utf-8"),
+      ).toContain("initial");
+      expect(existsSync(join(appDir, "NativiteBackgroundTasks.swift"))).toBe(true);
+      expect(readFileSync(join(appDir, "AppDelegate.swift"), "utf-8")).toContain(
+        "registerAppRefreshTasks",
+      );
+      expect(readFileSync(join(appDir, "Info.plist"), "utf-8")).toContain(
+        "BGTaskSchedulerPermittedIdentifiers",
       );
     },
     { timeout: 60_000 },

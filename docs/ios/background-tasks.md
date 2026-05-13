@@ -15,6 +15,12 @@ Other iOS task kinds fail native project generation with an actionable validatio
 This keeps the API aligned with iOS background execution constraints instead of implying
 arbitrary always-on JavaScript execution.
 
+`BGAppRefreshTask` is intended for short refresh operations. iOS decides when a task actually
+runs based on battery, usage patterns, network availability, and system quota. The
+`earliestBeginAfterMinutes` option is a lower-bound request, not a guarantee. Long-running
+processing, exact alarms, and user-visible foreground execution are intentionally unsupported by
+Nativite's iOS background task API today.
+
 ## Generated Info.plist
 
 When background tasks are configured for iOS, generated projects include:
@@ -74,6 +80,10 @@ expose private model names to TypeScript callers.
 
 Payloads arrive from the JavaScript API as a serialized JSON string and are passed to the
 JavaScriptCore host context when the task executes.
+
+Use Xcode device logs and filter for `[nativite-background]` while testing. The OS may defer
+execution even after scheduling succeeds, so verify generated metadata first, then use native
+debug tools to manually trigger or inspect `BGTaskScheduler` behavior.
 
 ## Completion And Expiration
 

@@ -139,6 +139,9 @@ web app needs native-owned UI or native capabilities:
 
 - Use `nativite/chrome` for native title bars, navigation, toolbars, drawers,
   sheets, menus, splash control, and inter-webview messaging.
+- Use `nativite/background` for registered background tasks; see
+  [Background Tasks](./background-tasks.md) and the `examples/background-tasks`
+  fixture.
 - Use `nativite/client` for low-level bridge calls, event subscriptions, and OTA
   checks.
 - Use `nativite/css` for live safe-area, keyboard, appearance, and device CSS
