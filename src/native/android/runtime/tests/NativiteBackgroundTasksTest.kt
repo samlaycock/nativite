@@ -1,6 +1,10 @@
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.ListenableWorker
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -70,6 +74,31 @@ class NativiteBackgroundTasksTest {
             "nativite-background-sync-inbox",
             NativiteBackgroundWorkScheduler.uniqueWorkName("sync-inbox"),
         )
+    }
+
+    @Test
+    fun backgroundWorker_retriesTimedOutTasks() = runBlocking {
+        val result = runNativiteBackgroundWork {
+            withTimeout(1) {
+                delay(10)
+                NativiteBackgroundTaskResult("sync-inbox", null)
+            }
+        }
+
+        assertTrue(result is ListenableWorker.Result.Retry)
+    }
+
+    @Test
+    fun backgroundWorker_rethrowsCancellationInsteadOfRetrying() {
+        try {
+            runBlocking {
+                runNativiteBackgroundWork {
+                    throw CancellationException("cancelled")
+                }
+            }
+            throw AssertionError("Expected CancellationException to be rethrown.")
+        } catch (_: CancellationException) {
+        }
     }
 
     @Test

@@ -244,6 +244,30 @@ export default defineBackgroundTask({
     }
   });
 
+  it("rejects Android backoff policies without an explicit backoff delay", async () => {
+    const cwd = makeTempDir();
+    writeFileSync(
+      join(cwd, "sync.task.ts"),
+      `import { defineBackgroundTask } from "${join(process.cwd(), "src/background.ts")}";
+
+export default defineBackgroundTask({
+  id: "sync",
+  android: { kind: "one-off-work", backoffPolicy: "linear" },
+  run() {},
+});
+`,
+    );
+
+    try {
+      await generateProject({ ...androidConfig, backgroundTasks: ["./sync.task.ts"] }, cwd);
+      throw new Error("Expected Android background task validation to fail.");
+    } catch (err) {
+      expect((err as Error).message).toContain(
+        'Invalid Android background task option for "sync". android.backoffPolicy requires android.backoffDelayMinutes.',
+      );
+    }
+  });
+
   it.skip(
     "generates gradlew.bat",
     async () => {
