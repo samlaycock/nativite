@@ -122,8 +122,8 @@ final class NativiteBackgroundTasksTests: XCTestCase {
   func testPersistedStateRoundTripsVersionedTaskMetadata() throws {
     let state = NativiteBackgroundTaskPersistedState(
       version: 1,
-      taskId: "sync-inbox",
-      scheduleState: "completed",
+      id: "sync-inbox",
+      state: "completed",
       runCount: 2,
       retryCount: 1,
       lastRunAt: "2026-05-13T12:00:00Z",
@@ -140,8 +140,8 @@ final class NativiteBackgroundTasksTests: XCTestCase {
   func testPersistedStateEncodesLastRunAtAsString() throws {
     let state = NativiteBackgroundTaskPersistedState(
       version: 1,
-      taskId: "sync-inbox",
-      scheduleState: "completed",
+      id: "sync-inbox",
+      state: "completed",
       runCount: 1,
       retryCount: 0,
       lastRunAt: "2026-05-13T12:00:00Z",
@@ -153,14 +153,18 @@ final class NativiteBackgroundTasksTests: XCTestCase {
       JSONSerialization.jsonObject(with: encoded) as? [String: Any]
     )
 
+    XCTAssertEqual(object["id"] as? String, "sync-inbox")
+    XCTAssertEqual(object["state"] as? String, "completed")
+    XCTAssertNil(object["taskId"])
+    XCTAssertNil(object["scheduleState"])
     XCTAssertEqual(object["lastRunAt"] as? String, "2026-05-13T12:00:00Z")
   }
 
   func testPersistedStateEncodesLastResultOutputUnderPublicContractKey() throws {
     let state = NativiteBackgroundTaskPersistedState(
       version: 1,
-      taskId: "sync-inbox",
-      scheduleState: "failed",
+      id: "sync-inbox",
+      state: "failed",
       runCount: 1,
       retryCount: 1,
       lastRunAt: "2026-05-13T12:00:00Z",
@@ -186,8 +190,8 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     userDefaults.removePersistentDomain(forName: "NativiteBackgroundTasksStateTests")
     let state = NativiteBackgroundTaskPersistedState(
       version: 1,
-      taskId: "sync.inbox",
-      scheduleState: "failed",
+      id: "sync.inbox",
+      state: "failed",
       runCount: 1,
       retryCount: 1,
       lastRunAt: nil,
@@ -201,6 +205,25 @@ final class NativiteBackgroundTasksTests: XCTestCase {
       NativiteBackgroundTasks.readPersistedState(taskId: "sync.inbox", userDefaults: userDefaults),
       state
     )
+  }
+
+  func testPersistedStateReadsLegacyTaskIdAndScheduleStateKeys() throws {
+    let data = """
+      {
+        "version": 1,
+        "taskId": "sync-inbox",
+        "scheduleState": "completed",
+        "runCount": 2,
+        "retryCount": 1
+      }
+      """.data(using: .utf8)!
+
+    let state = try JSONDecoder().decode(NativiteBackgroundTaskPersistedState.self, from: data)
+
+    XCTAssertEqual(state.id, "sync-inbox")
+    XCTAssertEqual(state.state, "completed")
+    XCTAssertEqual(state.runCount, 2)
+    XCTAssertEqual(state.retryCount, 1)
   }
 
   private func decodePlatformMetadata(_ json: String) throws -> AnyCodable {
