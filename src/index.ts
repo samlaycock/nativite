@@ -678,6 +678,18 @@ export const NativiteConfigSchema = z
             message: 'Built-in platform "android" minSdk must be an integer when provided.',
           });
         }
+        if (
+          entry["minSdk"] !== undefined &&
+          typeof entry["minSdk"] === "number" &&
+          Number.isInteger(entry["minSdk"]) &&
+          entry["minSdk"] < DEFAULT_ANDROID_MIN_SDK
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["platforms"],
+            message: `Built-in platform "android" minSdk must be at least ${DEFAULT_ANDROID_MIN_SDK}.`,
+          });
+        }
         if (entry["targetSdk"] !== undefined && !Number.isInteger(entry["targetSdk"])) {
           ctx.addIssue({
             code: "custom",
