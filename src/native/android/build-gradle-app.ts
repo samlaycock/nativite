@@ -7,6 +7,10 @@ export interface AndroidPluginGradleInputs {
   readonly dependencies: readonly ResolvedNativiteGradleDependency[];
 }
 
+function hasBackgroundTasks(config: NativiteConfig): boolean {
+  return (config.backgroundTasks ?? []).length > 0;
+}
+
 function escapeKotlinString(input: string): string {
   return input.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("$", "\\$");
 }
@@ -44,6 +48,9 @@ export function buildGradleAppTemplate(
 ): string {
   const pluginSourceSetEntries = `${sourceSetEntries("java.srcDirs", pluginInputs.sourceDirs)}${sourceSetEntries("res.srcDirs", pluginInputs.resourceDirs)}`;
   const pluginDependencyLines = pluginDependencyEntries(pluginInputs.dependencies);
+  const backgroundRuntimeDependencyLine = hasBackgroundTasks(config)
+    ? "\n    implementation(libs.quickjs.kt.android)"
+    : "";
 
   return `plugins {
     alias(libs.plugins.android.application)
@@ -135,7 +142,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.webkit)
-    implementation(libs.androidx.core.splashscreen)${pluginDependencyLines ? `\n${pluginDependencyLines}` : ""}
+    implementation(libs.androidx.core.splashscreen)${backgroundRuntimeDependencyLine}${pluginDependencyLines ? `\n${pluginDependencyLines}` : ""}
 }
 `;
 }

@@ -42,7 +42,7 @@ export default defineConfig({
 
 The helper calls rely on built-in defaults for whichever platforms are
 selected: iOS minimum version `17.0`, macOS minimum version `14.0`, Android
-`minSdk` `26`, and Android `targetSdk` `35`.
+`minSdk` `26`, and Android `targetSdk` `36`.
 
 Existing `nativite.config.ts` files are preserved by default. Passing `--force`
 allows init to overwrite the generated Nativite config.

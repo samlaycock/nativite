@@ -50,14 +50,14 @@ function writeBuildFile(projectDir: string): void {
   writeFileSync(
     join(projectDir, "build.gradle.kts"),
     `plugins {
-    id("com.android.library") version "8.7.3"
-    id("org.jetbrains.kotlin.android") version "2.1.0"
-    id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
+    id("com.android.library") version "8.13.2"
+    id("org.jetbrains.kotlin.android") version "2.3.20"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.20"
 }
 
 android {
     namespace = "${packageName}"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 26
@@ -96,6 +96,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("io.github.dokar3:quickjs-kt-android:1.0.5")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test:core:1.6.1")
@@ -156,6 +157,12 @@ function writeTestAssets(projectDir: string): void {
       null,
       2,
     ),
+  );
+  writeFileSync(
+    join(assetsDir, "sync-inbox.js"),
+    `const syncInbox = { run() { return "ok"; } };
+export { syncInbox as default };
+`,
   );
 }
 

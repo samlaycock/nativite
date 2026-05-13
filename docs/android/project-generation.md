@@ -52,7 +52,7 @@ The generator creates a complete Android Gradle project from the user's configur
 
 1. Creates all necessary directories with `mkdirSync(dir, { recursive: true })`.
 2. Writes `settings.gradle.kts` first (required by Gradle).
-3. Runs `gradle wrapper --gradle-version 8.11.1 --no-daemon` to generate wrapper files (`gradlew`, `gradlew.bat`, `gradle-wrapper.jar`).
+3. Runs `gradle wrapper --gradle-version 8.13 --no-daemon` to generate wrapper files (`gradlew`, `gradlew.bat`, `gradle-wrapper.jar`).
 4. Writes root and app `build.gradle.kts` files.
 5. Writes `AndroidManifest.xml`.
 6. Generates Kotlin source files.
@@ -107,7 +107,7 @@ The generator resolves platform-specific settings:
 | Setting       | Default          | Description                   |
 | ------------- | ---------------- | ----------------------------- |
 | `minSdk`      | `26`             | Minimum Android SDK version   |
-| `targetSdk`   | `35`             | Target Android SDK version    |
+| `targetSdk`   | `36`             | Target Android SDK version    |
 | `compileSdk`  | (from targetSdk) | Compile SDK version           |
 | `bundleId`    | from config      | Application ID / package name |
 | `versionCode` | from config      | Integer version code          |
@@ -127,8 +127,8 @@ Validation notes:
 
 | Dependency            | Version    |
 | --------------------- | ---------- |
-| Android Gradle Plugin | 8.7.3      |
-| Kotlin                | 2.1.0      |
+| Android Gradle Plugin | 8.13.2     |
+| Kotlin                | 2.3.20     |
 | Core KTX              | 1.15.0     |
 | Lifecycle Runtime KTX | 2.8.7      |
 | Activity Compose      | 1.9.3      |
@@ -166,6 +166,7 @@ assets are merged.
 - `androidx.compose` (BOM + ui, ui-graphics, material3)
 - `androidx.webkit` (WebViewCompat, WebMessagePort)
 - `androidx.core:core-splashscreen`
+- `io.github.dokar3:quickjs-kt-android` only when `backgroundTasks` are configured
 - Plugin Gradle dependencies declared through `platforms.android.dependencies`
 
 ### Gradle Properties
