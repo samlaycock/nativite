@@ -129,6 +129,8 @@ enum NativiteBackgroundTasks {
 final class NativiteBackgroundTaskRuntime {
   private let bundle: Bundle
   private let tasks: [NativiteBackgroundTask]
+  private let activeContextLock = NSLock()
+  private var activeContexts: [UUID: JSContext] = [:]
 
   init(bundle: Bundle = .main) throws {
     self.bundle = bundle
@@ -163,11 +165,15 @@ final class NativiteBackgroundTaskRuntime {
     let completion = CompletionOnce { success in
       bgTask.setTaskCompleted(success: success)
     }
-    bgTask.expirationHandler = {
+    var executionID: UUID?
+    bgTask.expirationHandler = { [weak self] in
+      if let executionID {
+        self?.releaseContext(id: executionID)
+      }
       completion.complete(false)
     }
 
-    execute(task: task) { success in
+    executionID = execute(task: task) { success in
       completion.complete(success)
     }
   }
@@ -189,14 +195,19 @@ final class NativiteBackgroundTaskRuntime {
     task: NativiteBackgroundTask,
     payloadJSON: String? = nil,
     completion: @escaping (Bool) -> Void
-  ) {
+  ) -> UUID? {
     guard
       let url = NativiteBackgroundTasks.bundleURL(for: task, bundle: bundle),
       let source = try? String(contentsOf: url, encoding: .utf8),
       let context = JSContext()
     else {
       completion(false)
-      return
+      return nil
+    }
+    let contextID = retainContext(context)
+    let finish: (Bool) -> Void = { [weak self] success in
+      self?.releaseContext(id: contextID)
+      completion(success)
     }
 
     context.exceptionHandler = { _, exception in
@@ -206,8 +217,8 @@ final class NativiteBackgroundTaskRuntime {
     context.evaluateScript(NativiteBackgroundTasks.executableBundleSource(source))
 
     guard context.exception == nil else {
-      completion(false)
-      return
+      finish(false)
+      return contextID
     }
 
     guard
@@ -217,8 +228,8 @@ final class NativiteBackgroundTaskRuntime {
       ),
       let contextValue = context.evaluateScript(contextScript)
     else {
-      completion(false)
-      return
+      finish(false)
+      return contextID
     }
     let invocation = """
       (async () => {
@@ -234,15 +245,16 @@ final class NativiteBackgroundTaskRuntime {
 
     if let promise = result, promise.hasProperty("then") {
       promise.invokeMethod("then", withArguments: [
-        JSValue(object: { completion(true) }, in: context) as Any,
+        JSValue(object: { finish(true) }, in: context) as Any,
         JSValue(object: { (_ error: JSValue?) in
           print("[nativite-background] JavaScript rejection: \(error?.toString() ?? "unknown")")
-          completion(false)
+          finish(false)
         }, in: context) as Any,
       ])
     } else {
-      completion(context.exception == nil)
+      finish(context.exception == nil)
     }
+    return contextID
   }
 
   private func installConsole(in context: JSContext) {
@@ -258,6 +270,20 @@ final class NativiteBackgroundTaskRuntime {
         warn: (...args) => __nativiteLog(args.map(String).join(' '))
       };
       """)
+  }
+
+  private func retainContext(_ context: JSContext) -> UUID {
+    let id = UUID()
+    activeContextLock.lock()
+    activeContexts[id] = context
+    activeContextLock.unlock()
+    return id
+  }
+
+  private func releaseContext(id: UUID) {
+    activeContextLock.lock()
+    activeContexts[id] = nil
+    activeContextLock.unlock()
   }
 }
 
