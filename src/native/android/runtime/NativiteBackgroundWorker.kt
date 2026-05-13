@@ -91,10 +91,21 @@ object NativiteBackgroundWorkScheduler {
         val workName = uniqueWorkName(taskId)
         val future = WorkManager.getInstance(context).getWorkInfosForUniqueWork(workName)
         future.addListener({
-            val state = future.get().firstOrNull()?.state.toNativiteBackgroundState()
-            completion(mapOf("id" to taskId, "state" to state, "platform" to "android"))
+            completion(
+                statusResult(
+                    taskId = taskId,
+                    state = try {
+                        future.get().firstOrNull()?.state.toNativiteBackgroundState()
+                    } catch (_: Exception) {
+                        "unknown"
+                    },
+                ),
+            )
         }, directExecutor)
     }
+
+    internal fun statusResult(taskId: String, state: String): Map<String, Any?> =
+        mapOf("id" to taskId, "state" to state, "platform" to "android")
 
     internal fun uniqueWorkName(task: NativiteBackgroundTask): String = uniqueWorkName(task.id)
 
