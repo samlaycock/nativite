@@ -154,7 +154,7 @@ class NativiteBackgroundTasksTest {
                 runCount = 2,
                 retryCount = 1,
                 lastRunAt = "2026-05-13T12:00:00Z",
-                lastResult = org.json.JSONObject("""{"status":"success","output":{"count":2}}"""),
+                lastResult = org.json.JSONObject("""{"status":"success","output":{"count":2,"labels":["inbox",null]}}"""),
                 lastError = null,
             ),
         )
@@ -166,9 +166,24 @@ class NativiteBackgroundTasksTest {
         assertEquals(2, status["runCount"])
         assertEquals(1, status["retryCount"])
         assertEquals("2026-05-13T12:00:00Z", status["lastRunAt"])
-        assertEquals("success", (status["lastResult"] as org.json.JSONObject).getString("status"))
+        val lastResult = status["lastResult"] as Map<*, *>
+        val output = lastResult["output"] as Map<*, *>
+        assertEquals("success", lastResult["status"])
+        assertEquals(2, output["count"])
+        assertEquals(listOf("inbox", null), output["labels"])
         assertFalse(status.containsKey("taskId"))
         assertFalse(status.containsKey("scheduleState"))
+    }
+
+    @Test
+    fun backgroundWorker_statusResultPayloadConvertsJsonToPlainBridgeValues() {
+        val payload = NativiteBackgroundWorkScheduler.statusResultPayload(
+            org.json.JSONObject("""{"status":"retry","output":{"nested":[1,true,null]}}"""),
+        )
+        val output = payload["output"] as Map<*, *>
+
+        assertEquals("retry", payload["status"])
+        assertEquals(listOf(1, true, null), output["nested"])
     }
 
     @Test
