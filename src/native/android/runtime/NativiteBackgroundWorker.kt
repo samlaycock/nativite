@@ -18,6 +18,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
+import org.json.JSONArray
 import org.json.JSONObject
 
 class NativiteBackgroundWorker(
@@ -124,11 +125,14 @@ object NativiteBackgroundWorkScheduler {
             result["runCount"] = persistedState.runCount
             result["retryCount"] = persistedState.retryCount
             result["lastRunAt"] = persistedState.lastRunAt
-            result["lastResult"] = persistedState.lastResult
+            result["lastResult"] = persistedState.lastResult?.let(::statusResultPayload)
             result["lastError"] = persistedState.lastError
         }
         return result
     }
+
+    internal fun statusResultPayload(result: JSONObject): Map<String, Any?> =
+        result.toPlainMap()
 
     internal fun uniqueWorkName(task: NativiteBackgroundTask): String = uniqueWorkName(task.id)
 
@@ -218,6 +222,30 @@ internal fun WorkInfo.State?.toNativiteBackgroundState(): String =
         WorkInfo.State.SUCCEEDED -> "completed"
         WorkInfo.State.FAILED -> "failed"
         null -> "unknown"
+    }
+
+private fun JSONObject.toPlainMap(): Map<String, Any?> {
+    val result = mutableMapOf<String, Any?>()
+    for (key in keys()) {
+        result[key] = opt(key).toPlainValue()
+    }
+    return result
+}
+
+private fun JSONArray.toPlainList(): List<Any?> {
+    val result = mutableListOf<Any?>()
+    for (index in 0 until length()) {
+        result += opt(index).toPlainValue()
+    }
+    return result
+}
+
+private fun Any?.toPlainValue(): Any? =
+    when (this) {
+        null, JSONObject.NULL -> null
+        is JSONObject -> toPlainMap()
+        is JSONArray -> toPlainList()
+        else -> this
     }
 
 private fun NativiteBackgroundTaskResult.toWorkResult(): androidx.work.ListenableWorker.Result {
