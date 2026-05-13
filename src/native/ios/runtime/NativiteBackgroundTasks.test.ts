@@ -10,7 +10,10 @@ describe("NativiteBackgroundTasks.swift", () => {
     expect(swift).toContain("@discardableResult");
     expect(swift).toContain("let contextID = retainContext(context)");
     expect(swift).toContain("self?.releaseContext(id: contextID)");
-    expect(swift).toContain("JSValue(object: { finish(true) }, in: context)");
+    expect(swift).toContain("let taskResult = NativiteBackgroundTasks.resultState");
+    expect(swift).toContain(
+      "finish(NativiteBackgroundTasks.resultSucceeded(taskResult), taskResult, nil)",
+    );
   });
 
   it("releases retained JavaScriptCore contexts when BGTask expiration fires", () => {

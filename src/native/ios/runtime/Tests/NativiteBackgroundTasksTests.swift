@@ -102,6 +102,23 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     XCTAssertNil(NativiteBackgroundTasks.readStoredValue(taskId: "sync-inbox", key: "cursor", userDefaults: userDefaults))
   }
 
+  func testStorageKeysEncodeTaskIdAndKeyWithoutDotCollisions() {
+    XCTAssertNotEqual(
+      NativiteBackgroundTasks.storageKey(taskId: "a.b", key: "c"),
+      NativiteBackgroundTasks.storageKey(taskId: "a", key: "b.c")
+    )
+  }
+
+  func testResultStateParsesRetryEnvelope() throws {
+    let result = try XCTUnwrap(
+      NativiteBackgroundTasks.resultState(from: #"{"result":{"status":"retry","output":{"reason":"offline"}}}"#)
+    )
+
+    XCTAssertEqual(result.status, "retry")
+    XCTAssertEqual(result.outputJSON, #"{"reason":"offline"}"#)
+    XCTAssertFalse(NativiteBackgroundTasks.resultSucceeded(result))
+  }
+
   func testPersistedStateRoundTripsVersionedTaskMetadata() throws {
     let state = NativiteBackgroundTaskPersistedState(
       version: 1,
@@ -118,6 +135,28 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     let decoded = try JSONDecoder().decode(NativiteBackgroundTaskPersistedState.self, from: encoded)
 
     XCTAssertEqual(decoded, state)
+  }
+
+  func testPersistedStateWritesToEncodedTaskStateKey() throws {
+    let userDefaults = try XCTUnwrap(UserDefaults(suiteName: "NativiteBackgroundTasksStateTests"))
+    userDefaults.removePersistentDomain(forName: "NativiteBackgroundTasksStateTests")
+    let state = NativiteBackgroundTaskPersistedState(
+      version: 1,
+      taskId: "sync.inbox",
+      scheduleState: "failed",
+      runCount: 1,
+      retryCount: 1,
+      lastRunAt: nil,
+      lastResult: NativiteBackgroundTaskResultState(status: "retry", outputJSON: nil),
+      lastError: nil
+    )
+
+    NativiteBackgroundTasks.writePersistedState(state, userDefaults: userDefaults)
+
+    XCTAssertEqual(
+      NativiteBackgroundTasks.readPersistedState(taskId: "sync.inbox", userDefaults: userDefaults),
+      state
+    )
   }
 
   private func decodePlatformMetadata(_ json: String) throws -> AnyCodable {
