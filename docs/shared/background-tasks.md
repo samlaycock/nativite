@@ -160,8 +160,9 @@ constraints, and maps task return values of `"retry"`/`"failure"` or matching st
 WorkManager result states.
 
 Android persists task-scoped `ctx.storage` values in private `SharedPreferences` under the
-`dev.nativite.background` namespace. The native state model is versioned and stores schedule
-state, run/retry counters, last run time, last result, and last error metadata.
+`dev.nativite.background` namespace with encoded task/key components to avoid collisions. The
+native state model is versioned and stores schedule state, run/retry counters, last run time,
+last result, and last error metadata.
 
 The generated iOS source includes `NativiteBackgroundTasks.swift`, whose
 `loadManifest(bundle:)` helper locates the bundled `nativite-background/manifest.json`
@@ -170,10 +171,11 @@ resource and decodes the task list. iOS generation also emits
 registration for `ios.kind: "app-refresh"` tasks, and a JavaScriptCore runtime that loads the
 matching task bundle by id outside the WebView lifecycle.
 
-iOS persists task-scoped `ctx.storage` values in `UserDefaults` under
-`dev.nativite.background.storage.<taskId>.<key>`. Pending payloads remain separate from durable
-task storage. The native state model is versioned and stores schedule state, run/retry counters,
-last run time, last result, and last error metadata.
+iOS persists task-scoped `ctx.storage` values in `UserDefaults` under the
+`dev.nativite.background.storage` namespace with encoded task/key components to avoid collisions.
+Pending payloads remain separate from durable task storage. The native state model is versioned
+and stores schedule state, run/retry counters, last run time, last result, and last error
+metadata.
 
 macOS currently generates the same manifest and bundle resources for metadata parity, but does
 not schedule or execute background tasks.

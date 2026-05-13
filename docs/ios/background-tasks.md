@@ -48,12 +48,16 @@ The initial JavaScriptCore context injects a constrained host object:
 - `fetch` from `globalThis.fetch` when available
 - `log.debug`, `log.error`, `log.info`, and `log.warn`
 
-Storage values persist in `UserDefaults` under
-`dev.nativite.background.storage.<taskId>.<key>`. Pending payloads use a separate
-namespace so one-off scheduling data does not overwrite durable task data.
+Storage values persist in `UserDefaults` under `dev.nativite.background.storage`
+with encoded task/key components so dotted task ids and dotted storage keys
+cannot collide. Pending payloads use a separate namespace so one-off scheduling
+data does not overwrite durable task data.
 
 iOS also defines a versioned persisted task-state model containing schedule
 state, run/retry counters, last run time, last result, and last error metadata.
+Resolved task return values of `"failure"`, `"retry"`, or matching status
+objects are captured into this state model and mark the `BGTask` completion as
+unsuccessful.
 
 ## WebView Scheduling
 

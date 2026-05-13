@@ -221,6 +221,23 @@ class NativiteBackgroundTasksTest {
     }
 
     @Test
+    fun hostApi_defaultPreludeInstallsNoopConsoleForInheritedContextScript() {
+        val task = NativiteBackgroundTask("sync-inbox", "sync-inbox.js", org.json.JSONObject())
+        val hostApi = object : NativiteBackgroundTaskHostApi {}
+
+        assertTrue(hostApi.preludeScript(task).contains("globalThis.console"))
+        assertTrue(hostApi.contextScript(task, null).contains("console.debug"))
+    }
+
+    @Test
+    fun sharedPreferencesHostApi_encodesStorageKeysWithoutDotCollisions() {
+        val first = NativiteBackgroundTaskSharedPreferencesHostApi.storageKey("a.b", "c")
+        val second = NativiteBackgroundTaskSharedPreferencesHostApi.storageKey("a", "b.c")
+
+        assertTrue(first != second)
+    }
+
+    @Test
     fun persistedState_roundTripsVersionedTaskState() {
         val state = NativiteBackgroundTaskPersistedState(
             taskId = "sync-inbox",

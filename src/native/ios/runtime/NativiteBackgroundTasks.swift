@@ -21,6 +21,7 @@ enum NativiteBackgroundTasks {
   static let manifestSubdirectory = "nativite-background"
   static let pendingPayloadKeyPrefix = "dev.nativite.background.pendingPayload."
   static let storageKeyPrefix = "dev.nativite.background.storage."
+  static let stateKeyPrefix = "dev.nativite.background.state."
 
   static func loadManifest(bundle: Bundle = .main) throws -> [NativiteBackgroundTask] {
     guard let url = bundle.url(
@@ -131,7 +132,7 @@ enum NativiteBackgroundTasks {
   }
 
   static func storageKey(taskId: String, key: String) -> String {
-    "\(storageKeyPrefix)\(taskId).\(key)"
+    "\(storageKeyPrefix)\(keyComponent(taskId))/\(keyComponent(key))"
   }
 
   static func readStoredValue(taskId: String, key: String, userDefaults: UserDefaults = .standard) -> String? {
@@ -149,6 +150,73 @@ enum NativiteBackgroundTasks {
 
   static func removeStoredValue(taskId: String, key: String, userDefaults: UserDefaults = .standard) {
     userDefaults.removeObject(forKey: storageKey(taskId: taskId, key: key))
+  }
+
+  static func stateKey(taskId: String) -> String {
+    "\(stateKeyPrefix)\(keyComponent(taskId))"
+  }
+
+  static func readPersistedState(
+    taskId: String,
+    userDefaults: UserDefaults = .standard
+  ) -> NativiteBackgroundTaskPersistedState? {
+    guard let data = userDefaults.data(forKey: stateKey(taskId: taskId)) else { return nil }
+    return try? JSONDecoder().decode(NativiteBackgroundTaskPersistedState.self, from: data)
+  }
+
+  static func writePersistedState(
+    _ state: NativiteBackgroundTaskPersistedState,
+    userDefaults: UserDefaults = .standard
+  ) {
+    guard let data = try? JSONEncoder().encode(state) else { return }
+    userDefaults.set(data, forKey: stateKey(taskId: state.taskId))
+  }
+
+  static func resultState(from envelopeJSON: String?) -> NativiteBackgroundTaskResultState? {
+    guard
+      let envelopeJSON,
+      let data = envelopeJSON.data(using: .utf8),
+      let envelope = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? [String: Any],
+      let result = envelope["result"]
+    else {
+      return nil
+    }
+
+    if let status = result as? String {
+      return NativiteBackgroundTaskResultState(status: status, outputJSON: nil)
+    }
+
+    guard let object = result as? [String: Any] else {
+      return NativiteBackgroundTaskResultState(status: "success", outputJSON: jsonFragmentString(result))
+    }
+
+    return NativiteBackgroundTaskResultState(
+      status: object["status"] as? String,
+      outputJSON: object["output"].flatMap(jsonFragmentString)
+    )
+  }
+
+  static func resultSucceeded(_ result: NativiteBackgroundTaskResultState?) -> Bool {
+    result?.status != "failure" && result?.status != "retry"
+  }
+
+  private static func jsonFragmentString(_ value: Any) -> String? {
+    guard JSONSerialization.isValidJSONObject(["value": value]) else { return nil }
+    guard
+      let data = try? JSONSerialization.data(withJSONObject: value, options: []),
+      let string = String(data: data, encoding: .utf8)
+    else {
+      return nil
+    }
+    return string
+  }
+
+  private static func keyComponent(_ value: String) -> String {
+    Data(value.utf8)
+      .base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-")
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
   }
 
   private struct Manifest: Decodable {
@@ -261,7 +329,8 @@ final class NativiteBackgroundTaskRuntime {
       return nil
     }
     let contextID = retainContext(context)
-    let finish: (Bool) -> Void = { [weak self] success in
+    let finish: (Bool, NativiteBackgroundTaskResultState?, String?) -> Void = { [weak self] success, result, error in
+      self?.recordTaskState(taskId: task.id, success: success, result: result, error: error)
       self?.releaseContext(id: contextID)
       completion(success)
     }
@@ -274,7 +343,7 @@ final class NativiteBackgroundTaskRuntime {
     context.evaluateScript(NativiteBackgroundTasks.executableBundleSource(source))
 
     guard context.exception == nil else {
-      finish(false)
+      finish(false, nil, context.exception?.toString())
       return contextID
     }
 
@@ -285,7 +354,7 @@ final class NativiteBackgroundTaskRuntime {
       ),
       let contextValue = context.evaluateScript(contextScript)
     else {
-      finish(false)
+      finish(false, nil, "Background task context could not be created.")
       return contextID
     }
     let invocation = """
@@ -294,7 +363,8 @@ final class NativiteBackgroundTaskRuntime {
         if (!task || typeof task.run !== 'function') {
           throw new Error('Background task bundle did not expose a default run(ctx) function.');
         }
-        await task.run(__nativiteContext);
+        const result = await task.run(__nativiteContext);
+        return JSON.stringify({ result });
       })()
       """
     context.setObject(contextValue, forKeyedSubscript: "__nativiteContext" as NSString)
@@ -302,16 +372,42 @@ final class NativiteBackgroundTaskRuntime {
 
     if let promise = result, promise.hasProperty("then") {
       promise.invokeMethod("then", withArguments: [
-        JSValue(object: { finish(true) }, in: context) as Any,
+        JSValue(object: { (envelope: JSValue?) in
+          let taskResult = NativiteBackgroundTasks.resultState(from: envelope?.toString())
+          finish(NativiteBackgroundTasks.resultSucceeded(taskResult), taskResult, nil)
+        }, in: context) as Any,
         JSValue(object: { (_ error: JSValue?) in
           print("[nativite-background] JavaScript rejection: \(error?.toString() ?? "unknown")")
-          finish(false)
+          finish(false, nil, error?.toString())
         }, in: context) as Any,
       ])
     } else {
-      finish(context.exception == nil)
+      finish(context.exception == nil, nil, context.exception?.toString())
     }
     return contextID
+  }
+
+  private func recordTaskState(
+    taskId: String,
+    success: Bool,
+    result: NativiteBackgroundTaskResultState?,
+    error: String?
+  ) {
+    let previous = NativiteBackgroundTasks.readPersistedState(taskId: taskId, userDefaults: userDefaults)
+    let retryCount = result?.status == "retry" ? (previous?.retryCount ?? 0) + 1 : previous?.retryCount ?? 0
+    NativiteBackgroundTasks.writePersistedState(
+      NativiteBackgroundTaskPersistedState(
+        version: 1,
+        taskId: taskId,
+        scheduleState: success ? "completed" : "failed",
+        runCount: (previous?.runCount ?? 0) + 1,
+        retryCount: retryCount,
+        lastRunAt: Date(),
+        lastResult: result,
+        lastError: error
+      ),
+      userDefaults: userDefaults
+    )
   }
 
   private func installConsole(in context: JSContext) {

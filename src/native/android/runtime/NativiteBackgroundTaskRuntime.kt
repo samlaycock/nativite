@@ -2,6 +2,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.dokar.quickjs.evaluate
 import com.dokar.quickjs.quickJs
+import java.util.Base64
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
@@ -80,7 +81,15 @@ object NativiteQuickJsBackgroundJavaScriptEngine : NativiteBackgroundJavaScriptE
 }
 
 interface NativiteBackgroundTaskHostApi {
-    fun preludeScript(task: NativiteBackgroundTask): String = ""
+    fun preludeScript(task: NativiteBackgroundTask): String =
+        """
+        globalThis.console = globalThis.console || {
+            debug: (...args) => undefined,
+            error: (...args) => undefined,
+            info: (...args) => undefined,
+            warn: (...args) => undefined,
+        };
+        """.trimIndent()
 
     fun contextScript(task: NativiteBackgroundTask, payloadJSON: String?): String {
         val payloadScript = payloadJSON ?: "null"
@@ -115,23 +124,13 @@ interface NativiteBackgroundTaskHostApi {
 class NativiteBackgroundTaskSharedPreferencesHostApi(
     private val preferences: SharedPreferences,
 ) : NativiteBackgroundTaskHostApi {
-    override fun preludeScript(task: NativiteBackgroundTask): String =
-        """
-        globalThis.console = {
-            debug: (...args) => undefined,
-            error: (...args) => undefined,
-            info: (...args) => undefined,
-            warn: (...args) => undefined,
-        };
-        """.trimIndent()
-
     override fun contextScript(task: NativiteBackgroundTask, payloadJSON: String?): String {
         val payloadScript = payloadJSON ?: "null"
         val storage = JSONObject()
         val prefix = storageKeyPrefix(task.id)
         for ((key, value) in preferences.all) {
             if (key.startsWith(prefix) && value is String) {
-                storage.put(key.removePrefix(prefix), value)
+                storage.put(keyValue(key.removePrefix(prefix)), value)
             }
         }
         return """
@@ -168,9 +167,9 @@ class NativiteBackgroundTaskSharedPreferencesHostApi(
             if (key.startsWith(prefix)) editor.remove(key)
         }
         for (key in storage.keys()) {
-            editor.putString("$prefix$key", storage.getString(key))
+            editor.putString(storageKey(taskId, key), storage.getString(key))
         }
-        editor.apply()
+        editor.commit()
     }
 
     companion object {
@@ -179,7 +178,15 @@ class NativiteBackgroundTaskSharedPreferencesHostApi(
         fun preferences(context: Context): SharedPreferences =
             context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
 
-        fun storageKeyPrefix(taskId: String): String = "storage.$taskId."
+        fun storageKey(taskId: String, key: String): String = "${storageKeyPrefix(taskId)}${keyComponent(key)}"
+
+        fun storageKeyPrefix(taskId: String): String = "storage.${keyComponent(taskId)}."
+
+        private fun keyComponent(value: String): String =
+            Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))
+
+        private fun keyValue(value: String): String =
+            String(Base64.getUrlDecoder().decode(value), Charsets.UTF_8)
     }
 }
 
