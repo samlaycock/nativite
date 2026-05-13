@@ -6,6 +6,8 @@ import {
   createBackgroundTaskManifest,
   createBackgroundTaskManifestEntry,
   defineBackgroundTask,
+  type BackgroundTaskResult,
+  type BackgroundTaskRunnerContext,
 } from "./background.ts";
 
 describe("background task API", () => {
@@ -49,6 +51,20 @@ describe("background task API", () => {
         },
       ],
     });
+  });
+
+  it("types task runners as returning explicit result semantics", () => {
+    const retry: BackgroundTaskResult = { status: "retry", output: { reason: "offline" } };
+    const task = defineBackgroundTask<{ reason: string }>({
+      id: "sync-inbox",
+      async run(ctx: BackgroundTaskRunnerContext<{ reason: string }>) {
+        await ctx.storage.set("last-reason", ctx.payload?.reason ?? "unknown");
+        ctx.log.info("sync requested");
+        return retry;
+      },
+    });
+
+    expect(task.run).toBeFunction();
   });
 
   it("normalizes string and object registrations to entrypoint paths", () => {

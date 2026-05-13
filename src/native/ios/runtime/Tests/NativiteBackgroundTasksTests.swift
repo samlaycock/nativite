@@ -51,6 +51,8 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     XCTAssertTrue(script.contains(#"taskId: "sync-inbox""#))
     XCTAssertTrue(script.contains(#"payload: {"reason":"test"}"#))
     XCTAssertTrue(script.contains("storage:"))
+    XCTAssertTrue(script.contains("signal: Object.freeze"))
+    XCTAssertTrue(script.contains("__nativiteBackgroundStorageGet"))
     XCTAssertTrue(script.contains("fetch: globalThis.fetch"))
     XCTAssertTrue(script.contains("log:"))
   }
@@ -78,6 +80,44 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     let right = try decodePlatformMetadata(#"{"b":{"c":["d",true,1]},"a":"x"}"#)
 
     XCTAssertEqual(left, right)
+  }
+
+  func testTaskScopedStoragePersistsThroughUserDefaults() throws {
+    let userDefaults = try XCTUnwrap(UserDefaults(suiteName: "NativiteBackgroundTasksStorageTests"))
+    userDefaults.removePersistentDomain(forName: "NativiteBackgroundTasksStorageTests")
+
+    NativiteBackgroundTasks.writeStoredValue(
+      taskId: "sync-inbox",
+      key: "cursor",
+      value: "abc",
+      userDefaults: userDefaults
+    )
+
+    XCTAssertEqual(
+      NativiteBackgroundTasks.readStoredValue(taskId: "sync-inbox", key: "cursor", userDefaults: userDefaults),
+      "abc"
+    )
+
+    NativiteBackgroundTasks.removeStoredValue(taskId: "sync-inbox", key: "cursor", userDefaults: userDefaults)
+    XCTAssertNil(NativiteBackgroundTasks.readStoredValue(taskId: "sync-inbox", key: "cursor", userDefaults: userDefaults))
+  }
+
+  func testPersistedStateRoundTripsVersionedTaskMetadata() throws {
+    let state = NativiteBackgroundTaskPersistedState(
+      version: 1,
+      taskId: "sync-inbox",
+      scheduleState: "completed",
+      runCount: 2,
+      retryCount: 1,
+      lastRunAt: Date(timeIntervalSince1970: 1_778_673_600),
+      lastResult: NativiteBackgroundTaskResultState(status: "success", outputJSON: #"{"count":2}"#),
+      lastError: nil
+    )
+
+    let encoded = try JSONEncoder().encode(state)
+    let decoded = try JSONDecoder().decode(NativiteBackgroundTaskPersistedState.self, from: encoded)
+
+    XCTAssertEqual(decoded, state)
   }
 
   private func decodePlatformMetadata(_ json: String) throws -> AnyCodable {

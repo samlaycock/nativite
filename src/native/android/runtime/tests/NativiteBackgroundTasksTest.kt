@@ -216,6 +216,31 @@ class NativiteBackgroundTasksTest {
         assertEquals("ok", result.value)
         assertTrue(engine.bundleScript.contains("export { syncInbox as default };"))
         assertTrue(engine.contextScript.contains("sync-inbox"))
+        assertTrue(engine.contextScript.contains("storage:"))
+        assertTrue(engine.contextScript.contains("signal:"))
+    }
+
+    @Test
+    fun persistedState_roundTripsVersionedTaskState() {
+        val state = NativiteBackgroundTaskPersistedState(
+            taskId = "sync-inbox",
+            scheduleState = "completed",
+            runCount = 2,
+            retryCount = 1,
+            lastRunAt = "2026-05-13T12:00:00Z",
+            lastResult = org.json.JSONObject("""{"status":"success","output":{"count":2}}"""),
+            lastError = null,
+        )
+
+        val roundTripped = NativiteBackgroundTaskPersistedState.fromJson(state.toJson())
+
+        assertEquals(1, roundTripped.version)
+        assertEquals("sync-inbox", roundTripped.taskId)
+        assertEquals("completed", roundTripped.scheduleState)
+        assertEquals(2, roundTripped.runCount)
+        assertEquals(1, roundTripped.retryCount)
+        assertEquals("success", roundTripped.lastResult?.getString("status"))
+        assertEquals(null, roundTripped.lastError)
     }
 }
 
@@ -227,9 +252,9 @@ private class RecordingBackgroundJavaScriptEngine : NativiteBackgroundJavaScript
         preludeScript: String,
         bundleScript: String,
         contextScript: String,
-    ): Any? {
+    ): String {
         this.bundleScript = bundleScript
         this.contextScript = contextScript
-        return "ok"
+        return """{"result":"ok","storage":{"cursor":"abc"}}"""
     }
 }

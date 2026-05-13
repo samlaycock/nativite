@@ -2,22 +2,36 @@ export interface BackgroundTaskPlatformOptions {
   readonly [platform: string]: unknown;
 }
 
-export type BackgroundTaskRunnerContext<TPayload = unknown> = {
+export interface BackgroundTaskStorage {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
+export interface BackgroundTaskResult {
+  readonly status?: "success" | "failure" | "retry";
+  readonly output?: BackgroundTaskPayload;
+}
+
+export type BackgroundTaskRunnerResult =
+  | void
+  | "success"
+  | "failure"
+  | "retry"
+  | BackgroundTaskResult;
+
+export interface BackgroundTaskRunnerContext<TPayload = unknown> {
   readonly taskId: string;
   readonly payload?: TPayload;
   readonly signal?: AbortSignal;
-  readonly storage: {
-    get(key: string): Promise<string | null>;
-    set(key: string, value: string): Promise<void>;
-    remove(key: string): Promise<void>;
-  };
+  readonly storage: BackgroundTaskStorage;
   readonly fetch: typeof fetch;
   readonly log: Pick<Console, "debug" | "error" | "info" | "warn">;
-};
+}
 
 export type BackgroundTaskRunner<TPayload = unknown> = (
   ctx: BackgroundTaskRunnerContext<TPayload>,
-) => void | Promise<void>;
+) => BackgroundTaskRunnerResult | Promise<BackgroundTaskRunnerResult>;
 
 export type BackgroundTaskDefinition<TPayload = unknown> = {
   readonly id: string;
@@ -51,6 +65,12 @@ export interface BackgroundTaskStatus {
   readonly id: string;
   readonly state: "unknown" | "scheduled" | "running" | "cancelled" | "completed" | "failed";
   readonly platform?: string;
+  readonly version?: 1;
+  readonly runCount?: number;
+  readonly retryCount?: number;
+  readonly lastRunAt?: string;
+  readonly lastResult?: BackgroundTaskResult;
+  readonly lastError?: string;
 }
 
 export interface BackgroundTaskBridge {

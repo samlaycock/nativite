@@ -34,8 +34,20 @@ export default defineBackgroundTask({
 });
 ```
 
-The runner receives a constrained context containing task metadata, storage, `fetch`, logging,
-and an optional cancellation signal. It should not depend on WebView globals.
+The runner receives a constrained context and should not depend on WebView globals:
+
+| Property  | Description                                                                                                                                                  |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `taskId`  | Stable registered task id from the native manifest.                                                                                                          |
+| `payload` | JSON payload supplied by the native scheduler or WebView scheduling API.                                                                                     |
+| `signal`  | Cancellation/deadline signal when the host can expose one. Current native hosts expose a non-aborted placeholder and cancel by terminating active execution. |
+| `storage` | Durable task-scoped string storage with `get`, `set`, and `remove`.                                                                                          |
+| `fetch`   | Host fetch function when the JavaScript engine provides one.                                                                                                 |
+| `log`     | Structured log methods mapped to native background logging.                                                                                                  |
+
+Task runners can return `undefined`, `"success"`, `"failure"`, `"retry"`, or an object like
+`{ status: "retry", output: { reason: "offline" } }`. Native hosts persist latest result
+metadata separately from executable task source.
 
 ## WebView Scheduling API
 
@@ -147,12 +159,21 @@ function, and bounds execution with a coroutine timeout. The WorkManager helper 
 constraints, and maps task return values of `"retry"`/`"failure"` or matching status objects to
 WorkManager result states.
 
+Android persists task-scoped `ctx.storage` values in private `SharedPreferences` under the
+`dev.nativite.background` namespace. The native state model is versioned and stores schedule
+state, run/retry counters, last run time, last result, and last error metadata.
+
 The generated iOS source includes `NativiteBackgroundTasks.swift`, whose
 `loadManifest(bundle:)` helper locates the bundled `nativite-background/manifest.json`
 resource and decodes the task list. iOS generation also emits
 `BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes` fetch support, app startup
 registration for `ios.kind: "app-refresh"` tasks, and a JavaScriptCore runtime that loads the
 matching task bundle by id outside the WebView lifecycle.
+
+iOS persists task-scoped `ctx.storage` values in `UserDefaults` under
+`dev.nativite.background.storage.<taskId>.<key>`. Pending payloads remain separate from durable
+task storage. The native state model is versioned and stores schedule state, run/retry counters,
+last run time, last result, and last error metadata.
 
 macOS currently generates the same manifest and bundle resources for metadata parity, but does
 not schedule or execute background tasks.
