@@ -49,8 +49,8 @@ enum NativiteBackgroundTasks {
     )
   }
 
-  static func contextScript(task: NativiteBackgroundTask, payloadJSON: String? = nil) -> String {
-    let payload = payloadJSON ?? "undefined"
+  static func contextScript(task: NativiteBackgroundTask, payloadJSON: String? = nil) -> String? {
+    guard let payload = payloadLiteral(payloadJSON) else { return nil }
     return """
       ({
         taskId: \(jsonString(task.id)),
@@ -69,6 +69,18 @@ enum NativiteBackgroundTasks {
         }
       })
       """
+  }
+
+  private static func payloadLiteral(_ payloadJSON: String?) -> String? {
+    guard let payloadJSON else { return "undefined" }
+    guard let data = payloadJSON.data(using: .utf8) else { return nil }
+
+    do {
+      _ = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+      return payloadJSON
+    } catch {
+      return nil
+    }
   }
 
   static func executableBundleSource(_ source: String) -> String {
@@ -133,7 +145,11 @@ final class NativiteBackgroundTaskRuntime {
           bgTask.setTaskCompleted(success: false)
           return
         }
-        self?.handleAppRefreshTask(refreshTask)
+        guard let self else {
+          bgTask.setTaskCompleted(success: false)
+          return
+        }
+        self.handleAppRefreshTask(refreshTask)
       }
     }
   }
@@ -194,10 +210,16 @@ final class NativiteBackgroundTaskRuntime {
       return
     }
 
-    let contextValue = context.evaluateScript(NativiteBackgroundTasks.contextScript(
-      task: task,
-      payloadJSON: payloadJSON
-    ))
+    guard
+      let contextScript = NativiteBackgroundTasks.contextScript(
+        task: task,
+        payloadJSON: payloadJSON
+      ),
+      let contextValue = context.evaluateScript(contextScript)
+    else {
+      completion(false)
+      return
+    }
     let invocation = """
       (async () => {
         const task = globalThis.default || globalThis.__nativiteBackgroundTask;
