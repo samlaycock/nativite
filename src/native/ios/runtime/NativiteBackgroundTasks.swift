@@ -236,7 +236,7 @@ struct NativiteBackgroundTaskPersistedState: Codable, Equatable {
   let scheduleState: String
   let runCount: Int
   let retryCount: Int
-  let lastRunAt: Date?
+  let lastRunAt: String?
   let lastResult: NativiteBackgroundTaskResultState?
   let lastError: String?
 }
@@ -402,7 +402,7 @@ final class NativiteBackgroundTaskRuntime {
         scheduleState: success ? "completed" : "failed",
         runCount: (previous?.runCount ?? 0) + 1,
         retryCount: retryCount,
-        lastRunAt: Date(),
+        lastRunAt: ISO8601DateFormatter().string(from: Date()),
         lastResult: result,
         lastError: error
       ),
