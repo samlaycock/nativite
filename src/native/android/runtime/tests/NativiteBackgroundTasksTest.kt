@@ -204,6 +204,14 @@ class NativiteBackgroundTasksTest {
     }
 
     @Test
+    fun backgroundTaskInvocationScript_treatsStorageSnapshotAsOptionalHostDetail() {
+        val script = backgroundTaskInvocationScript()
+
+        assertTrue(script.contains("""typeof context.__storageSnapshot === "function""""))
+        assertTrue(script.contains(": {};"))
+    }
+
+    @Test
     fun run_loadsBundledTaskAndInvokesInjectedEngine() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         NativiteBackgroundTaskSharedPreferencesHostApi.preferences(context).edit().clear().commit()
