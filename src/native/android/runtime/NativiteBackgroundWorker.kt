@@ -14,6 +14,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkRequest
 import androidx.work.WorkerParameters
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
@@ -83,16 +84,20 @@ object NativiteBackgroundWorkScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(uniqueWorkName(taskId))
     }
 
-    fun status(context: Context, taskId: String): Map<String, Any?> {
+    fun status(context: Context, taskId: String, completion: (Map<String, Any?>) -> Unit) {
         val workName = uniqueWorkName(taskId)
-        val infos = WorkManager.getInstance(context).getWorkInfosForUniqueWork(workName).get()
-        val state = infos.firstOrNull()?.state.toNativiteBackgroundState()
-        return mapOf("id" to taskId, "state" to state, "platform" to "android")
+        val future = WorkManager.getInstance(context).getWorkInfosForUniqueWork(workName)
+        future.addListener({
+            val state = future.get().firstOrNull()?.state.toNativiteBackgroundState()
+            completion(mapOf("id" to taskId, "state" to state, "platform" to "android"))
+        }, directExecutor)
     }
 
     internal fun uniqueWorkName(task: NativiteBackgroundTask): String = uniqueWorkName(task.id)
 
     internal fun uniqueWorkName(taskId: String): String = "nativite-background-$taskId"
+
+    private val directExecutor = Executor { runnable -> runnable.run() }
 
     internal fun oneOffWorkRequest(
         task: NativiteBackgroundTask,
@@ -168,7 +173,7 @@ object NativiteBackgroundWorkScheduler {
         }
 }
 
-private fun WorkInfo.State?.toNativiteBackgroundState(): String =
+internal fun WorkInfo.State?.toNativiteBackgroundState(): String =
     when (this) {
         WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> "scheduled"
         WorkInfo.State.RUNNING -> "running"

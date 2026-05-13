@@ -84,7 +84,7 @@ manifest and schedules supported Android tasks by id. Periodic tasks use
 `enqueueUniquePeriodicWork(..., UPDATE, ...)`; one-off tasks use
 `enqueueUniqueWork(..., REPLACE, ...)`. The generated helper also exposes
 `schedule(context, task, payloadJSON)`, `cancel(context, taskId)`, and
-`status(context, taskId)` for native startup code, bridge handlers, or plugins
+`status(context, taskId, completion)` for native startup code, bridge handlers, or plugins
 that need explicit scheduling control.
 
 The Android bridge registers `__background__.schedule`, `__background__.cancel`,

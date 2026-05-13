@@ -24,6 +24,13 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     XCTAssertNil(NativiteBackgroundTasks.task(id: "missing", in: tasks))
   }
 
+  func testPendingPayloadKeyIsNamespacedByTaskId() {
+    XCTAssertEqual(
+      NativiteBackgroundTasks.pendingPayloadKey(taskId: "sync-inbox"),
+      "dev.nativite.background.pendingPayload.sync-inbox"
+    )
+  }
+
   func testContextScriptInjectsConstrainedHostContext() throws {
     let task = try XCTUnwrap(NativiteBackgroundTasks.loadManifest(bundle: .module).first)
     let script = try XCTUnwrap(

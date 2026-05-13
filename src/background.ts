@@ -103,6 +103,8 @@ function assertTaskId(taskId: string): void {
   }
 }
 
+// BackgroundTaskPayload is JSON-safe for typed callers. This runtime guard catches
+// untyped consumers or callers that bypass the type system with casts.
 function assertSerializablePayload(payload: BackgroundTaskPayload | undefined): void {
   if (payload === undefined) return;
   try {
