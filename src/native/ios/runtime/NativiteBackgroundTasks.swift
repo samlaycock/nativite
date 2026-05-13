@@ -183,32 +183,21 @@ enum NativiteBackgroundTasks {
     }
 
     if let status = result as? String {
-      return NativiteBackgroundTaskResultState(status: status, outputJSON: nil)
+      return NativiteBackgroundTaskResultState(status: status, output: nil)
     }
 
     guard let object = result as? [String: Any] else {
-      return NativiteBackgroundTaskResultState(status: "success", outputJSON: jsonFragmentString(result))
+      return NativiteBackgroundTaskResultState(status: "success", output: AnyCodable(result))
     }
 
     return NativiteBackgroundTaskResultState(
       status: object["status"] as? String,
-      outputJSON: object["output"].flatMap(jsonFragmentString)
+      output: object["output"].map(AnyCodable.init)
     )
   }
 
   static func resultSucceeded(_ result: NativiteBackgroundTaskResultState?) -> Bool {
     result?.status != "failure" && result?.status != "retry"
-  }
-
-  private static func jsonFragmentString(_ value: Any) -> String? {
-    guard JSONSerialization.isValidJSONObject(["value": value]) else { return nil }
-    guard
-      let data = try? JSONSerialization.data(withJSONObject: value, options: []),
-      let string = String(data: data, encoding: .utf8)
-    else {
-      return nil
-    }
-    return string
   }
 
   private static func keyComponent(_ value: String) -> String {
@@ -227,7 +216,7 @@ enum NativiteBackgroundTasks {
 
 struct NativiteBackgroundTaskResultState: Codable, Equatable {
   let status: String?
-  let outputJSON: String?
+  let output: AnyCodable?
 }
 
 struct NativiteBackgroundTaskPersistedState: Codable, Equatable {
@@ -558,8 +547,12 @@ final class NativiteBackgroundTaskScheduler {
 }
 #endif
 
-struct AnyCodable: Decodable, Equatable {
+struct AnyCodable: Codable, Equatable {
   let value: Any
+
+  init(_ value: Any) {
+    self.value = value
+  }
 
   init(from decoder: Decoder) throws {
     let container = try decoder.singleValueContainer()
@@ -590,8 +583,33 @@ struct AnyCodable: Decodable, Equatable {
     valuesEqual(lhs.value, rhs.value)
   }
 
-  private init(unchecked value: Any) {
-    self.value = value
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+
+    switch value {
+    case is NSNull:
+      try container.encodeNil()
+    case let bool as Bool:
+      try container.encode(bool)
+    case let int as Int:
+      try container.encode(int)
+    case let double as Double:
+      try container.encode(double)
+    case let string as String:
+      try container.encode(string)
+    case let array as [Any]:
+      try container.encode(array.map(AnyCodable.init))
+    case let object as [String: Any]:
+      try container.encode(object.mapValues(AnyCodable.init))
+    default:
+      throw EncodingError.invalidValue(
+        value,
+        EncodingError.Context(
+          codingPath: encoder.codingPath,
+          debugDescription: "Unsupported background task metadata value."
+        )
+      )
+    }
   }
 
   private static func valuesEqual(_ lhs: Any, _ rhs: Any) -> Bool {
