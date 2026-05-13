@@ -57,6 +57,7 @@ expectations.
 - Prepare the generated default export for invocation.
 - Invoke `default.run(ctx)` in QuickJS.
 - Bound execution with a cancellation timeout using Kotlin coroutines.
+- Persist task-scoped `ctx.storage` values through private `SharedPreferences`.
 
 The default execution timeout is 30 seconds. Later WorkManager integration can
 construct the runtime with a different timeout if Android scheduling constraints
@@ -105,11 +106,15 @@ Supported WorkManager constraints/options are:
 
 ## Host API Seam
 
-`NativiteBackgroundTaskHostApi` provides the placeholder injection seam for
-native APIs. Its `preludeScript(task)` hook can install global JavaScript
-helpers before task evaluation, and `contextScript(task, payloadJSON)` returns the
-JavaScript object passed to `run(ctx)`.
+`NativiteBackgroundTaskHostApi` provides the native API injection seam. Its
+`preludeScript(task)` hook can install global JavaScript helpers before task
+evaluation, and `contextScript(task, payloadJSON)` returns the JavaScript object
+passed to `run(ctx)`.
 
-The default context currently contains task metadata, optional payload, and
-no-op logging methods. Persistent storage, fetch, retry state, and platform
-signals are intentionally left for later scheduling/runtime issues.
+The default context exposes `taskId`, optional `payload`, a non-aborted
+`signal`, durable string `storage`, `fetch` from the engine global when present,
+and `log.debug`/`info`/`warn`/`error`. Storage is snapshotted before execution
+and written back after completion under `dev.nativite.background`.
+
+Android also defines a versioned persisted task-state model containing schedule
+state, run/retry counters, last run time, last result, and last error metadata.

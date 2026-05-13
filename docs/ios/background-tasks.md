@@ -43,12 +43,17 @@ The initial JavaScriptCore context injects a constrained host object:
 
 - `taskId`
 - optional `payload`
-- placeholder async `storage.get`, `storage.set`, and `storage.remove`
+- task-scoped durable string `storage.get`, `storage.set`, and `storage.remove`
+- a non-aborted `signal` placeholder
 - `fetch` from `globalThis.fetch` when available
 - `log.debug`, `log.error`, `log.info`, and `log.warn`
 
-Persistent storage, richer fetch bridging, retry/result persistence, and WebView-originated
-scheduling state persistence are intentionally left for later runtime work.
+Storage values persist in `UserDefaults` under
+`dev.nativite.background.storage.<taskId>.<key>`. Pending payloads use a separate
+namespace so one-off scheduling data does not overwrite durable task data.
+
+iOS also defines a versioned persisted task-state model containing schedule
+state, run/retry counters, last run time, last result, and last error metadata.
 
 ## WebView Scheduling
 

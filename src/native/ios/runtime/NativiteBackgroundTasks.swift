@@ -20,6 +20,7 @@ enum NativiteBackgroundTasks {
   static let manifestResourceExtension = "json"
   static let manifestSubdirectory = "nativite-background"
   static let pendingPayloadKeyPrefix = "dev.nativite.background.pendingPayload."
+  static let storageKeyPrefix = "dev.nativite.background.storage."
 
   static func loadManifest(bundle: Bundle = .main) throws -> [NativiteBackgroundTask] {
     guard let url = bundle.url(
@@ -64,10 +65,11 @@ enum NativiteBackgroundTasks {
       ({
         taskId: \(jsonString(task.id)),
         payload: \(payload),
+        signal: Object.freeze({ aborted: false }),
         storage: {
-          async get(_key) { return null },
-          async set(_key, _value) {},
-          async remove(_key) {}
+          async get(key) { return __nativiteBackgroundStorageGet(\(jsonString(task.id)), String(key)); },
+          async set(key, value) { __nativiteBackgroundStorageSet(\(jsonString(task.id)), String(key), String(value)); },
+          async remove(key) { __nativiteBackgroundStorageRemove(\(jsonString(task.id)), String(key)); }
         },
         fetch: globalThis.fetch,
         log: {
@@ -128,10 +130,47 @@ enum NativiteBackgroundTasks {
     return data.flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
   }
 
+  static func storageKey(taskId: String, key: String) -> String {
+    "\(storageKeyPrefix)\(taskId).\(key)"
+  }
+
+  static func readStoredValue(taskId: String, key: String, userDefaults: UserDefaults = .standard) -> String? {
+    userDefaults.string(forKey: storageKey(taskId: taskId, key: key))
+  }
+
+  static func writeStoredValue(
+    taskId: String,
+    key: String,
+    value: String,
+    userDefaults: UserDefaults = .standard
+  ) {
+    userDefaults.set(value, forKey: storageKey(taskId: taskId, key: key))
+  }
+
+  static func removeStoredValue(taskId: String, key: String, userDefaults: UserDefaults = .standard) {
+    userDefaults.removeObject(forKey: storageKey(taskId: taskId, key: key))
+  }
+
   private struct Manifest: Decodable {
     let version: Int
     let tasks: [NativiteBackgroundTask]
   }
+}
+
+struct NativiteBackgroundTaskResultState: Codable, Equatable {
+  let status: String?
+  let outputJSON: String?
+}
+
+struct NativiteBackgroundTaskPersistedState: Codable, Equatable {
+  let version: Int
+  let taskId: String
+  let scheduleState: String
+  let runCount: Int
+  let retryCount: Int
+  let lastRunAt: Date?
+  let lastResult: NativiteBackgroundTaskResultState?
+  let lastError: String?
 }
 
 #if os(iOS)
@@ -231,6 +270,7 @@ final class NativiteBackgroundTaskRuntime {
       print("[nativite-background] JavaScript exception: \(exception?.toString() ?? "unknown")")
     }
     installConsole(in: context)
+    installStorage(in: context)
     context.evaluateScript(NativiteBackgroundTasks.executableBundleSource(source))
 
     guard context.exception == nil else {
@@ -288,6 +328,34 @@ final class NativiteBackgroundTaskRuntime {
         warn: (...args) => __nativiteLog(args.map(String).join(' '))
       };
       """)
+  }
+
+  private func installStorage(in context: JSContext) {
+    let get: @convention(block) (String, String) -> String? = { [weak self] taskId, key in
+      NativiteBackgroundTasks.readStoredValue(
+        taskId: taskId,
+        key: key,
+        userDefaults: self?.userDefaults ?? .standard
+      )
+    }
+    let set: @convention(block) (String, String, String) -> Void = { [weak self] taskId, key, value in
+      NativiteBackgroundTasks.writeStoredValue(
+        taskId: taskId,
+        key: key,
+        value: value,
+        userDefaults: self?.userDefaults ?? .standard
+      )
+    }
+    let remove: @convention(block) (String, String) -> Void = { [weak self] taskId, key in
+      NativiteBackgroundTasks.removeStoredValue(
+        taskId: taskId,
+        key: key,
+        userDefaults: self?.userDefaults ?? .standard
+      )
+    }
+    context.setObject(get, forKeyedSubscript: "__nativiteBackgroundStorageGet" as NSString)
+    context.setObject(set, forKeyedSubscript: "__nativiteBackgroundStorageSet" as NSString)
+    context.setObject(remove, forKeyedSubscript: "__nativiteBackgroundStorageRemove" as NSString)
   }
 
   private func retainContext(_ context: JSContext) -> UUID {
