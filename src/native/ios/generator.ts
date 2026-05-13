@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { BackgroundTaskManifest } from "../../background.ts";
 import type { NativiteConfig } from "../../index.ts";
 import type { NativitePluginMode } from "../../index.ts";
 
@@ -45,6 +46,7 @@ function generationHashInputs(
   targetPlatform: AppleTargetPlatform,
   projectRoot: string,
   cwd: string,
+  backgroundTaskManifest: BackgroundTaskManifest,
   backgroundTaskManifestJSON: string,
 ) {
   const platformConfig = resolveConfigForPlatform(config, targetPlatform);
@@ -82,7 +84,7 @@ function generationHashInputs(
       name: "Info.plist",
       content:
         targetPlatform === "ios"
-          ? infoPlistTemplate(platformConfig)
+          ? infoPlistTemplate(platformConfig, backgroundTaskManifest)
           : infoPlistMacOSTemplate(platformConfig),
     },
     { name: "AppIcon.appiconset/Contents.json", content: appIconContentsTemplate(appIconFilename) },
@@ -127,6 +129,20 @@ enum NativiteConfig {
     static let defaultChromeStateJSON: String? = ${defaultChromeStateJSON}
 }
 `;
+}
+
+function validateIOSBackgroundTaskManifest(backgroundTaskManifest: BackgroundTaskManifest): void {
+  for (const task of backgroundTaskManifest.tasks) {
+    const iosMetadata = task.platforms.ios;
+    if (!iosMetadata || typeof iosMetadata !== "object") continue;
+
+    const kind = (iosMetadata as { kind?: unknown }).kind;
+    if (kind !== "app-refresh") {
+      throw new Error(
+        `Unsupported iOS background task kind for "${task.id}". Nativite currently supports ios.kind: "app-refresh" only.`,
+      );
+    }
+  }
 }
 
 export type AppleTargetPlatform = "ios" | "macos";
@@ -183,6 +199,9 @@ export async function generateProject(
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
   const backgroundTaskEntries = await resolveBackgroundTaskEntries(config, cwd);
   const backgroundTaskManifest = createBackgroundTaskManifestFromEntries(backgroundTaskEntries);
+  if (targetPlatform === "ios") {
+    validateIOSBackgroundTaskManifest(backgroundTaskManifest);
+  }
   const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
   const backgroundTaskBundles = await buildBackgroundTaskBundles(backgroundTaskEntries, cwd);
   const hash = hashConfigForGeneration(config, resolvedPlugins, [
@@ -192,6 +211,7 @@ export async function generateProject(
       targetPlatform,
       projectRoot,
       cwd,
+      backgroundTaskManifest,
       backgroundTaskManifestJSON,
     ),
     ...backgroundTaskHashInputs(backgroundTaskBundles),
@@ -269,7 +289,10 @@ export async function generateProject(
 
   // Info.plist — platform-specific
   if (targetPlatform === "ios") {
-    writeFileSync(join(appDir, "Info.plist"), infoPlistTemplate(platformConfig));
+    writeFileSync(
+      join(appDir, "Info.plist"),
+      infoPlistTemplate(platformConfig, backgroundTaskManifest),
+    );
   } else {
     writeFileSync(join(appDir, "Info.plist"), infoPlistMacOSTemplate(platformConfig));
   }

@@ -53,4 +53,35 @@ describe("generateProject", () => {
     ) as { readonly images: readonly { readonly filename?: string }[] };
     expect(contents.images[0]?.filename).toBe("Splash.png");
   });
+
+  it("rejects unsupported iOS background task kinds", async () => {
+    const cwd = makeTempDir();
+    const config: NativiteConfig = {
+      ...baseConfig,
+      backgroundTasks: ["./refresh.task.ts"],
+    };
+    writeFileSync(
+      join(cwd, "refresh.task.ts"),
+      `import { defineBackgroundTask } from "${join(process.cwd(), "src/background.ts")}";
+
+export default defineBackgroundTask({
+  id: "refresh",
+  ios: { kind: "processing" },
+  run() {},
+});
+`,
+    );
+
+    await generateProject(config, cwd).then(
+      () => {
+        throw new Error("Expected iOS background task validation to fail.");
+      },
+      (err) => {
+        expect(err).toBeInstanceOf(Error);
+        expect((err as Error).message).toContain(
+          'Nativite currently supports ios.kind: "app-refresh" only.',
+        );
+      },
+    );
+  });
 });

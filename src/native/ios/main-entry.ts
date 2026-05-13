@@ -14,6 +14,9 @@ export function mainEntryTemplate(options?: MainEntryOptions): string {
 
 @main
 struct NativiteApp: App {
+  #if os(iOS)
+  @UIApplicationDelegateAdaptor(NativiteAppDelegate.self) var appDelegate
+  #endif
   #if os(macOS)
   @NSApplicationDelegateAdaptor(NativiteAppDelegate.self) var appDelegate
   #endif

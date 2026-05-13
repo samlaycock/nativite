@@ -42,6 +42,14 @@ describe("appDelegateTemplate", () => {
     expect(output).toContain(".nativiteToolbar(chromeState: chromeState)");
   });
 
+  it("registers the iOS background task runtime during app startup", () => {
+    const swift = appDelegateTemplate(baseConfig);
+
+    expect(swift).toContain("class NativiteAppDelegate: NSObject, UIApplicationDelegate");
+    expect(swift).toContain("let runtime = try NativiteBackgroundTaskRuntime()");
+    expect(swift).toContain("runtime.registerAppRefreshTasks()");
+  });
+
   it("applies sheet and alert modifiers outside NavigationStack", () => {
     const output = appDelegateTemplate(baseConfig);
     // Sheets and alerts are applied at the root level so they overlay

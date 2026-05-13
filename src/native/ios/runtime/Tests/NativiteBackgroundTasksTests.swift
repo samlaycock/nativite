@@ -11,6 +11,42 @@ final class NativiteBackgroundTasksTests: XCTestCase {
     XCTAssertEqual(tasks[0].platforms["ios"]?.value as? [String: String], ["kind": "app-refresh"])
   }
 
+  func testSupportedIOSTasksIncludesOnlyAppRefreshTasks() throws {
+    let tasks = try NativiteBackgroundTasks.loadManifest(bundle: .module)
+
+    XCTAssertEqual(NativiteBackgroundTasks.supportedIOSTasks(from: tasks).map(\.id), ["sync-inbox"])
+  }
+
+  func testTaskLookupFindsRegisteredTaskById() throws {
+    let tasks = try NativiteBackgroundTasks.loadManifest(bundle: .module)
+
+    XCTAssertEqual(NativiteBackgroundTasks.task(id: "sync-inbox", in: tasks)?.bundle, "sync-inbox.js")
+    XCTAssertNil(NativiteBackgroundTasks.task(id: "missing", in: tasks))
+  }
+
+  func testContextScriptInjectsConstrainedHostContext() throws {
+    let task = try XCTUnwrap(NativiteBackgroundTasks.loadManifest(bundle: .module).first)
+    let script = NativiteBackgroundTasks.contextScript(task: task, payloadJSON: #"{"reason":"test"}"#)
+
+    XCTAssertTrue(script.contains(#"taskId: "sync-inbox""#))
+    XCTAssertTrue(script.contains(#"payload: {"reason":"test"}"#))
+    XCTAssertTrue(script.contains("storage:"))
+    XCTAssertTrue(script.contains("fetch: globalThis.fetch"))
+    XCTAssertTrue(script.contains("log:"))
+  }
+
+  func testExecutableBundleSourceExposesBundledDefaultExport() throws {
+    let source = """
+      var sync_default = { run() {} };
+      export { sync_default as default };
+      """
+
+    let transformed = NativiteBackgroundTasks.executableBundleSource(source)
+
+    XCTAssertFalse(transformed.contains("export {"))
+    XCTAssertTrue(transformed.contains("globalThis.__nativiteBackgroundTask = sync_default;"))
+  }
+
   func testAnyCodableComparesDictionariesWithoutDependingOnKeyOrder() throws {
     let left = try decodePlatformMetadata(#"{"a":"x","b":{"c":["d",true,1]}}"#)
     let right = try decodePlatformMetadata(#"{"b":{"c":["d",true,1]},"a":"x"}"#)

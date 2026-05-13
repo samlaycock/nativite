@@ -133,4 +133,20 @@ describe("pbxprojTemplate (plugins)", () => {
     );
     expect(pbxproj).toContain('rm -f \\"$DEV_JSON_DEST\\"');
   });
+
+  it("links JavaScriptCore and BackgroundTasks for iOS background execution", () => {
+    const resolvedPlugins: ResolvedNativitePlugins = {
+      plugins: [],
+      platforms: {
+        ios: { sources: [], resources: [], registrars: [], dependencies: [] },
+        macos: { sources: [], resources: [], registrars: [], dependencies: [] },
+        android: { sources: [], resources: [], registrars: [], dependencies: [] },
+      },
+    };
+
+    const pbxproj = pbxprojTemplate(baseConfig, resolvedPlugins, "/tmp/demo/.nativite/ios", "ios");
+
+    expect(pbxproj).toContain("JavaScriptCore.framework");
+    expect(pbxproj).toContain("BackgroundTasks.framework");
+  });
 });

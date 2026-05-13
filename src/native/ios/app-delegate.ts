@@ -109,6 +109,24 @@ struct NativiteViewControllerRepresentable: UIViewControllerRepresentable {
   }
 }
 
+class NativiteAppDelegate: NSObject, UIApplicationDelegate {
+  private var backgroundRuntime: NativiteBackgroundTaskRuntime?
+
+  func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    do {
+      let runtime = try NativiteBackgroundTaskRuntime()
+      runtime.registerAppRefreshTasks()
+      backgroundRuntime = runtime
+    } catch {
+      print("[nativite-background] Failed to register background tasks: \\(error)")
+    }
+    return true
+  }
+}
+
 #elseif os(macOS)
 struct NativiteViewControllerRepresentable: NSViewControllerRepresentable {
   let chromeState: NativiteChromeState
