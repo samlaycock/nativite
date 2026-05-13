@@ -1,3 +1,4 @@
+import type { BackgroundTaskManifest } from "../../background.ts";
 import type { NativiteConfig } from "../../index.ts";
 
 export function infoPlistMacOSTemplate(config: NativiteConfig): string {
@@ -39,13 +40,31 @@ export function infoPlistMacOSTemplate(config: NativiteConfig): string {
 `;
 }
 
-export function infoPlistTemplate(config: NativiteConfig): string {
+export function infoPlistTemplate(
+  config: NativiteConfig,
+  backgroundTaskManifest?: BackgroundTaskManifest,
+): string {
   // When a splash config is present we use a LaunchScreen storyboard, which
   // requires UILaunchStoryboardName. Without one we fall back to the bare
   // UILaunchScreen dict (system default white screen).
   const launchScreenXml = config.splash
     ? `<key>UILaunchStoryboardName</key>\n  <string>LaunchScreen</string>`
     : `<key>UILaunchScreen</key>\n  <dict/>`;
+  const backgroundTaskIdentifiers = [
+    ...new Set(backgroundTaskManifest?.tasks.map((task) => task.id) ?? []),
+  ].sort();
+  const backgroundTasksXml =
+    backgroundTaskIdentifiers.length > 0
+      ? `
+  <key>BGTaskSchedulerPermittedIdentifiers</key>
+  <array>
+${backgroundTaskIdentifiers.map((id) => `    <string>${id}</string>`).join("\n")}
+  </array>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>fetch</string>
+  </array>`
+      : "";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -71,7 +90,7 @@ export function infoPlistTemplate(config: NativiteConfig): string {
   <string>$(CURRENT_PROJECT_VERSION)</string>
   <key>LSRequiresIPhoneOS</key>
   <true/>
-  ${launchScreenXml}
+  ${launchScreenXml}${backgroundTasksXml}
   <key>UISupportedInterfaceOrientations</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>

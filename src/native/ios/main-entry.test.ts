@@ -19,6 +19,14 @@ describe("mainEntryTemplate", () => {
     expect(output).toContain(".defaultSize(width: 1024, height: 768)");
   });
 
+  it("adapts the iOS app delegate for background task registration", () => {
+    const output = mainEntryTemplate();
+
+    expect(output).toContain(
+      "@UIApplicationDelegateAdaptor(NativiteAppDelegate.self) var appDelegate",
+    );
+  });
+
   it("defaults to unified window toolbar style on macOS", () => {
     const output = mainEntryTemplate();
     expect(output).toContain(".windowToolbarStyle(.unified)");

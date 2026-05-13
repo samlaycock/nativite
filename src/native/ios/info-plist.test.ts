@@ -109,6 +109,26 @@ describe("infoPlistTemplate", () => {
     expect(output).toContain("<true/>");
   });
 
+  it("includes iOS background task scheduler identifiers when tasks are configured", () => {
+    const output = infoPlistTemplate(baseConfig, {
+      version: 1,
+      tasks: [
+        {
+          id: "refresh-session",
+          bundle: "refresh-session.js",
+          platforms: { ios: { kind: "app-refresh" } },
+        },
+        { id: "sync-inbox", bundle: "sync-inbox.js", platforms: { ios: { kind: "app-refresh" } } },
+      ],
+    });
+
+    expect(output).toContain("<key>BGTaskSchedulerPermittedIdentifiers</key>");
+    expect(output).toContain("<string>refresh-session</string>");
+    expect(output).toContain("<string>sync-inbox</string>");
+    expect(output).toContain("<key>UIBackgroundModes</key>");
+    expect(output).toContain("<string>fetch</string>");
+  });
+
   // ── Config variations don't affect Info.plist content (only splash matters) ──
 
   it("produces the same launch screen section regardless of OTA config", () => {

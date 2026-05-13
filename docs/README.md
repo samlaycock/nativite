@@ -12,6 +12,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Keyboard & Input Accessory](./ios/keyboard.md) — Keyboard dismiss modes and accessory bar
 - [App Entry Point](./ios/app-entry.md) — SwiftUI @main, root view, splash overlay
 - [Project Generation](./ios/project-generation.md) — Xcode project generation and structure
+- [Background Tasks](./ios/background-tasks.md) — BGTaskScheduler registration and JavaScriptCore execution
 - [OTA Updates](./ios/ota-updates.md) — Over-the-air bundle updates
 - [Dev Workflow](./ios/dev-workflow.md) — IDE-owned debug runs and dev server integration
 

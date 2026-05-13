@@ -98,6 +98,10 @@ const UUID = {
   backgroundManifestBuildFile: "BB0000000000000000000016",
   webKitFileRef: "CC0000000000000000000001",
   webKitBuildFile: "CC0000000000000000000002",
+  javaScriptCoreFileRef: "CC0000000000000000000003",
+  javaScriptCoreBuildFile: "CC0000000000000000000004",
+  backgroundTasksFileRef: "CC0000000000000000000005",
+  backgroundTasksFrameworkBuildFile: "CC0000000000000000000006",
   sourcesBuildPhase: "DD0000000000000000000001",
   frameworksBuildPhase: "DD0000000000000000000002",
   resourcesBuildPhase: "DD0000000000000000000003",
@@ -334,6 +338,12 @@ export function pbxprojTemplate(
 
   const frameworkPhaseFiles = [
     `\t\t\t\t${UUID.webKitBuildFile} /* WebKit.framework in Frameworks */,`,
+    `\t\t\t\t${UUID.javaScriptCoreBuildFile} /* JavaScriptCore.framework in Frameworks */,`,
+    ...(isMacos
+      ? []
+      : [
+          `\t\t\t\t${UUID.backgroundTasksFrameworkBuildFile} /* BackgroundTasks.framework in Frameworks */,`,
+        ]),
     ...[...frameworkRefsByName.values()].map((framework) => {
       const frameworkName = `${framework.dep.name}.framework`;
       return `\t\t\t\t${framework.buildFile} /* ${frameworkName} in Frameworks */,`;
@@ -412,7 +422,8 @@ ${sourcesBuildFiles}
 ${hasSplash ? `\t\t${UUID.launchScreenBuildFile} /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = ${UUID.launchScreenFile} /* LaunchScreen.storyboard */; };` : ""}
 \n${pluginResourceBuildFiles.join("\n")}
 \t\t${UUID.webKitBuildFile} /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.webKitFileRef} /* WebKit.framework */; };
-${frameworkBuildFiles.length > 0 ? `\n${frameworkBuildFiles.join("\n")}` : ""}
+\t\t${UUID.javaScriptCoreBuildFile} /* JavaScriptCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.javaScriptCoreFileRef} /* JavaScriptCore.framework */; };
+${isMacos ? "" : `\t\t${UUID.backgroundTasksFrameworkBuildFile} /* BackgroundTasks.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.backgroundTasksFileRef} /* BackgroundTasks.framework */; };\n`}${frameworkBuildFiles.length > 0 ? `\n${frameworkBuildFiles.join("\n")}` : ""}
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -423,7 +434,8 @@ ${sourceFileRefs}
 \t\t${UUID.backgroundManifestFolder} /* nativite-background */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "nativite-background"; sourceTree = "<group>"; };
 ${hasSplash ? `\t\t${UUID.launchScreenFile} /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };` : ""}
 \t\t${UUID.webKitFileRef} /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
-${frameworkFileRefs.length > 0 ? frameworkFileRefs.join("\n") : ""}
+\t\t${UUID.javaScriptCoreFileRef} /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+${isMacos ? "" : `\t\t${UUID.backgroundTasksFileRef} /* BackgroundTasks.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BackgroundTasks.framework; path = System/Library/Frameworks/BackgroundTasks.framework; sourceTree = SDKROOT; };\n`}${frameworkFileRefs.length > 0 ? frameworkFileRefs.join("\n") : ""}
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

@@ -118,9 +118,15 @@ include the QuickJS catalog entry, runtime dependency, and `NativiteBackgroundTa
 minimal adapter that loads a task bundle asset, exposes a host API injection seam, invokes the
 task's default `run(ctx)` function, and bounds execution with a coroutine timeout.
 
-The generated Apple source includes `NativiteBackgroundTasks.swift`, whose
+The generated iOS source includes `NativiteBackgroundTasks.swift`, whose
 `loadManifest(bundle:)` helper locates the bundled `nativite-background/manifest.json`
-resource and decodes the task list.
+resource and decodes the task list. iOS generation also emits
+`BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes` fetch support, app startup
+registration for `ios.kind: "app-refresh"` tasks, and a JavaScriptCore runtime that loads the
+matching task bundle by id outside the WebView lifecycle.
+
+macOS currently generates the same manifest and bundle resources for metadata parity, but does
+not schedule or execute background tasks.
 
 Generation dirty-checking includes the serialized manifest and emitted task bundle contents, so
 changing task registrations, platform metadata, task source, or imported task dependencies
