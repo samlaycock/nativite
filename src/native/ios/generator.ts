@@ -15,8 +15,11 @@ import {
 } from "../assets.ts";
 import {
   BACKGROUND_MANIFEST_RELATIVE_PATH,
-  resolveBackgroundTaskManifest,
+  backgroundTaskHashInputs,
+  createBackgroundTaskManifestFromEntries,
+  resolveBackgroundTaskEntries,
   serializeBackgroundTaskManifest,
+  writeBackgroundTaskBundles,
   writeBackgroundTaskManifest,
 } from "../background-manifest.ts";
 import { appDelegateTemplate } from "./app-delegate.ts";
@@ -177,12 +180,11 @@ export async function generateProject(
   const appName = config.app.name;
   const platformConfig = resolveConfigForPlatform(config, targetPlatform);
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
-  const backgroundTaskManifest = await resolveBackgroundTaskManifest(config, cwd);
+  const backgroundTaskEntries = await resolveBackgroundTaskEntries(config, cwd);
+  const backgroundTaskManifest = createBackgroundTaskManifestFromEntries(backgroundTaskEntries);
   const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
-  const hash = hashConfigForGeneration(
-    config,
-    resolvedPlugins,
-    generationHashInputs(
+  const hash = hashConfigForGeneration(config, resolvedPlugins, [
+    ...generationHashInputs(
       config,
       resolvedPlugins,
       targetPlatform,
@@ -190,7 +192,8 @@ export async function generateProject(
       cwd,
       backgroundTaskManifestJSON,
     ),
-  );
+    ...backgroundTaskHashInputs(backgroundTaskEntries),
+  ]);
 
   // Dirty check — skip if nothing has changed
   if (!force && existsSync(hashFile)) {
@@ -242,6 +245,7 @@ export async function generateProject(
   writeFileSync(join(appDir, "NativiteKeyboard.swift"), readRuntimeFile("NativiteKeyboard.swift"));
   writeFileSync(join(appDir, "OTAUpdater.swift"), readRuntimeFile("OTAUpdater.swift"));
   writeBackgroundTaskManifest(backgroundTaskManifest, appDir);
+  await writeBackgroundTaskBundles(backgroundTaskEntries, appDir, cwd);
 
   // iOS-only: LaunchScreen storyboard and splash image
   if (targetPlatform === "ios" && config.splash) {

@@ -18,8 +18,11 @@ import {
 } from "../assets.ts";
 import {
   BACKGROUND_MANIFEST_RELATIVE_PATH,
-  resolveBackgroundTaskManifest,
+  backgroundTaskHashInputs,
+  createBackgroundTaskManifestFromEntries,
   serializeBackgroundTaskManifest,
+  resolveBackgroundTaskEntries,
+  writeBackgroundTaskBundles,
   writeBackgroundTaskManifest,
 } from "../background-manifest.ts";
 import { androidManifestTemplate } from "./android-manifest.ts";
@@ -195,16 +198,15 @@ export async function generateProject(
   const projectRoot = join(nativiteDir, "android");
   const androidConfig = resolveConfigForPlatform(config, "android");
   const resolvedPlugins = await resolveNativitePlugins(config, cwd, mode);
-  const backgroundTaskManifest = await resolveBackgroundTaskManifest(config, cwd);
+  const backgroundTaskEntries = await resolveBackgroundTaskEntries(config, cwd);
+  const backgroundTaskManifest = createBackgroundTaskManifestFromEntries(backgroundTaskEntries);
   const backgroundTaskManifestJSON = serializeBackgroundTaskManifest(backgroundTaskManifest);
   const appDir = join(projectRoot, "app");
   const srcMainDir = join(appDir, "src", "main");
   const pluginSourceDir = join(srcMainDir, "generated", "nativite", "plugins", "java");
   const pluginResourceDir = join(srcMainDir, "generated", "nativite", "plugins", "res");
-  const hash = hashConfigForGeneration(
-    config,
-    resolvedPlugins,
-    generationHashInputs(
+  const hash = hashConfigForGeneration(config, resolvedPlugins, [
+    ...generationHashInputs(
       config,
       resolvedPlugins,
       pluginSourceDir,
@@ -212,7 +214,8 @@ export async function generateProject(
       cwd,
       backgroundTaskManifestJSON,
     ),
-  );
+    ...backgroundTaskHashInputs(backgroundTaskEntries),
+  ]);
 
   // Ensure production/generate mode never packages stale dev server settings.
   syncAndroidDevMetadata(cwd, mode);
@@ -332,6 +335,7 @@ export async function generateProject(
     `package ${pkg}\n\n${nativitePluginRegistrantTemplate(resolvedPlugins)}`,
   );
   writeBackgroundTaskManifest(backgroundTaskManifest, assetsDir);
+  await writeBackgroundTaskBundles(backgroundTaskEntries, assetsDir, cwd);
 
   // Resources
   writeFileSync(join(valuesDir, "strings.xml"), stringsXmlTemplate(androidConfig));
