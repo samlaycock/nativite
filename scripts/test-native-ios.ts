@@ -48,6 +48,36 @@ function patchHandlerRegistration(packageDir: string, relativePath: string): voi
   );
 }
 
+function writeTestResources(packageDir: string): void {
+  const resourcesDir = join(
+    packageDir,
+    "Tests",
+    "NativiteRuntimeTests",
+    "Resources",
+    "nativite-background",
+  );
+  mkdirSync(resourcesDir, { recursive: true });
+  writeFileSync(
+    join(resourcesDir, "manifest.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        tasks: [
+          {
+            id: "sync-inbox",
+            bundle: "sync-inbox.js",
+            platforms: {
+              ios: { kind: "app-refresh" },
+            },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+}
+
 function writePackageManifest(packageDir: string): void {
   writeFileSync(
     join(packageDir, "Package.swift"),
@@ -71,6 +101,7 @@ let package = Package(
             name: "NativiteRuntimeTests",
             dependencies: ["NativiteRuntime"],
             path: "Tests/NativiteRuntimeTests",
+            resources: [.copy("Resources")],
         ),
     ],
     swiftLanguageVersions: [.v5],
@@ -123,6 +154,7 @@ const packageDir = mkdtempSync(join(tmpdir(), "nativite-ios-runtime-tests-"));
 try {
   copySwiftFiles(runtimeDir, join(packageDir, "Sources", "NativiteRuntime"));
   copySwiftFiles(runtimeTestsDir, join(packageDir, "Tests", "NativiteRuntimeTests"));
+  writeTestResources(packageDir);
   patchBridgeSource(packageDir);
   patchHandlerRegistration(packageDir, "ViewController.swift");
   patchHandlerRegistration(packageDir, "NativiteChromeState.swift");
