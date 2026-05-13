@@ -87,9 +87,9 @@ metadata without including the executable `run` function:
 }
 ```
 
-Native execution support still needs platform-specific bundling and runtime integration.
-The public API is designed so those implementations can load bundled task entrypoints by id
-instead of evaluating persisted source strings.
+Native execution support still needs platform-specific scheduling and runtime invocation.
+Generated projects do include compiled JavaScript task bundles so native implementations can
+load bundled task entrypoints by id instead of evaluating persisted source strings.
 
 ## Generated Native Metadata
 
@@ -99,6 +99,17 @@ Generated native projects include the manifest at a stable resource path:
 - iOS: `.nativite/ios/<AppName>/nativite-background/manifest.json`
 - macOS: `.nativite/macos/<AppName>/nativite-background/manifest.json`
 
+Each manifest `bundle` value points at a JavaScript file emitted next to the manifest:
+
+- Android: `.nativite/android/app/src/main/assets/nativite-background/<task>.js`
+- iOS: `.nativite/ios/<AppName>/nativite-background/<task>.js`
+- macOS: `.nativite/macos/<AppName>/nativite-background/<task>.js`
+
+Task bundles are built as isolated Vite entries and are kept separate from the main WebView
+application bundle. Bundle filenames are deterministic and derived from the registered task
+entrypoint filename, so two tasks with the same basename are rejected to avoid native asset
+collisions.
+
 The generated Android source includes `NativiteBackgroundTasks.kt`, whose
 `manifestAssetPath` constant points at the asset path and whose `loadManifest(context)` helper
 parses the task list.
@@ -107,5 +118,6 @@ The generated Apple source includes `NativiteBackgroundTasks.swift`, whose
 `loadManifest(bundle:)` helper locates the bundled `nativite-background/manifest.json`
 resource and decodes the task list.
 
-Generation dirty-checking includes the serialized manifest, so changing task registrations or
-platform metadata invalidates the generated native project hash.
+Generation dirty-checking includes the serialized manifest and registered task entrypoint source,
+so changing task registrations, platform metadata, or task source invalidates the generated
+native project hash.

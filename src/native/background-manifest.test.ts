@@ -8,7 +8,9 @@ import type { NativiteConfig } from "../index.ts";
 import { baseConfig } from "../../test/fixtures.ts";
 import {
   BACKGROUND_MANIFEST_RELATIVE_PATH,
+  resolveBackgroundTaskEntries,
   resolveBackgroundTaskManifest,
+  writeBackgroundTaskBundles,
   writeBackgroundTaskManifest,
 } from "./background-manifest.ts";
 
@@ -144,5 +146,60 @@ export default defineBackgroundTask({ id: "second", run() {} });
     expect(outputPath).toBe(join(cwd, BACKGROUND_MANIFEST_RELATIVE_PATH));
     expect(existsSync(outputPath)).toBe(true);
     expect(JSON.parse(readFileSync(outputPath, "utf-8"))).toEqual({ version: 1, tasks: [] });
+  });
+
+  it("bundles registered task entrypoints into manifest-referenced native assets", async () => {
+    const cwd = makeTempDir();
+    writeFileSync(join(cwd, "api.ts"), "export const endpoint = '/api/sync';\n");
+    writeFileSync(
+      join(cwd, "sync.task.ts"),
+      `import { defineBackgroundTask } from "${join(process.cwd(), "src/background.ts")}";
+import { endpoint } from "./api";
+export default defineBackgroundTask({
+  id: "sync-inbox",
+  async run(ctx) {
+    await ctx.fetch(endpoint);
+  },
+});
+`,
+    );
+
+    const config: NativiteConfig = {
+      ...baseConfig,
+      backgroundTasks: ["./sync.task.ts"],
+    };
+    const entries = await resolveBackgroundTaskEntries(config, cwd);
+    const bundlePaths = await writeBackgroundTaskBundles(entries, cwd, cwd);
+    const bundlePath = bundlePaths[0];
+
+    expect(bundlePath).toBe(join(cwd, "nativite-background", "sync.task.js"));
+    if (!bundlePath) throw new Error("Expected a background task bundle path.");
+    expect(existsSync(bundlePath)).toBe(true);
+    expect(readFileSync(bundlePath, "utf-8")).toContain("/api/sync");
+  });
+
+  it("fails when a resolved task entrypoint cannot be bundled", async () => {
+    const cwd = makeTempDir();
+    const taskPath = join(cwd, "missing.task.ts");
+    writeFileSync(
+      taskPath,
+      `import { defineBackgroundTask } from "${join(process.cwd(), "src/background.ts")}";
+export default defineBackgroundTask({ id: "missing", run() {} });
+`,
+    );
+
+    const config: NativiteConfig = {
+      ...baseConfig,
+      backgroundTasks: ["./missing.task.ts"],
+    };
+    const entries = await resolveBackgroundTaskEntries(config, cwd);
+    rmSync(taskPath);
+
+    expect.assertions(1);
+    try {
+      await writeBackgroundTaskBundles(entries, cwd, cwd);
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+    }
   });
 });

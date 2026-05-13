@@ -1,6 +1,7 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, extname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { build } from "vite";
 
 import type {
   BackgroundTaskDefinition,
@@ -16,6 +17,15 @@ import {
 } from "../background.ts";
 
 export const BACKGROUND_MANIFEST_RELATIVE_PATH = "nativite-background/manifest.json";
+export const BACKGROUND_ASSET_DIRECTORY = "nativite-background";
+
+const backgroundRuntimeModuleId = "\0nativite-background-runtime";
+
+export type ResolvedBackgroundTaskEntry = {
+  readonly registeredPath: string;
+  readonly absolutePath: string;
+  readonly manifestEntry: BackgroundTaskManifestEntry;
+};
 
 function stableBundleName(taskPath: string): string {
   const filename = basename(taskPath);
@@ -34,11 +44,19 @@ function isBackgroundTaskDefinition(value: unknown): value is BackgroundTaskDefi
   );
 }
 
-export async function resolveBackgroundTaskManifest(
+function isBackgroundRuntimeImport(id: string): boolean {
+  return (
+    id === "nativite/background" ||
+    id.includes("/src/background.ts") ||
+    id.includes("/dist/background.mjs")
+  );
+}
+
+export async function resolveBackgroundTaskEntries(
   config: NativiteConfig,
   cwd: string,
-): Promise<BackgroundTaskManifest> {
-  const entries: BackgroundTaskManifestEntry[] = [];
+): Promise<ResolvedBackgroundTaskEntry[]> {
+  const entries: ResolvedBackgroundTaskEntry[] = [];
   const taskIds = new Map<string, string>();
   const bundleNames = new Map<string, string>();
 
@@ -79,11 +97,91 @@ export async function resolveBackgroundTaskManifest(
 
     taskIds.set(module.default.id, registeredPath);
     bundleNames.set(bundle, registeredPath);
-    entries.push(createBackgroundTaskManifestEntry(module.default, bundle));
+    entries.push({
+      registeredPath,
+      absolutePath,
+      manifestEntry: createBackgroundTaskManifestEntry(module.default, bundle),
+    });
   }
 
-  entries.sort((a, b) => a.id.localeCompare(b.id));
-  return createBackgroundTaskManifest(entries);
+  entries.sort((a, b) => a.manifestEntry.id.localeCompare(b.manifestEntry.id));
+  return entries;
+}
+
+export async function resolveBackgroundTaskManifest(
+  config: NativiteConfig,
+  cwd: string,
+): Promise<BackgroundTaskManifest> {
+  const entries = await resolveBackgroundTaskEntries(config, cwd);
+  return createBackgroundTaskManifestFromEntries(entries);
+}
+
+export function createBackgroundTaskManifestFromEntries(
+  entries: readonly ResolvedBackgroundTaskEntry[],
+): BackgroundTaskManifest {
+  return createBackgroundTaskManifest(entries.map((entry) => entry.manifestEntry));
+}
+
+export function backgroundTaskHashInputs(
+  entries: readonly ResolvedBackgroundTaskEntry[],
+): { readonly name: string; readonly content: string }[] {
+  return entries.map((entry) => ({
+    name: `background-task:${entry.registeredPath}`,
+    content: readFileSync(entry.absolutePath, "utf-8"),
+  }));
+}
+
+export async function writeBackgroundTaskBundles(
+  entries: readonly ResolvedBackgroundTaskEntry[],
+  outputRoot: string,
+  cwd: string,
+): Promise<string[]> {
+  const outputDir = join(outputRoot, BACKGROUND_ASSET_DIRECTORY);
+  mkdirSync(outputDir, { recursive: true });
+
+  const outputPaths: string[] = [];
+  for (const entry of entries) {
+    const bundle = entry.manifestEntry.bundle;
+    await build({
+      configFile: false,
+      envFile: false,
+      logLevel: "silent",
+      plugins: [
+        {
+          name: "nativite-background-runtime",
+          enforce: "pre",
+          resolveId(id) {
+            return isBackgroundRuntimeImport(id) ? backgroundRuntimeModuleId : undefined;
+          },
+          load(id) {
+            if (id !== backgroundRuntimeModuleId) return undefined;
+            return "export function defineBackgroundTask(task) { return task; }\n";
+          },
+        },
+      ],
+      root: cwd,
+      build: {
+        emptyOutDir: false,
+        lib: {
+          entry: entry.absolutePath,
+          fileName: () => bundle,
+          formats: ["es"],
+        },
+        minify: false,
+        outDir: outputDir,
+        sourcemap: false,
+        target: "es2022",
+        rollupOptions: {
+          output: {
+            chunkFileNames: "chunks/[name]-[hash].js",
+          },
+        },
+      },
+    });
+    outputPaths.push(join(outputDir, bundle));
+  }
+
+  return outputPaths;
 }
 
 export function serializeBackgroundTaskManifest(manifest: BackgroundTaskManifest): string {
