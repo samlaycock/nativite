@@ -19,6 +19,9 @@ data class NativiteAndroidBackgroundTaskOptions(
     val backoffPolicy: String?,
     val backoffDelayMinutes: Long?,
 ) {
+    val isSchedulable: Boolean
+        get() = kind == "periodic-work" || kind == "one-off-work"
+
     companion object {
         fun fromJson(json: JSONObject): NativiteAndroidBackgroundTaskOptions =
             NativiteAndroidBackgroundTaskOptions(

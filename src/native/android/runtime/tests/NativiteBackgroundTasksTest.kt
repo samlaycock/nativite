@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -67,6 +68,51 @@ class NativiteBackgroundTasksTest {
         assertEquals(true, android.requiresCharging)
         assertEquals("linear", android.backoffPolicy)
         assertEquals(5L, android.backoffDelayMinutes)
+        assertTrue(android.isSchedulable)
+    }
+
+    @Test
+    fun androidOptions_marksUnknownKindsAsUnsupported() {
+        val task = NativiteBackgroundTask(
+            id = "sync-inbox",
+            bundle = "sync-inbox.js",
+            platforms = org.json.JSONObject(
+                """
+                {
+                  "android": {
+                    "kind": "background-fetch"
+                  }
+                }
+                """.trimIndent(),
+            ),
+        )
+
+        assertEquals(false, task.androidOptions!!.isSchedulable)
+    }
+
+    @Test
+    fun backgroundWorker_throwsForUnsupportedAndroidTaskKinds() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val task = NativiteBackgroundTask(
+            id = "sync-inbox",
+            bundle = "sync-inbox.js",
+            platforms = org.json.JSONObject(
+                """
+                {
+                  "android": {
+                    "kind": "background-fetch"
+                  }
+                }
+                """.trimIndent(),
+            ),
+        )
+
+        try {
+            NativiteBackgroundWorkScheduler.schedule(context, task)
+            fail("Expected unsupported Android background task kind to throw.")
+        } catch (err: IllegalArgumentException) {
+            assertEquals("Background task sync-inbox is not supported on Android.", err.message)
+        }
     }
 
     @Test
