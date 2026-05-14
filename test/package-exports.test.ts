@@ -14,6 +14,7 @@ describe("package exports", () => {
       "./chrome",
       "./css",
       "./background",
+      "./plugins/contacts",
       "./globals",
     ]);
   });

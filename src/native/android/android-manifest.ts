@@ -1,10 +1,21 @@
 import type { NativiteConfig } from "../../index.ts";
 
 export function androidManifestTemplate(config: NativiteConfig): string {
+  const includesContacts =
+    config.plugins?.some((plugin) => plugin.name === "nativite-contacts") ?? false;
+  const contactsPermissions = includesContacts
+    ? `
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
+`
+    : "";
+
   return `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+${contactsPermissions}
 
     <application
         android:allowBackup="true"

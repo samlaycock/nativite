@@ -75,6 +75,12 @@ ${backgroundTaskIdentifiers.map((id) => `    <string>${id}</string>`).join("\n")
     <string>fetch</string>
   </array>`
       : "";
+  const contactsXml =
+    (config.plugins?.some((plugin) => plugin.name === "nativite-contacts") ?? false)
+      ? `
+  <key>NSContactsUsageDescription</key>
+  <string>${config.app.name} needs contacts access for contact-book features.</string>`
+      : "";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -100,7 +106,7 @@ ${backgroundTaskIdentifiers.map((id) => `    <string>${id}</string>`).join("\n")
   <string>$(CURRENT_PROJECT_VERSION)</string>
   <key>LSRequiresIPhoneOS</key>
   <true/>
-  ${launchScreenXml}${backgroundTasksXml}
+  ${launchScreenXml}${backgroundTasksXml}${contactsXml}
   <key>UISupportedInterfaceOrientations</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>

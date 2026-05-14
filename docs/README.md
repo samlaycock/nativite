@@ -43,6 +43,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Client Bridge](./shared/client-bridge.md) — Low-level RPC and event subscription API
 - [CSS Variables Module](./shared/css-vars-module.md) — Observable access to `--nv-*` variables
 - [Background Tasks](./shared/background-tasks.md) — JavaScript task authoring API and manifest model
+- [Contacts Plugin](./shared/contacts-plugin.md) — First-party native address-book plugin API and platform behavior
 - [Native Test Scripts](./shared/native-test-scripts.md) — Bun commands for running Swift and Kotlin runtime tests
 - [CLI Init Command](./shared/cli-init.md) — One-command setup for existing Vite projects
 - [CLI Dev Command](./shared/cli-dev.md) — Optional native development status dashboard

@@ -129,6 +129,16 @@ describe("infoPlistTemplate", () => {
     expect(output).toContain("<string>fetch</string>");
   });
 
+  it("includes contacts usage description when the first-party contacts plugin is configured", () => {
+    const output = infoPlistTemplate({
+      ...baseConfig,
+      plugins: [{ name: "nativite-contacts" }],
+    });
+
+    expect(output).toContain("<key>NSContactsUsageDescription</key>");
+    expect(output).toContain("TestApp needs contacts access for contact-book features.");
+  });
+
   it("excludes tasks without supported iOS metadata from scheduler identifiers", () => {
     const output = infoPlistTemplate(baseConfig, {
       version: 1,
