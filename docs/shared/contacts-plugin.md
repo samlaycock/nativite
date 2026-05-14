@@ -70,6 +70,11 @@ iOS uses the Contacts framework for permission status and contact queries.
 Android uses `ContactsContract` for contact queries after `READ_CONTACTS` has
 been granted.
 
+On iOS, the `note` field is not included in default `queryContacts()` results.
+Request it explicitly only if the app is provisioned with Apple's
+`com.apple.developer.contacts.notes` entitlement; otherwise Contacts.framework
+can reject the fetch.
+
 Operations that are not supported by the current platform/runtime fail with a
 structured JSON error string containing `code`, `message`, `platform`, and
 `operation`. The initial implementation documents unsupported operations
