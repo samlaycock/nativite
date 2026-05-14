@@ -156,7 +156,7 @@ export const contacts = definePlugin(
       ios: {
         sources: ["./ios/NativiteContactsPlugin.swift"],
         registrars: ["registerNativiteContactsPlugin"],
-        dependencies: ["Contacts", "ContactsUI"],
+        dependencies: ["Contacts"],
       },
       android: {
         sources: ["./android/NativiteContactsPlugin.kt"],

@@ -34,7 +34,7 @@ fun registerNativiteContactsPlugin(bridge: Any) {
             return@register
         }
         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
-        completion(Result.success(mapOf("status" to if (granted) "granted" else "prompt", "canAskAgain" to !granted, "platform" to "android")))
+        completion(Result.success(mapOf("status" to if (granted) "granted" else "denied", "canAskAgain" to false, "platform" to "android")))
     }
 
     register(bridge, "requestPermissions") { _, completion ->

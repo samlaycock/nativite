@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { NativiteConfig } from "../../index.ts";
 
@@ -37,6 +39,7 @@ describe("contacts plugin", () => {
       ),
     ).toBe(true);
     expect(resolved.platforms.ios.registrars).toContain("registerNativiteContactsPlugin");
+    expect(resolved.platforms.ios.dependencies).toEqual([{ name: "Contacts", weak: false }]);
     expect(
       resolved.platforms.android.sources.some((source) =>
         source.absolutePath.includes("src/plugins/contacts/android/NativiteContactsPlugin.kt"),
@@ -45,5 +48,29 @@ describe("contacts plugin", () => {
     expect(resolved.platforms.android.registrars).toContain(
       "dev.nativite.plugins.contacts.registerNativiteContactsPlugin",
     );
+  });
+
+  it("does not advertise unsupported Android runtime permission requests", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/contacts/android/NativiteContactsPlugin.kt"),
+      "utf-8",
+    );
+
+    expect(source).toContain('if (granted) "granted" else "denied"');
+    expect(source).toContain('"canAskAgain" to false');
+    expect(source).toContain('unsupported("requestPermissions")');
+  });
+
+  it("honors iOS field selection and page size in the native query implementation", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/contacts/ios/NativiteContactsPlugin.swift"),
+      "utf-8",
+    );
+
+    expect(source).not.toContain("ContactsUI");
+    expect(source).toContain("private func requestedFields(_ args: Any?) -> Set<String>");
+    expect(source).toContain("private func requestedPageSize(_ args: Any?) -> Int");
+    expect(source).toContain("contactDictionary(contact, fields: fields)");
+    expect(source).toContain("if contacts.count >= pageSize");
   });
 });
