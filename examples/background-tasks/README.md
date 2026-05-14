@@ -9,8 +9,10 @@ Nativite background tasks.
 - `src/background/periodic-sync.task.ts` demonstrates a periodic sync task with durable
   task-scoped storage.
 - `src/background/refresh-session.task.ts` demonstrates a one-off session refresh task
-  with payload validation and retry semantics.
-- `src/main.ts` schedules, cancels, and observes task status from WebView app code.
+  with payload validation and retry semantics. It is Android-only because iOS does not
+  expose one-off background work through Nativite.
+- `src/main.ts` schedules and observes task status from WebView app code, including an
+  Android platform guard and explicit error handling for rejected bridge calls.
 
 ## Try It
 

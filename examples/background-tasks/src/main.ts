@@ -1,16 +1,20 @@
+/// <reference types="nativite/globals" />
+
 import { background } from "nativite/background";
 
 async function registerBackgroundWork(): Promise<void> {
-  await background.schedule("periodic-sync", {
-    payload: { reason: "app-start" },
-  });
+  await background.schedule("periodic-sync");
 
-  await background.schedule("refresh-session", {
-    payload: { reason: "manual" },
-  });
+  if (__PLATFORM__ === "android") {
+    await background.schedule("refresh-session", {
+      payload: { reason: "manual" },
+    });
 
-  const status = await background.getStatus("refresh-session");
-  console.info("refresh-session status", status);
+    const status = await background.getStatus("refresh-session");
+    console.info("refresh-session status", status);
+  }
 }
 
-void registerBackgroundWork();
+registerBackgroundWork().catch((err: unknown) => {
+  console.error("Background task scheduling failed", err);
+});
