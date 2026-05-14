@@ -54,6 +54,7 @@ export default defineConfig([
       "client/index": "./src/client/index.ts",
       "chrome/public": "./src/chrome/public.ts",
       "css-vars/index": "./src/css-vars/index.ts",
+      "plugins/contacts/index": "./src/plugins/contacts/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],

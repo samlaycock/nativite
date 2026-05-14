@@ -45,6 +45,8 @@ open class NativiteBridge {
         handlers["$namespace.$method"] = handler
     }
 
+    fun applicationContextOrNull(): Context? = applicationContext
+
     private fun registerBuiltinHandlers() {
         register(namespace = "__nativite__", method = "__ping__") { _, completion ->
             completion(Result.success("pong"))
