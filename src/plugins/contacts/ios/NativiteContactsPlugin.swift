@@ -228,6 +228,11 @@ func registerNativiteContactsPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "contacts", method: "listGroups") { _, completion in
+    guard CNContactStore.authorizationStatus(for: .contacts) == .authorized else {
+      completion(.failure(contactsError("permission-denied", "Contacts permission has not been granted.", operation: "listGroups")))
+      return
+    }
+
     do {
       let groups = try store.groups(matching: nil).map { ["id": $0.identifier, "name": $0.name] }
       completion(.success(["groups": groups]))

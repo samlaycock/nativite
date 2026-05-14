@@ -84,4 +84,15 @@ describe("contacts plugin", () => {
     expect(source).toContain("contactDictionary(contact, fields: fields)");
     expect(source).toContain("if contacts.count >= pageSize");
   });
+
+  it("guards iOS group listing behind contacts authorization", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/contacts/ios/NativiteContactsPlugin.swift"),
+      "utf-8",
+    );
+
+    expect(source).toContain('method: "listGroups"');
+    expect(source).toContain('operation: "listGroups"');
+    expect(source).toContain('contactsError("permission-denied"');
+  });
 });
