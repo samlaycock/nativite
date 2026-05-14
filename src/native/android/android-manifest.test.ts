@@ -31,14 +31,14 @@ describe("androidManifestTemplate", () => {
     expect(output).toContain("@style/Theme.TestApp");
   });
 
-  it("declares contacts permissions when the first-party contacts plugin is configured", () => {
+  it("declares only read contacts permission when the first-party contacts plugin is configured", () => {
     const output = androidManifestTemplate({
       ...androidConfig,
       plugins: [{ name: "nativite-contacts" }],
     });
 
     expect(output).toContain("android.permission.READ_CONTACTS");
-    expect(output).toContain("android.permission.WRITE_CONTACTS");
-    expect(output).toContain("android.permission.GET_ACCOUNTS");
+    expect(output).not.toContain("android.permission.WRITE_CONTACTS");
+    expect(output).not.toContain("android.permission.GET_ACCOUNTS");
   });
 });

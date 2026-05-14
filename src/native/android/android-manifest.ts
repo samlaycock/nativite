@@ -6,8 +6,6 @@ export function androidManifestTemplate(config: NativiteConfig): string {
   const contactsPermissions = includesContacts
     ? `
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
-    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
 `
     : "";
 

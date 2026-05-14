@@ -55,11 +55,10 @@ The bridge namespace is `contacts`. The plugin also exports
 ## Permissions
 
 iOS generation adds `NSContactsUsageDescription` when the contacts plugin is in
-the app config. Android generation adds:
+the app config. Android generation currently adds only the permission used by
+the implemented read path:
 
 - `android.permission.READ_CONTACTS`
-- `android.permission.WRITE_CONTACTS`
-- `android.permission.GET_ACCOUNTS`
 
 Call `getContactsPermissionStatus()` before querying contacts. Call
 `requestContactsPermissions()` to start the native permission flow where the
