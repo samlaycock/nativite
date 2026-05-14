@@ -79,10 +79,42 @@ describe("contacts plugin", () => {
     );
 
     expect(source).not.toContain("ContactsUI");
+    expect(source).toContain("private let defaultContactFields: Set<String>");
+    expect(source).toContain("private let supportedContactFields: Set<String>");
     expect(source).toContain("private func requestedFields(_ args: Any?) -> Set<String>");
     expect(source).toContain("private func requestedPageSize(_ args: Any?) -> Int");
     expect(source).toContain("contactDictionary(contact, fields: fields)");
     expect(source).toContain("if contacts.count >= pageSize");
+  });
+
+  it("does not request iOS contact notes by default", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/contacts/ios/NativiteContactsPlugin.swift"),
+      "utf-8",
+    );
+    const defaultFields = source.slice(
+      source.indexOf("private let defaultContactFields"),
+      source.indexOf("private let supportedContactFields"),
+    );
+
+    expect(defaultFields).not.toContain('"note"');
+    expect(source).toContain("CNContactNoteKey");
+  });
+
+  it("wraps iOS Contacts framework failures in structured plugin errors", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/contacts/ios/NativiteContactsPlugin.swift"),
+      "utf-8",
+    );
+
+    expect(source).toContain("JSONSerialization.data(withJSONObject: payload)");
+    expect(source).toContain(
+      'contactsError("operation-failed", error.localizedDescription, operation: "queryContacts")',
+    );
+    expect(source).toContain(
+      'contactsError("operation-failed", error.localizedDescription, operation: "listGroups")',
+    );
+    expect(source).not.toContain("completion(.failure(error))");
   });
 
   it("guards iOS group listing behind contacts authorization", () => {

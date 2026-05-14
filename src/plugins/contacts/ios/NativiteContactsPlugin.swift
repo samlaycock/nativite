@@ -4,13 +4,20 @@ import Foundation
 private let nativiteContactsErrorDomain = "NativiteContacts"
 
 private func contactsError(_ code: String, _ message: String, operation: String) -> NSError {
-  NSError(
+  let payload = [
+    "code": code,
+    "message": message,
+    "platform": "ios",
+    "operation": operation,
+  ]
+  let jsonMessage = (try? JSONSerialization.data(withJSONObject: payload))
+    .flatMap { String(data: $0, encoding: .utf8) }
+    ?? "{\"code\":\"operation-failed\",\"message\":\"Contacts operation failed\",\"platform\":\"ios\",\"operation\":\"\(operation)\"}"
+
+  return NSError(
     domain: nativiteContactsErrorDomain,
     code: 1,
-    userInfo: [
-      NSLocalizedDescriptionKey:
-        "{\"code\":\"\(code)\",\"message\":\"\(message)\",\"platform\":\"ios\",\"operation\":\"\(operation)\"}"
-    ]
+    userInfo: [NSLocalizedDescriptionKey: jsonMessage]
   )
 }
 
@@ -29,7 +36,7 @@ private func permissionResponse(_ status: CNAuthorizationStatus) -> [String: Any
   }
 }
 
-private let allContactFields: Set<String> = [
+private let defaultContactFields: Set<String> = [
   "id",
   "name",
   "phones",
@@ -37,8 +44,14 @@ private let allContactFields: Set<String> = [
   "addresses",
   "organization",
   "birthday",
-  "note",
 ]
+
+private let supportedContactFields: Set<String> = defaultContactFields.union([
+  // Fetching CNContactNoteKey on iOS 13+ requires the
+  // com.apple.developer.contacts.notes entitlement. It is supported only when
+  // callers explicitly request it and provision the entitlement themselves.
+  "note",
+])
 
 private func requestedFields(_ args: Any?) -> Set<String> {
   guard
@@ -46,11 +59,11 @@ private func requestedFields(_ args: Any?) -> Set<String> {
     let fields = options["fields"] as? [String],
     !fields.isEmpty
   else {
-    return allContactFields
+    return defaultContactFields
   }
 
-  let knownFields = Set(fields).intersection(allContactFields)
-  return knownFields.isEmpty ? allContactFields : knownFields.union(["id", "name"])
+  let knownFields = Set(fields).intersection(supportedContactFields)
+  return knownFields.isEmpty ? defaultContactFields : knownFields.union(["id", "name"])
 }
 
 private func requestedPageSize(_ args: Any?) -> Int {
@@ -207,7 +220,7 @@ func registerNativiteContactsPlugin(_ bridge: NativiteBridge) {
       }
       completion(.success(["contacts": contacts]))
     } catch {
-      completion(.failure(error))
+      completion(.failure(contactsError("operation-failed", error.localizedDescription, operation: "queryContacts")))
     }
   }
 
@@ -237,7 +250,7 @@ func registerNativiteContactsPlugin(_ bridge: NativiteBridge) {
       let groups = try store.groups(matching: nil).map { ["id": $0.identifier, "name": $0.name] }
       completion(.success(["groups": groups]))
     } catch {
-      completion(.failure(error))
+      completion(.failure(contactsError("operation-failed", error.localizedDescription, operation: "listGroups")))
     }
   }
 
