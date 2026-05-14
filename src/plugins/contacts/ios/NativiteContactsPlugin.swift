@@ -1,5 +1,4 @@
 import Contacts
-import ContactsUI
 import Foundation
 
 private let nativiteContactsErrorDomain = "NativiteContacts"
@@ -30,50 +29,147 @@ private func permissionResponse(_ status: CNAuthorizationStatus) -> [String: Any
   }
 }
 
-private func contactDictionary(_ contact: CNContact) -> [String: Any] {
+private let allContactFields: Set<String> = [
+  "id",
+  "name",
+  "phones",
+  "emails",
+  "addresses",
+  "organization",
+  "birthday",
+  "note",
+]
+
+private func requestedFields(_ args: Any?) -> Set<String> {
+  guard
+    let options = args as? [String: Any],
+    let fields = options["fields"] as? [String],
+    !fields.isEmpty
+  else {
+    return allContactFields
+  }
+
+  let knownFields = Set(fields).intersection(allContactFields)
+  return knownFields.isEmpty ? allContactFields : knownFields.union(["id", "name"])
+}
+
+private func requestedPageSize(_ args: Any?) -> Int {
+  guard let options = args as? [String: Any] else { return 100 }
+  let rawPageSize = options["pageSize"] as? Int ?? 100
+  return min(max(rawPageSize, 1), 500)
+}
+
+private func contactDictionary(_ contact: CNContact, fields: Set<String>) -> [String: Any] {
   var out: [String: Any] = [
     "id": contact.identifier,
-    "name": [
+  ]
+
+  if fields.contains("name") {
+    out["name"] = [
       "givenName": contact.givenName,
       "middleName": contact.middleName,
       "familyName": contact.familyName,
       "nickname": contact.nickname,
       "displayName": CNContactFormatter.string(from: contact, style: .fullName) ?? "",
-    ],
-  ]
+    ]
+  }
 
-  if contact.isKeyAvailable(CNContactPhoneNumbersKey) {
+  if fields.contains("phones") && contact.isKeyAvailable(CNContactPhoneNumbersKey) {
     out["phones"] = contact.phoneNumbers.map { value in
       ["label": CNLabeledValue<NSString>.localizedString(forLabel: value.label ?? ""), "value": value.value.stringValue]
     }
   }
-  if contact.isKeyAvailable(CNContactEmailAddressesKey) {
+  if fields.contains("emails") && contact.isKeyAvailable(CNContactEmailAddressesKey) {
     out["emails"] = contact.emailAddresses.map { value in
       ["label": CNLabeledValue<NSString>.localizedString(forLabel: value.label ?? ""), "value": String(value.value)]
     }
   }
-  if contact.isKeyAvailable(CNContactOrganizationNameKey) {
+  if fields.contains("addresses") && contact.isKeyAvailable(CNContactPostalAddressesKey) {
+    out["addresses"] = contact.postalAddresses.map { value in
+      [
+        "label": CNLabeledValue<NSString>.localizedString(forLabel: value.label ?? ""),
+        "street": value.value.street,
+        "city": value.value.city,
+        "region": value.value.state,
+        "postalCode": value.value.postalCode,
+        "country": value.value.country,
+      ]
+    }
+  }
+  if fields.contains("organization") && contact.isKeyAvailable(CNContactOrganizationNameKey) {
     out["organization"] = contact.organizationName
   }
-  if contact.isKeyAvailable(CNContactNoteKey) {
+  if fields.contains("birthday") && contact.isKeyAvailable(CNContactBirthdayKey), let birthday = contact.birthday,
+     let date = Calendar.current.date(from: birthday) {
+    out["birthday"] = ISO8601DateFormatter().string(from: date)
+  }
+  if fields.contains("note") && contact.isKeyAvailable(CNContactNoteKey) {
     out["note"] = contact.note
   }
 
   return out
 }
 
-private func requestedKeys(_ args: Any?) -> [CNKeyDescriptor] {
-  [
+private func requestedKeyStrings(_ args: Any?) -> [String] {
+  let fields = requestedFields(args)
+  var keys: [String] = [CNContactIdentifierKey]
+
+  if fields.contains("name") {
+    keys.append(contentsOf: [
+      CNContactGivenNameKey,
+      CNContactMiddleNameKey,
+      CNContactFamilyNameKey,
+      CNContactNicknameKey,
+    ])
+  }
+  if fields.contains("phones") {
+    keys.append(CNContactPhoneNumbersKey)
+  }
+  if fields.contains("emails") {
+    keys.append(CNContactEmailAddressesKey)
+  }
+  if fields.contains("addresses") {
+    keys.append(CNContactPostalAddressesKey)
+  }
+  if fields.contains("organization") {
+    keys.append(CNContactOrganizationNameKey)
+  }
+  if fields.contains("birthday") {
+    keys.append(CNContactBirthdayKey)
+  }
+  if fields.contains("note") {
+    keys.append(CNContactNoteKey)
+  }
+
+  return Array(Set(keys))
+}
+
+private func requestedSearch(_ args: Any?) -> String? {
+  guard
+    let options = args as? [String: Any],
+    let search = options["search"] as? String,
+    !search.isEmpty
+  else {
+    return nil
+  }
+
+  return search
+}
+
+private func contactMatchesSearch(_ contact: CNContact, search: String?) -> Bool {
+  guard let search else { return true }
+  let displayName = CNContactFormatter.string(from: contact, style: .fullName) ?? ""
+  return displayName.localizedCaseInsensitiveContains(search)
+}
+
+private func baseFetchKeyStrings() -> [String] {
+  return [
     CNContactIdentifierKey,
     CNContactGivenNameKey,
     CNContactMiddleNameKey,
     CNContactFamilyNameKey,
     CNContactNicknameKey,
-    CNContactPhoneNumbersKey,
-    CNContactEmailAddressesKey,
-    CNContactOrganizationNameKey,
-    CNContactNoteKey,
-  ].map { $0 as CNKeyDescriptor }
+  ]
 }
 
 func registerNativiteContactsPlugin(_ bridge: NativiteBridge) {
@@ -95,11 +191,19 @@ func registerNativiteContactsPlugin(_ bridge: NativiteBridge) {
       return
     }
 
-    let request = CNContactFetchRequest(keysToFetch: requestedKeys(args))
+    let fields = requestedFields(args)
+    let pageSize = requestedPageSize(args)
+    let search = requestedSearch(args)
+    let requestKeys = Array(Set(requestedKeyStrings(args) + baseFetchKeyStrings()))
+    let request = CNContactFetchRequest(keysToFetch: requestKeys.map { $0 as CNKeyDescriptor })
     var contacts: [[String: Any]] = []
     do {
-      try store.enumerateContacts(with: request) { contact, _ in
-        contacts.append(contactDictionary(contact))
+      try store.enumerateContacts(with: request) { contact, stop in
+        guard contactMatchesSearch(contact, search: search) else { return }
+        contacts.append(contactDictionary(contact, fields: fields))
+        if contacts.count >= pageSize {
+          stop.pointee = true
+        }
       }
       completion(.success(["contacts": contacts]))
     } catch {
