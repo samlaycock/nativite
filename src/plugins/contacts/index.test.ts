@@ -61,6 +61,17 @@ describe("contacts plugin", () => {
     expect(source).toContain('unsupported("requestPermissions")');
   });
 
+  it("honors Android search in the native query implementation", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/contacts/android/NativiteContactsPlugin.kt"),
+      "utf-8",
+    );
+
+    expect(source).toContain('options?.optString("search")');
+    expect(source).toContain("DISPLAY_NAME_PRIMARY} LIKE ?");
+    expect(source).toContain("selectionArgs");
+  });
+
   it("honors iOS field selection and page size in the native query implementation", () => {
     const source = readFileSync(
       join(process.cwd(), "src/plugins/contacts/ios/NativiteContactsPlugin.swift"),

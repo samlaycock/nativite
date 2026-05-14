@@ -26,6 +26,12 @@ private fun applicationContextOrNull(bridge: Any): android.content.Context? {
     return accessor?.invoke(bridge) as? android.content.Context
 }
 
+private fun searchSelection(search: String?): Pair<String?, Array<String>?> {
+    if (search.isNullOrBlank()) return null to null
+
+    return "${ContactsContract.Contacts.DISPLAY_NAME_PRIMARY} LIKE ?" to arrayOf("%$search%")
+}
+
 fun registerNativiteContactsPlugin(bridge: Any) {
     register(bridge, "getPermissionStatus") { _, completion ->
         val context = applicationContextOrNull(bridge)
@@ -55,6 +61,8 @@ fun registerNativiteContactsPlugin(bridge: Any) {
 
         val options = args as? JSONObject
         val pageSize = options?.optInt("pageSize", 100)?.coerceIn(1, 500) ?: 100
+        val search = options?.optString("search")?.takeIf { it.isNotBlank() }
+        val (selection, selectionArgs) = searchSelection(search)
         val contacts = mutableListOf<Map<String, Any?>>()
         val cursor = context.contentResolver.query(
             ContactsContract.Contacts.CONTENT_URI,
@@ -62,8 +70,8 @@ fun registerNativiteContactsPlugin(bridge: Any) {
                 ContactsContract.Contacts._ID,
                 ContactsContract.Contacts.DISPLAY_NAME_PRIMARY,
             ),
-            null,
-            null,
+            selection,
+            selectionArgs,
             "${ContactsContract.Contacts.DISPLAY_NAME_PRIMARY} ASC",
         )
 
