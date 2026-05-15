@@ -44,13 +44,16 @@ private func localAuthStatus(_ code: Int) -> String {
 
 private func supportedLocalAuthTypes(_ context: LAContext = LAContext()) -> [String] {
   _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
+  let supportsDeviceCredential = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+  let deviceCredentialTypes = supportsDeviceCredential ? ["device-credential"] : []
+
   switch context.biometryType {
   case .faceID:
-    return ["face"]
+    return ["face"] + deviceCredentialTypes
   case .touchID:
-    return ["fingerprint"]
+    return ["fingerprint"] + deviceCredentialTypes
   case .none:
-    return []
+    return deviceCredentialTypes
   @unknown default:
     return ["unknown"]
   }

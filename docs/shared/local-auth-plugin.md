@@ -71,7 +71,9 @@ Supported auth types are reported as `fingerprint`, `face`, `iris`,
 
 iOS uses `LocalAuthentication.LAContext`. `disableDeviceFallback` switches the
 policy from device-owner authentication to biometrics-only authentication.
-Cancellation invalidates the active `LAContext`.
+`getLocalAuthSupportedTypes` reports `device-credential` when device-owner
+authentication is available, including passcode-only devices. Cancellation
+invalidates the active `LAContext`.
 
 Android uses the platform `android.hardware.biometrics.BiometricPrompt`.
 Authentication requires Android 9 or newer. Device credentials are enabled on

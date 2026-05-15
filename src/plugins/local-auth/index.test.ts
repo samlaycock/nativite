@@ -119,6 +119,22 @@ describe("local auth plugin", () => {
     expect(isEnrolledSource).toContain(".deviceOwnerAuthentication");
   });
 
+  it("reports iOS device credentials in supported local auth types", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/ios/NativiteLocalAuthPlugin.swift"),
+      "utf-8",
+    );
+    const supportedTypesSource = source.slice(
+      source.indexOf("private func supportedLocalAuthTypes"),
+      source.indexOf("func registerNativiteLocalAuthPlugin"),
+    );
+
+    expect(supportedTypesSource).toContain(".deviceOwnerAuthenticationWithBiometrics");
+    expect(supportedTypesSource).toContain(".deviceOwnerAuthentication");
+    expect(supportedTypesSource).toContain('"device-credential"');
+    expect(supportedTypesSource).toContain("return deviceCredentialTypes");
+  });
+
   it("distinguishes Android biometric support from device credential support", () => {
     const source = readFileSync(
       join(process.cwd(), "src/plugins/local-auth/android/NativiteLocalAuthPlugin.kt"),
