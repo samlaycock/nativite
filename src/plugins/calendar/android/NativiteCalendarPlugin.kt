@@ -48,7 +48,7 @@ private fun hasPermission(context: Context, permission: String): Boolean =
     ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
 private fun permissionResponse(context: Context, kind: String): Map<String, Any> {
-    val permission = if (kind == "reminders") Manifest.permission.READ_CALENDAR else Manifest.permission.READ_CALENDAR
+    val permission = Manifest.permission.READ_CALENDAR
     val granted = hasPermission(context, permission)
     return mapOf(
         "status" to if (granted) "granted" else "denied",
@@ -254,8 +254,12 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
             args !is JSONObject || !args.has("id") -> completion(Result.failure(calendarError("invalid-arguments", "updateEvent requires an id.", "updateEvent")))
             else -> {
                 val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, args.getString("id").toLong())
-                context.contentResolver.update(uri, eventValues(args), null, null)
-                completion(Result.success(mapOf("id" to args.getString("id"))))
+                val rows = context.contentResolver.update(uri, eventValues(args), null, null)
+                if (rows == 0) {
+                    completion(Result.failure(calendarError("not-found", "Calendar event was not found.", "updateEvent")))
+                } else {
+                    completion(Result.success(mapOf("id" to args.getString("id"))))
+                }
             }
         }
     }

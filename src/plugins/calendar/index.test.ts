@@ -68,6 +68,12 @@ describe("calendar plugin", () => {
     expect(source).toContain("store.save(event, span: .futureEvents, commit: true)");
     expect(source).toContain("store.remove(event, span: .futureEvents, commit: true)");
     expect(source).toContain("EKEventEditViewController");
+    expect(source).toContain("editController.editViewDelegate = delegate");
+    expect(source).toContain("eventEditViewController(_ controller: EKEventEditViewController");
+    expect(source).toContain('let mode = options["mode"] as? String ?? "view"');
+    expect(source).toContain("EKEventViewController");
+    expect(source).toContain("queryEvents requires options.");
+    expect(source).toContain("createEvent requires an event.");
     expect(source).toContain("EKReminder(eventStore: store)");
   });
 
@@ -81,7 +87,13 @@ describe("calendar plugin", () => {
     expect(source).toContain("CalendarContract.Events.CONTENT_URI");
     expect(source).toContain("CalendarContract.Instances.CONTENT_URI");
     expect(source).toContain("ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI");
+    expect(source).toContain("val permission = Manifest.permission.READ_CALENDAR");
+    expect(source).toContain("val rows = context.contentResolver.update");
+    expect(source).toContain(
+      'calendarError("not-found", "Calendar event was not found.", "updateEvent")',
+    );
     expect(source).toContain("Intent(Intent.ACTION_VIEW)");
     expect(source).toContain('unsupported("createReminder")');
+    expect(source).not.toContain('if (kind == "reminders") Manifest.permission.READ_CALENDAR');
   });
 });
