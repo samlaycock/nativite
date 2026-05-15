@@ -207,8 +207,10 @@ func registerNativiteContactsPlugin(_ bridge: NativiteBridge) {
     let fields = requestedFields(args)
     let pageSize = requestedPageSize(args)
     let search = requestedSearch(args)
-    let requestKeys = Array(Set(requestedKeyStrings(args) + baseFetchKeyStrings()))
-    let request = CNContactFetchRequest(keysToFetch: requestKeys.map { $0 as CNKeyDescriptor })
+    let requestKeyStrings = Array(Set(requestedKeyStrings(args) + baseFetchKeyStrings()))
+    let requestKeys: [CNKeyDescriptor] = requestKeyStrings.map { $0 as CNKeyDescriptor }
+      + [CNContactFormatter.descriptorForRequiredKeys(for: .fullName)]
+    let request = CNContactFetchRequest(keysToFetch: requestKeys)
     var contacts: [[String: Any]] = []
     do {
       try store.enumerateContacts(with: request) { contact, stop in

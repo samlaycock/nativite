@@ -68,7 +68,9 @@ platform/runtime supports it.
 
 iOS uses the Contacts framework for permission status and contact queries.
 Android uses `ContactsContract` for contact queries after `READ_CONTACTS` has
-been granted.
+been granted. Both platforms honor `queryContacts({ fields })` by returning the
+requested supported fields, with `id` and `name` included for stable identity
+and display.
 
 On iOS, the `note` field is not included in default `queryContacts()` results.
 Request it explicitly only if the app is provisioned with Apple's
