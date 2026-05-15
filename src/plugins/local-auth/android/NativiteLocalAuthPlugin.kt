@@ -48,6 +48,24 @@ private fun canAuthenticate(context: android.content.Context): Int =
         AUTH_NO_HARDWARE
     }
 
+private fun canAuthenticateBiometric(context: android.content.Context): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        biometricManager(context)?.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            ?: AUTH_NO_HARDWARE
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        biometricManager(context)?.canAuthenticate() ?: AUTH_NO_HARDWARE
+    } else {
+        AUTH_NO_HARDWARE
+    }
+
+private fun canAuthenticateDeviceCredential(context: android.content.Context): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        biometricManager(context)?.canAuthenticate(BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+            ?: AUTH_NO_HARDWARE
+    } else {
+        AUTH_NO_HARDWARE
+    }
+
 private fun reasonFor(code: Int): String = when (code) {
     AUTH_NONE_ENROLLED -> "not-enrolled"
     AUTH_NO_HARDWARE -> "hardware-unavailable"
@@ -96,10 +114,14 @@ fun registerNativiteLocalAuthPlugin(bridge: Any) {
 
     register(bridge, "getSupportedTypes") { _, completion ->
         val context = applicationContextOrNull(bridge)
-        val types = if (context != null && canAuthenticate(context) == AUTH_SUCCESS) {
-            listOf("fingerprint", "face", "iris", "device-credential")
-        } else {
-            emptyList()
+        val types = mutableListOf<String>()
+        if (context != null) {
+            if (canAuthenticateBiometric(context) == AUTH_SUCCESS) {
+                types.addAll(listOf("fingerprint", "face", "iris"))
+            }
+            if (canAuthenticateDeviceCredential(context) == AUTH_SUCCESS) {
+                types.add("device-credential")
+            }
         }
         completion(Result.success(mapOf("types" to types, "platform" to "android")))
     }

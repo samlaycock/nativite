@@ -76,8 +76,10 @@ Cancellation invalidates the active `LAContext`.
 Android uses the platform `android.hardware.biometrics.BiometricPrompt`.
 Authentication requires Android 9 or newer. Device credentials are enabled on
 Android 11 or newer when `disableDeviceFallback` is not set. Android cannot
-reliably distinguish the exact enrolled biometric class across devices, so
-supported types may be broader than the current hardware.
+reliably distinguish the exact enrolled biometric class across devices, so it
+reports biometric type strings only when biometric authentication is enrolled,
+and reports `device-credential` separately when device credentials are
+available.
 
 Unsupported platforms and missing runtime context return structured
 `unavailable` results.

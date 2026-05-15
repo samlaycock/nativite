@@ -118,4 +118,21 @@ describe("local auth plugin", () => {
     expect(isEnrolledSource).toContain(".deviceOwnerAuthenticationWithBiometrics");
     expect(isEnrolledSource).toContain(".deviceOwnerAuthentication");
   });
+
+  it("distinguishes Android biometric support from device credential support", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/android/NativiteLocalAuthPlugin.kt"),
+      "utf-8",
+    );
+    const supportedTypesSource = source.slice(
+      source.indexOf('register(bridge, "getSupportedTypes")'),
+      source.indexOf('register(bridge, "authenticate")'),
+    );
+
+    expect(source).toContain("private fun canAuthenticateBiometric");
+    expect(source).toContain("private fun canAuthenticateDeviceCredential");
+    expect(supportedTypesSource).not.toContain("canAuthenticate(context)");
+    expect(supportedTypesSource).toContain("canAuthenticateBiometric(context)");
+    expect(supportedTypesSource).toContain("canAuthenticateDeviceCredential(context)");
+  });
 });
