@@ -220,7 +220,7 @@ describe("NativiteConfigSchema", () => {
     ).toThrow();
   });
 
-  it("rejects Chromium web engine configuration for mobile targets", () => {
+  it("rejects any webEngine configuration for mobile targets", () => {
     expect(() =>
       NativiteConfigSchema.parse({
         ...baseUserConfig,
@@ -232,6 +232,13 @@ describe("NativiteConfigSchema", () => {
       NativiteConfigSchema.parse({
         ...baseUserConfig,
         platforms: [{ platform: "android", webEngine: "chromium" }],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platforms: [{ platform: "ios", webEngine: "system" }],
       }),
     ).toThrow();
   });
