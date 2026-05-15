@@ -1,19 +1,34 @@
 import Foundation
 import UIKit
 
+private let nativiteCaptureProtectionErrorDomain = "NativiteCaptureProtection"
+
 private final class CaptureProtectionState {
   var keys = Set<String>()
+  var observerTokens: [NSObjectProtocol] = []
+
+  deinit {
+    for token in observerTokens {
+      NotificationCenter.default.removeObserver(token)
+    }
+  }
 }
 
-private func captureProtectionFailure(_ code: String, _ message: String, _ errorCode: Int = -1) -> NSError {
+private func captureProtectionFailure(_ code: String, _ message: String, operation: String) -> NSError {
+  let payload: [String: Any] = [
+    "code": code,
+    "message": message,
+    "platform": "ios",
+    "operation": operation,
+  ]
+  let jsonMessage = (try? JSONSerialization.data(withJSONObject: payload))
+    .flatMap { String(data: $0, encoding: .utf8) }
+    ?? "{\"code\":\"operation-failed\",\"message\":\"Capture protection operation failed\",\"platform\":\"ios\",\"operation\":\"\(operation)\"}"
+
   NSError(
-    domain: "NativiteCaptureProtection",
-    code: errorCode,
-    userInfo: [
-      NSLocalizedDescriptionKey: message,
-      "code": code,
-      "platform": "ios",
-    ]
+    domain: nativiteCaptureProtectionErrorDomain,
+    code: 1,
+    userInfo: [NSLocalizedDescriptionKey: jsonMessage]
   )
 }
 
@@ -40,24 +55,24 @@ private func captureProtectionState(_ state: CaptureProtectionState) -> [String:
 func registerNativiteCaptureProtectionPlugin(_ bridge: NativiteBridge) {
   let state = CaptureProtectionState()
 
-  NotificationCenter.default.addObserver(
+  state.observerTokens.append(NotificationCenter.default.addObserver(
     forName: UIScreen.capturedDidChangeNotification,
     object: UIScreen.main,
     queue: .main
-  ) { _ in
-    bridge.sendEvent(name: "captureProtection:captureStatusChange", data: [
+  ) { [weak bridge] _ in
+    bridge?.sendEvent(name: "captureProtection:captureStatusChange", data: [
       "platform": "ios",
       "captured": UIScreen.main.isCaptured,
     ])
-  }
+  })
 
-  NotificationCenter.default.addObserver(
+  state.observerTokens.append(NotificationCenter.default.addObserver(
     forName: UIApplication.userDidTakeScreenshotNotification,
     object: nil,
     queue: .main
-  ) { _ in
-    bridge.sendEvent(name: "captureProtection:screenshot", data: ["platform": "ios"])
-  }
+  ) { [weak bridge] _ in
+    bridge?.sendEvent(name: "captureProtection:screenshot", data: ["platform": "ios"])
+  })
 
   bridge.register(namespace: "captureProtection", method: "getCapabilities") { _, completion in
     completion(.success([
@@ -72,7 +87,7 @@ func registerNativiteCaptureProtectionPlugin(_ bridge: NativiteBridge) {
     completion(.failure(captureProtectionFailure(
       "unsupported",
       "iOS does not expose a public API for reliable screenshot prevention. Use screenshot and capture-status events to react to capture activity.",
-      1
+      operation: "preventCapture"
     )))
   }
 

@@ -78,6 +78,26 @@ describe("capture protection plugin", () => {
     expect(source).toContain("synchronized(state)");
   });
 
+  it("serializes Android errors as structured JSON and guards bridge registration", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "src/plugins/capture-protection/android/NativiteCaptureProtectionPlugin.kt",
+      ),
+      "utf-8",
+    );
+
+    expect(source).toContain("JSONObject(");
+    expect(source).toContain('"code" to code');
+    expect(source).toContain('"message" to message');
+    expect(source).toContain('"platform" to "android"');
+    expect(source).toContain('"operation" to operation');
+    expect(source).toContain("firstOrNull");
+    expect(source).toContain(
+      "Nativite bridge does not expose the expected plugin registration method.",
+    );
+  });
+
   it("documents iOS public API limits in the native implementation", () => {
     const source = readFileSync(
       join(
@@ -90,5 +110,22 @@ describe("capture protection plugin", () => {
     expect(source).toContain("UIScreen.capturedDidChangeNotification");
     expect(source).toContain("UIApplication.userDidTakeScreenshotNotification");
     expect(source).toContain("iOS does not expose a public API");
+  });
+
+  it("serializes iOS errors as structured JSON and cleans up observers", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "src/plugins/capture-protection/ios/NativiteCaptureProtectionPlugin.swift",
+      ),
+      "utf-8",
+    );
+
+    expect(source).toContain("JSONSerialization.data(withJSONObject: payload)");
+    expect(source).toContain("NSLocalizedDescriptionKey: jsonMessage");
+    expect(source).toContain("var observerTokens: [NSObjectProtocol] = []");
+    expect(source).toContain("NotificationCenter.default.removeObserver(token)");
+    expect(source).toContain("state.observerTokens.append");
+    expect(source).toContain("[weak bridge]");
   });
 });
