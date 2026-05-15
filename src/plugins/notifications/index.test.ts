@@ -90,7 +90,10 @@ describe("notifications plugin", () => {
     expect(androidSource).toContain("ActivityCompat.shouldShowRequestPermissionRationale");
     expect(androidSource).toContain('it.name == "requestPermission"');
     expect(androidSource).toContain("return@register");
-    expect(androidSource).toContain("AlarmManager.RTC_WAKEUP");
+    expect(androidSource).toContain("setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP");
+    expect(androidSource).toContain("alarmManager.canScheduleExactAlarms()");
+    expect(androidSource).toContain("AtomicInteger");
+    expect(androidSource).toContain("computeIfAbsent(id)");
     expect(androidSource).toContain("class NativiteNotificationReceiver : BroadcastReceiver()");
     expect(androidSource).toContain("pendingNotifications.remove(id)\n        return id");
     expect(androidSource).toContain("ConcurrentHashMap");

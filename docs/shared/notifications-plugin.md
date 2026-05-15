@@ -54,9 +54,12 @@ export default defineConfig({
 When the plugin is present, iOS generation includes the `UserNotifications`
 framework. iOS notification permission is requested through
 `UNUserNotificationCenter` and does not use an Info.plist usage-description key.
-Android generation includes `android.permission.POST_NOTIFICATIONS`, the
-notifications Kotlin source, and the broadcast receiver used by scheduled local
-notification alarms.
+Android generation includes `android.permission.POST_NOTIFICATIONS`,
+`android.permission.SCHEDULE_EXACT_ALARM`, the notifications Kotlin source, and
+the broadcast receiver used by scheduled local notification alarms. Android 12+
+devices can still revoke exact-alarm access at the system level; when that
+happens, scheduling a local notification fails with a structured
+`permission-denied` error instead of falling back to an inexact alarm.
 
 Unsupported operations fail with structured native errors:
 
