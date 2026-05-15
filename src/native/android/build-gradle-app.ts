@@ -1,14 +1,16 @@
 import type { NativiteConfig } from "../../index.ts";
-import type { ResolvedNativiteGradleDependency } from "../../plugins/resolve.ts";
+import type {
+  ResolvedNativiteGradleDependency,
+  ResolvedNativiteVersionCatalogDependency,
+} from "../../plugins/resolve.ts";
 
 export interface AndroidPluginGradleInputs {
   readonly sourceDirs: readonly string[];
   readonly resourceDirs: readonly string[];
-  readonly dependencies: readonly ResolvedNativiteGradleDependency[];
-}
-
-function hasBackgroundTasks(config: NativiteConfig): boolean {
-  return (config.backgroundTasks ?? []).length > 0;
+  readonly dependencies: readonly (
+    | ResolvedNativiteGradleDependency
+    | ResolvedNativiteVersionCatalogDependency
+  )[];
 }
 
 function escapeKotlinString(input: string): string {
@@ -26,14 +28,24 @@ function sourceSetEntries(
             ${method}(${quotedPaths})`;
 }
 
+function versionCatalogAccessor(alias: string): string {
+  return alias.replace(/[A-Z]/g, (char) => `.${char.toLowerCase()}`).replaceAll("-", ".");
+}
+
 function pluginDependencyEntries(
-  dependencies: readonly ResolvedNativiteGradleDependency[],
+  dependencies: readonly (
+    | ResolvedNativiteGradleDependency
+    | ResolvedNativiteVersionCatalogDependency
+  )[],
 ): string {
   if (dependencies.length === 0) return "";
 
   return dependencies
     .map((dependency) => {
       const configuration = escapeKotlinString(dependency.configuration);
+      if (dependency.kind === "version-catalog") {
+        return `    add("${configuration}", libs.${versionCatalogAccessor(dependency.alias)})`;
+      }
       const notation = escapeKotlinString(dependency.notation);
       return `    add("${configuration}", "${notation}")`;
     })
@@ -48,9 +60,6 @@ export function buildGradleAppTemplate(
 ): string {
   const pluginSourceSetEntries = `${sourceSetEntries("java.srcDirs", pluginInputs.sourceDirs)}${sourceSetEntries("res.srcDirs", pluginInputs.resourceDirs)}`;
   const pluginDependencyLines = pluginDependencyEntries(pluginInputs.dependencies);
-  const backgroundRuntimeDependencyLine = hasBackgroundTasks(config)
-    ? "\n    implementation(libs.quickjs.kt.android)\n    implementation(libs.androidx.work.runtime.ktx)"
-    : "";
 
   return `plugins {
     alias(libs.plugins.android.application)
@@ -142,7 +151,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.webkit)
-    implementation(libs.androidx.core.splashscreen)${backgroundRuntimeDependencyLine}${pluginDependencyLines ? `\n${pluginDependencyLines}` : ""}
+    implementation(libs.androidx.core.splashscreen)${pluginDependencyLines ? `\n${pluginDependencyLines}` : ""}
 }
 `;
 }

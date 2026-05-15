@@ -19,7 +19,8 @@ export type NativiteFrameworkDependency =
 
 export type NativiteGradleDependency =
   | string
-  | { kind: "gradle"; notation: string; configuration?: string };
+  | { kind: "gradle"; notation: string; configuration?: string }
+  | { kind: "version-catalog"; alias: string; configuration?: string };
 
 export type NativitePluginDependency = NativiteFrameworkDependency | NativiteGradleDependency;
 
@@ -49,6 +50,12 @@ export type NativiteApplePlatformContribution = {
   resources?: NativitePluginFile[];
   registrars?: NativitePluginRegistrar[];
   dependencies?: NativitePluginDependency[];
+  generatedAssets?: NativitePluginFile[];
+  metadata?: Record<string, unknown>;
+  appLifecycle?: {
+    startup?: NativitePluginRegistrar[];
+  };
+  buildEntries?: NativitePluginFile[];
 };
 
 export type NativitePluginContribution = {

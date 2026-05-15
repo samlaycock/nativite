@@ -132,11 +132,20 @@ function generationHashInputs(
     DEFAULT_ANDROID_TARGET_SDK;
   const pkg = androidConfig.app.bundleId;
   const pluginDependencies = resolvedPlugins.platforms.android.dependencies.filter(
-    (dependency) => dependency.kind === "gradle",
+    (dependency) => dependency.kind === "gradle" || dependency.kind === "version-catalog",
+  );
+  const versionCatalogAliases = new Set(
+    pluginDependencies
+      .filter((dependency) => dependency.kind === "version-catalog")
+      .map((dependency) => dependency.alias),
   );
   const hasBackgroundTasks = (config.backgroundTasks ?? []).length > 0;
   const backgroundTaskRuntimeInput = hasBackgroundTasks
     ? [
+        {
+          name: "NativiteBackgroundBridge.kt",
+          content: readRuntimeFile(pkg, "NativiteBackgroundBridge.kt"),
+        },
         {
           name: "NativiteBackgroundTaskRuntime.kt",
           content: readRuntimeFile(pkg, "NativiteBackgroundTaskRuntime.kt"),
@@ -161,8 +170,8 @@ function generationHashInputs(
     {
       name: "gradle/libs.versions.toml",
       content: versionCatalogTemplate({
-        includeQuickJs: hasBackgroundTasks,
-        includeWorkManager: hasBackgroundTasks,
+        includeQuickJs: versionCatalogAliases.has("quickjs-kt-android"),
+        includeWorkManager: versionCatalogAliases.has("androidx-work-runtime-ktx"),
       }),
     },
     {
@@ -388,14 +397,23 @@ export async function generateProject(
     gradleWrapperPropertiesTemplate(),
   );
 
+  const pluginDependencies = resolvedPlugins.platforms.android.dependencies.filter(
+    (dependency) => dependency.kind === "gradle" || dependency.kind === "version-catalog",
+  );
+  const versionCatalogAliases = new Set(
+    pluginDependencies
+      .filter((dependency) => dependency.kind === "version-catalog")
+      .map((dependency) => dependency.alias),
+  );
+
   // Version catalog
   const gradleDir = join(projectRoot, "gradle");
   mkdirSync(gradleDir, { recursive: true });
   writeFileSync(
     join(gradleDir, "libs.versions.toml"),
     versionCatalogTemplate({
-      includeQuickJs: hasBackgroundTasks,
-      includeWorkManager: hasBackgroundTasks,
+      includeQuickJs: versionCatalogAliases.has("quickjs-kt-android"),
+      includeWorkManager: versionCatalogAliases.has("androidx-work-runtime-ktx"),
     }),
   );
 
@@ -408,10 +426,6 @@ export async function generateProject(
     pluginResourceDir,
     true,
   );
-  const pluginDependencies = resolvedPlugins.platforms.android.dependencies.filter(
-    (dependency) => dependency.kind === "gradle",
-  );
-
   // App module build file
   writeFileSync(
     join(appDir, "build.gradle.kts"),
@@ -434,6 +448,10 @@ export async function generateProject(
     readRuntimeFile(pkg, "NativiteBackgroundTasks.kt"),
   );
   if (hasBackgroundTasks) {
+    writeFileSync(
+      join(javaDir, "NativiteBackgroundBridge.kt"),
+      readRuntimeFile(pkg, "NativiteBackgroundBridge.kt"),
+    );
     writeFileSync(
       join(javaDir, "NativiteBackgroundTaskRuntime.kt"),
       readRuntimeFile(pkg, "NativiteBackgroundTaskRuntime.kt"),

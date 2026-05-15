@@ -108,6 +108,9 @@ export const cameraPlugin = definePlugin(
           },
         ],
         dependencies: ["androidx.camera:camera-core:1.4.0"],
+        metadata: {
+          manifestPermissions: ["android.permission.CAMERA"],
+        },
       },
     },
   },
@@ -200,3 +203,42 @@ During project generation, plugins are resolved from the config:
 - iOS/macOS generation creates the `NativitePluginRegistrant` file with conditional compilation for each Apple platform.
 - Android generation copies plugin sources/resources into generated project-owned directories, adds them to Gradle source sets, emits Gradle dependencies, and creates `NativitePluginRegistrant.kt`.
 - Plugin fingerprints are included in the config hash for dirty-check optimization.
+
+## Platform Contribution Hooks
+
+Each `platforms.<platform>` block can contribute native build inputs beyond bridge namespace
+metadata:
+
+| Field                  | Purpose                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `sources`              | Native Swift/Kotlin source files or directories to compile into the generated app.                                 |
+| `resources`            | Native resource files or directories to copy into generated platform resource locations.                           |
+| `registrars`           | Bridge registration functions called from `NativitePluginRegistrant`.                                              |
+| `dependencies`         | Apple frameworks, Android Gradle coordinates, or Android version-catalog aliases.                                  |
+| `generatedAssets`      | Native assets emitted by a plugin-owned generation step, such as manifests or task bundles.                        |
+| `metadata`             | Structured platform metadata that generators can use for Info.plist, Android manifest, or build metadata mutation. |
+| `appLifecycle.startup` | Native startup hooks that run separately from WebView bridge registration.                                         |
+| `buildEntries`         | Extra JavaScript entrypoints that should be bundled independently from the main WebView app.                       |
+
+Android version-catalog dependencies use `{ kind: "version-catalog", alias }` and are emitted as
+`add("<configuration>", libs.<alias>)` in `app/build.gradle.kts`. This is used by optional native
+capabilities that need generated catalog entries instead of hard-coded feature booleans in the
+core Android Gradle template.
+
+These hooks are intentionally structured data rather than arbitrary callbacks. Platform
+generators can include them in generation hashes, deduplicate them across plugins, and apply them
+deterministically.
+
+## Background Tasks And Plugins
+
+Background tasks still use the top-level `backgroundTasks` config field. The feature owns task
+entry discovery, isolated Vite bundling, manifest generation, native scheduler metadata, and
+platform-specific runtime emission, so moving the entire feature behind
+`nativite/plugins/background` would still require more migration work.
+
+The bridge-facing scheduler handlers are now contributed through an internal
+`nativite-background-runtime` plugin when `backgroundTasks` are configured. That plugin registers
+the `__background__` bridge namespace, contributes Android QuickJS and WorkManager
+version-catalog dependencies, and records the generated asset/build-entry hooks needed for the
+future full migration. Apps without background tasks do not get background scheduler bridge
+handlers from the core bridge runtime.

@@ -35,18 +35,26 @@ describe("buildGradleAppTemplate", () => {
     expect(output).not.toContain("libs.androidx.work.runtime.ktx");
   });
 
-  it("includes Android background execution dependencies when background tasks are configured", () => {
-    const output = buildGradleAppTemplate(
-      {
-        ...androidConfig,
-        backgroundTasks: ["./sync.task.ts"],
-      },
-      26,
-      36,
-    );
+  it("includes Android background execution dependencies when contributed by plugins", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 36, {
+      sourceDirs: [],
+      resourceDirs: [],
+      dependencies: [
+        {
+          kind: "version-catalog",
+          alias: "quickjs-kt-android",
+          configuration: "implementation",
+        },
+        {
+          kind: "version-catalog",
+          alias: "androidx-work-runtime-ktx",
+          configuration: "implementation",
+        },
+      ],
+    });
 
-    expect(output).toContain("implementation(libs.quickjs.kt.android)");
-    expect(output).toContain("implementation(libs.androidx.work.runtime.ktx)");
+    expect(output).toContain('add("implementation", libs.quickjs.kt.android)');
+    expect(output).toContain('add("implementation", libs.androidx.work.runtime.ktx)');
   });
 
   it("enables Compose build feature", () => {

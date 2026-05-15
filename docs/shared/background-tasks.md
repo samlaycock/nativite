@@ -173,9 +173,11 @@ The generated Android source includes `NativiteBackgroundTasks.kt`, whose
 `manifestAssetPath` constant points at the asset path and whose `loadManifest(context)` helper
 parses the task list. When background tasks are configured, generated Android projects also
 include the QuickJS and WorkManager catalog entries, runtime dependencies,
-`NativiteBackgroundTaskRuntime`, and `NativiteBackgroundWorker`. The runtime adapter loads a
-task bundle asset, exposes a host API injection seam, invokes the task's default `run(ctx)`
-function, and bounds execution with a coroutine timeout. The WorkManager helper schedules
+`NativiteBackgroundBridge`, `NativiteBackgroundTaskRuntime`, and `NativiteBackgroundWorker`.
+The `__background__` WebView scheduler handlers are contributed by the internal
+`nativite-background-runtime` plugin rather than being registered by the core Android bridge.
+The runtime adapter loads a task bundle asset, exposes a host API injection seam, invokes the
+task's default `run(ctx)` function, and bounds execution with a coroutine timeout. The WorkManager helper schedules
 `android.kind: "periodic-work"` and `"one-off-work"` tasks by task id, applies supported
 constraints, and maps task return values of `"retry"`/`"failure"` or matching status objects to
 WorkManager result states.
@@ -190,7 +192,9 @@ The generated iOS source includes `NativiteBackgroundTasks.swift`, whose
 resource and decodes the task list. iOS generation also emits
 `BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes` fetch support, app startup
 registration for `ios.kind: "app-refresh"` tasks, and a JavaScriptCore runtime that loads the
-matching task bundle by id outside the WebView lifecycle.
+matching task bundle by id outside the WebView lifecycle. The `__background__` scheduler bridge
+handlers live in the plugin-contributed `NativiteBackgroundBridge.swift` source so the core
+bridge does not keep scheduler references when no background tasks are configured.
 
 iOS persists task-scoped `ctx.storage` values in `UserDefaults` under the
 `dev.nativite.background.storage` namespace with encoded task/key components to avoid collisions.

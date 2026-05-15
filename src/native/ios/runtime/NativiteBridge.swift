@@ -20,10 +20,6 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
   private static let maxChromeSnapshotNodes = 500
   private static let maxChromeSnapshotChildren = 200
   private static let nclpLeafKinds: Set<String> = ["item", "title", "search", "separator", "spacer", "statusBar", "homeIndicator"]
-#if os(iOS)
-  private lazy var backgroundTaskScheduler = NativiteBackgroundTaskScheduler()
-#endif
-
   // Chrome handler — lazily wired to viewController after init
   lazy var chrome: NativiteChrome = {
     let c = NativiteChrome()
