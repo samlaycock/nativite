@@ -72,6 +72,25 @@ describe("contacts plugin", () => {
     expect(source).toContain("selectionArgs");
   });
 
+  it("honors Android field selection in the native query implementation", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/contacts/android/NativiteContactsPlugin.kt"),
+      "utf-8",
+    );
+
+    expect(source).toContain("private fun requestedFields(options: JSONObject?): Set<String>");
+    expect(source).toContain('options?.optJSONArray("fields")');
+    expect(source).toContain(
+      "contactMap(context, it.getString(idIndex), it.getString(displayNameIndex), fields)",
+    );
+    expect(source).toContain("ContactsContract.CommonDataKinds.Phone.CONTENT_URI");
+    expect(source).toContain("ContactsContract.CommonDataKinds.Email.CONTENT_URI");
+    expect(source).toContain("ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_URI");
+    expect(source).toContain("ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE");
+    expect(source).toContain("ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY");
+    expect(source).toContain("ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE");
+  });
+
   it("honors iOS field selection and page size in the native query implementation", () => {
     const source = readFileSync(
       join(process.cwd(), "src/plugins/contacts/ios/NativiteContactsPlugin.swift"),
@@ -85,6 +104,7 @@ describe("contacts plugin", () => {
     expect(source).toContain("private func requestedPageSize(_ args: Any?) -> Int");
     expect(source).toContain("contactDictionary(contact, fields: fields)");
     expect(source).toContain("if contacts.count >= pageSize");
+    expect(source).toContain("CNContactFormatter.descriptorForRequiredKeys(for: .fullName)");
   });
 
   it("does not request iOS contact notes by default", () => {
