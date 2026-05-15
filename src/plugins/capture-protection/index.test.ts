@@ -76,6 +76,14 @@ describe("capture protection plugin", () => {
     expect(source).toContain("activity.runOnUiThread");
     expect(source).toContain("private class CaptureProtectionState");
     expect(source).toContain("synchronized(state)");
+    expect(source).toContain("completion: () -> Unit");
+    expect(source).toContain("completion()");
+    expect(source).toContain(
+      "setSecureFlag(activity, true) {\n            completion(Result.success(next))",
+    );
+    expect(source).toContain(
+      'setSecureFlag(activity, next["preventionActive"] == true) {\n            completion(Result.success(next))',
+    );
   });
 
   it("serializes Android errors as structured JSON and guards bridge registration", () => {

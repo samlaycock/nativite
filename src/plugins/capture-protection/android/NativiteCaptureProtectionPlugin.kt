@@ -50,7 +50,11 @@ private fun response(state: CaptureProtectionState): Map<String, Any?> =
         "captured" to null,
     )
 
-private fun setSecureFlag(activity: android.app.Activity, enabled: Boolean) {
+private fun setSecureFlag(
+    activity: android.app.Activity,
+    enabled: Boolean,
+    completion: () -> Unit,
+) {
     activity.runOnUiThread {
         if (enabled) {
             activity.window.setFlags(
@@ -60,6 +64,7 @@ private fun setSecureFlag(activity: android.app.Activity, enabled: Boolean) {
         } else {
             activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
+        completion()
     }
 }
 
@@ -86,8 +91,9 @@ fun registerNativiteCaptureProtectionPlugin(bridge: Any) {
             state.keys.add(keyFromArgs(args))
             response(state)
         }
-        setSecureFlag(activity, true)
-        completion(Result.success(next))
+        setSecureFlag(activity, true) {
+            completion(Result.success(next))
+        }
     }
 
     register(bridge, "allowCapture") { args, completion ->
@@ -101,8 +107,9 @@ fun registerNativiteCaptureProtectionPlugin(bridge: Any) {
             state.keys.remove(keyFromArgs(args))
             response(state)
         }
-        setSecureFlag(activity, next["preventionActive"] == true)
-        completion(Result.success(next))
+        setSecureFlag(activity, next["preventionActive"] == true) {
+            completion(Result.success(next))
+        }
     }
 
     register(bridge, "getState") { _, completion ->
