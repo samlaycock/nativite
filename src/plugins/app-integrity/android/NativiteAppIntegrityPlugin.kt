@@ -4,10 +4,12 @@ import com.google.android.gms.tasks.Task
 import com.google.android.play.core.integrity.IntegrityManagerFactory
 import com.google.android.play.core.integrity.IntegrityServiceException
 import com.google.android.play.core.integrity.IntegrityTokenRequest
-import com.google.android.play.core.integrity.PrepareIntegrityTokenRequest
+import com.google.android.play.core.integrity.StandardIntegrityException
 import com.google.android.play.core.integrity.StandardIntegrityManager
-import com.google.android.play.core.integrity.StandardIntegrityTokenRequest
+import com.google.android.play.core.integrity.model.IntegrityErrorCode
+import com.google.android.play.core.integrity.model.StandardIntegrityErrorCode
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicReference
 
 private typealias AppIntegrityHandler = (args: Any?, completion: (Result<Any?>) -> Unit) -> Unit
 
@@ -26,14 +28,49 @@ private fun applicationContextOrNull(bridge: Any): android.content.Context? {
 private fun appIntegrityException(code: String, message: String): IllegalStateException =
     IllegalStateException("$code: $message")
 
+private fun classicPlayIntegrityCode(errorCode: Int): String = when (errorCode) {
+    IntegrityErrorCode.API_NOT_AVAILABLE,
+    IntegrityErrorCode.PLAY_STORE_NOT_FOUND,
+    IntegrityErrorCode.PLAY_STORE_VERSION_OUTDATED,
+    IntegrityErrorCode.CANNOT_BIND_TO_SERVICE,
+    -> "unsupported-device"
+    IntegrityErrorCode.NETWORK_ERROR,
+    IntegrityErrorCode.GOOGLE_SERVER_UNAVAILABLE,
+    IntegrityErrorCode.CLIENT_TRANSIENT_ERROR,
+    -> "server-unavailable"
+    IntegrityErrorCode.TOO_MANY_REQUESTS -> "quota-exceeded"
+    IntegrityErrorCode.CLOUD_PROJECT_NUMBER_IS_INVALID -> "configuration-missing"
+    IntegrityErrorCode.APP_NOT_INSTALLED,
+    IntegrityErrorCode.APP_UID_MISMATCH,
+    IntegrityErrorCode.NONCE_TOO_SHORT,
+    IntegrityErrorCode.NONCE_TOO_LONG,
+    -> "invalid-arguments"
+    else -> "native-failure"
+}
+
+private fun standardPlayIntegrityCode(errorCode: Int): String = when (errorCode) {
+    StandardIntegrityErrorCode.API_NOT_AVAILABLE,
+    StandardIntegrityErrorCode.PLAY_SERVICES_NOT_FOUND,
+    StandardIntegrityErrorCode.PLAY_SERVICES_VERSION_OUTDATED,
+    StandardIntegrityErrorCode.PLAY_STORE_NOT_FOUND,
+    StandardIntegrityErrorCode.PLAY_STORE_VERSION_OUTDATED,
+    StandardIntegrityErrorCode.CANNOT_BIND_TO_SERVICE,
+    -> "unsupported-device"
+    StandardIntegrityErrorCode.NETWORK_ERROR,
+    StandardIntegrityErrorCode.GOOGLE_SERVER_UNAVAILABLE,
+    StandardIntegrityErrorCode.CLIENT_TRANSIENT_ERROR,
+    -> "server-unavailable"
+    StandardIntegrityErrorCode.TOO_MANY_REQUESTS -> "quota-exceeded"
+    StandardIntegrityErrorCode.CLOUD_PROJECT_NUMBER_IS_INVALID -> "configuration-missing"
+    StandardIntegrityErrorCode.REQUEST_HASH_TOO_LONG,
+    StandardIntegrityErrorCode.INTEGRITY_TOKEN_PROVIDER_INVALID,
+    -> "invalid-arguments"
+    else -> "native-failure"
+}
+
 private fun playIntegrityCode(error: Exception): String = when (error) {
-    is IntegrityServiceException -> when {
-        error.message?.contains("PLAY_SERVICES", ignoreCase = true) == true -> "configuration-missing"
-        error.message?.contains("NETWORK", ignoreCase = true) == true -> "server-unavailable"
-        error.message?.contains("TOO_MANY_REQUESTS", ignoreCase = true) == true -> "rate-limited"
-        error.message?.contains("CANNOT_BIND", ignoreCase = true) == true -> "unsupported-device"
-        else -> "native-failure"
-    }
+    is StandardIntegrityException -> standardPlayIntegrityCode(error.errorCode)
+    is IntegrityServiceException -> classicPlayIntegrityCode(error.errorCode)
     else -> "native-failure"
 }
 
@@ -41,13 +78,12 @@ private fun <T> completeTask(task: Task<T>, completion: (Result<Any?>) -> Unit, 
     task.addOnSuccessListener { value ->
         completion(Result.success(map(value)))
     }.addOnFailureListener { error ->
-        val exception = error as? Exception ?: RuntimeException(error)
-        completion(Result.failure(appIntegrityException(playIntegrityCode(exception), exception.message ?: "Play Integrity request failed.")))
+        completion(Result.failure(appIntegrityException(playIntegrityCode(error), error.message ?: "Play Integrity request failed.")))
     }
 }
 
 fun registerNativiteAppIntegrityPlugin(bridge: Any) {
-    var standardProvider: StandardIntegrityManager.StandardIntegrityTokenProvider? = null
+    val standardProvider = AtomicReference<StandardIntegrityManager.StandardIntegrityTokenProvider?>()
 
     register(bridge, "isPlayIntegrityAvailable") { _, completion ->
         val context = applicationContextOrNull(bridge)
@@ -78,12 +114,12 @@ fun registerNativiteAppIntegrityPlugin(bridge: Any) {
         }
 
         val manager = IntegrityManagerFactory.createStandard(context)
-        val request = PrepareIntegrityTokenRequest.builder()
+        val request = StandardIntegrityManager.PrepareIntegrityTokenRequest.builder()
             .setCloudProjectNumber(cloudProjectNumber)
             .build()
 
         completeTask(manager.prepareIntegrityToken(request), completion) { provider ->
-            standardProvider = provider
+            standardProvider.set(provider)
             mapOf("prepared" to true, "platform" to "android")
         }
     }
@@ -97,9 +133,9 @@ fun registerNativiteAppIntegrityPlugin(bridge: Any) {
             return@register
         }
 
-        val provider = standardProvider
+        val provider = standardProvider.get()
         if (provider != null) {
-            val request = StandardIntegrityTokenRequest.builder()
+            val request = StandardIntegrityManager.StandardIntegrityTokenRequest.builder()
                 .setRequestHash(requestHash)
                 .build()
             completeTask(provider.request(request), completion) { response ->

@@ -1,3 +1,4 @@
+import CryptoKit
 import DeviceCheck
 import Foundation
 
@@ -12,6 +13,18 @@ private func appAttestUnavailable() -> [String: Any] {
     "provider": "app-attest",
     "error": appIntegrityError("unsupported-device", "App Attest is not available on this device."),
   ]
+}
+
+private func appIntegrityFailure(_ code: String, _ message: String, _ errorCode: Int = -1) -> NSError {
+  NSError(
+    domain: "NativiteAppIntegrity",
+    code: errorCode,
+    userInfo: [
+      NSLocalizedDescriptionKey: message,
+      "code": code,
+      "platform": "ios",
+    ]
+  )
 }
 
 private func appIntegrityErrorCode(_ error: Error) -> String {
@@ -35,10 +48,17 @@ private func appIntegrityErrorCode(_ error: Error) -> String {
 
 private func requireAppAttestSupport(_ completion: (Result<Any?>) -> Void) -> Bool {
   guard DCAppAttestService.shared.isSupported else {
-    completion(.success(appAttestUnavailable()))
+    completion(.failure(appIntegrityFailure(
+      "unsupported-device",
+      "App Attest is not available on this device."
+    )))
     return false
   }
   return true
+}
+
+private func sha256Data(_ data: Data) -> Data {
+  Data(SHA256.hash(data: data))
 }
 
 func registerNativiteAppIntegrityPlugin(_ bridge: NativiteBridge) {
@@ -60,13 +80,10 @@ func registerNativiteAppIntegrityPlugin(_ bridge: NativiteBridge) {
       }
 
       let error = error ?? NSError(domain: "NativiteAppIntegrity", code: -1)
-      completion(.failure(NSError(
-        domain: "NativiteAppIntegrity",
-        code: 1,
-        userInfo: [
-          NSLocalizedDescriptionKey: error.localizedDescription,
-          "code": appIntegrityErrorCode(error),
-        ]
+      completion(.failure(appIntegrityFailure(
+        appIntegrityErrorCode(error),
+        error.localizedDescription,
+        1
       )))
     }
   }
@@ -79,18 +96,16 @@ func registerNativiteAppIntegrityPlugin(_ bridge: NativiteBridge) {
       let challengeBase64 = options["challengeBase64"] as? String,
       let challenge = Data(base64Encoded: challengeBase64)
     else {
-      completion(.failure(NSError(
-        domain: "NativiteAppIntegrity",
-        code: 2,
-        userInfo: [
-          NSLocalizedDescriptionKey: "App Attest attestation requires keyId and challengeBase64.",
-          "code": "invalid-arguments",
-        ]
+      completion(.failure(appIntegrityFailure(
+        "invalid-arguments",
+        "App Attest attestation requires keyId and challengeBase64.",
+        2
       )))
       return
     }
 
-    DCAppAttestService.shared.attestKey(keyId, clientDataHash: challenge) { attestation, error in
+    let clientDataHash = sha256Data(challenge)
+    DCAppAttestService.shared.attestKey(keyId, clientDataHash: clientDataHash) { attestation, error in
       if let attestation {
         completion(.success([
           "keyId": keyId,
@@ -101,13 +116,10 @@ func registerNativiteAppIntegrityPlugin(_ bridge: NativiteBridge) {
       }
 
       let error = error ?? NSError(domain: "NativiteAppIntegrity", code: -1)
-      completion(.failure(NSError(
-        domain: "NativiteAppIntegrity",
-        code: 3,
-        userInfo: [
-          NSLocalizedDescriptionKey: error.localizedDescription,
-          "code": appIntegrityErrorCode(error),
-        ]
+      completion(.failure(appIntegrityFailure(
+        appIntegrityErrorCode(error),
+        error.localizedDescription,
+        3
       )))
     }
   }
@@ -120,13 +132,10 @@ func registerNativiteAppIntegrityPlugin(_ bridge: NativiteBridge) {
       let clientDataHashBase64 = options["clientDataHashBase64"] as? String,
       let clientDataHash = Data(base64Encoded: clientDataHashBase64)
     else {
-      completion(.failure(NSError(
-        domain: "NativiteAppIntegrity",
-        code: 4,
-        userInfo: [
-          NSLocalizedDescriptionKey: "App Attest assertion requires keyId and clientDataHashBase64.",
-          "code": "invalid-arguments",
-        ]
+      completion(.failure(appIntegrityFailure(
+        "invalid-arguments",
+        "App Attest assertion requires keyId and clientDataHashBase64.",
+        4
       )))
       return
     }
@@ -142,13 +151,10 @@ func registerNativiteAppIntegrityPlugin(_ bridge: NativiteBridge) {
       }
 
       let error = error ?? NSError(domain: "NativiteAppIntegrity", code: -1)
-      completion(.failure(NSError(
-        domain: "NativiteAppIntegrity",
-        code: 5,
-        userInfo: [
-          NSLocalizedDescriptionKey: error.localizedDescription,
-          "code": appIntegrityErrorCode(error),
-        ]
+      completion(.failure(appIntegrityFailure(
+        appIntegrityErrorCode(error),
+        error.localizedDescription,
+        5
       )))
     }
   }
