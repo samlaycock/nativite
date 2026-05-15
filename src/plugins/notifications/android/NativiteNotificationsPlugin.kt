@@ -208,6 +208,8 @@ private fun scheduleNotification(context: Context, args: Any?): String {
 
     if (triggerAt <= Instant.now().toEpochMilli()) {
         postNotification(context, id, title, content.optString("body").takeIf { it.isNotBlank() }, channelId)
+        pendingNotifications.remove(id)
+        return id
     } else {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
