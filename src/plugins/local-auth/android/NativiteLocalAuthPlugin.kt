@@ -130,8 +130,8 @@ fun registerNativiteLocalAuthPlugin(bridge: Any) {
         val activity = activityOrNull(bridge)
         val options = args as? JSONObject
         val reason = options?.optString("reason") ?: ""
-        if (activity == null || reason.isBlank() || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            completion(Result.success(mapOf("status" to "unavailable", "success" to false, "platform" to "android", "error" to "Local authentication requires Android 9+, a foreground activity, and prompt reason.")))
+        if (activity == null || reason.isBlank() || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            completion(Result.success(mapOf("status" to "unavailable", "success" to false, "platform" to "android", "error" to "Local authentication requires Android 10+, a foreground activity, and prompt reason.")))
             return@register
         }
 

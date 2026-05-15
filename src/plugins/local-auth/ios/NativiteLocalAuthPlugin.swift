@@ -55,7 +55,7 @@ private func supportedLocalAuthTypes(_ context: LAContext = LAContext()) -> [Str
   case .none:
     return deviceCredentialTypes
   @unknown default:
-    return ["unknown"]
+    return ["unknown"] + deviceCredentialTypes
   }
 }
 
@@ -84,7 +84,7 @@ func registerNativiteLocalAuthPlugin(_ bridge: NativiteBridge) {
       let reason = options["reason"] as? String,
       !reason.isEmpty
     else {
-      completion(.success(["status": "failed", "success": false, "platform": "ios", "error": "Missing authentication reason."]))
+      completion(.success(["status": "unavailable", "success": false, "platform": "ios", "error": "Missing authentication reason."]))
       return
     }
 
