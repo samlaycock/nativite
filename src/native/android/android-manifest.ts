@@ -23,6 +23,13 @@ export function androidManifestTemplate(config: NativiteConfig): string {
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 `
     : "";
+  const notificationsReceiver = includesNotifications
+    ? `
+        <receiver
+            android:name="dev.nativite.plugins.notifications.NativiteNotificationReceiver"
+            android:exported="false" />
+`
+    : "";
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -37,6 +44,7 @@ ${contactsPermissions}${calendarPermissions}${notificationsPermissions}
         android:supportsRtl="true"
         android:theme="@style/Theme.${sanitizeName(config.app.name)}"
         android:usesCleartextTraffic="true">
+${notificationsReceiver}
 
         <activity
             android:name=".MainActivity"

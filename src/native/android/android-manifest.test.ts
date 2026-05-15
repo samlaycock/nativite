@@ -59,5 +59,7 @@ describe("androidManifestTemplate", () => {
     });
 
     expect(output).toContain("android.permission.POST_NOTIFICATIONS");
+    expect(output).toContain("dev.nativite.plugins.notifications.NativiteNotificationReceiver");
+    expect(output).toContain('android:exported="false"');
   });
 });

@@ -1,7 +1,9 @@
 import android.content.Context
+import android.content.ContextWrapper
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.webkit.WebMessageCompat
@@ -19,6 +21,7 @@ open class NativiteBridge {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val handlers = mutableMapOf<String, NativiteHandler>()
     private var applicationContext: Context? = null
+    private var activity: ComponentActivity? = null
 
     private var primaryWebView: WebView? = null
     private var primaryPort: WebMessagePortCompat? = null
@@ -46,6 +49,8 @@ open class NativiteBridge {
     }
 
     fun applicationContextOrNull(): Context? = applicationContext
+
+    fun activityOrNull(): ComponentActivity? = activity
 
     private fun registerBuiltinHandlers() {
         register(namespace = "__nativite__", method = "__ping__") { _, completion ->
@@ -113,6 +118,7 @@ open class NativiteBridge {
 
     fun attachWebView(webView: WebView, instanceName: String = "main") {
         applicationContext = webView.context.applicationContext
+        activity = webView.context.findActivity()
         if (instanceName == "main") {
             primaryWebView = webView
             primaryVars = NativiteVars(webView, this).also { it.startObserving() }
@@ -842,4 +848,10 @@ open class NativiteBridge {
             return list
         }
     }
+}
+
+private tailrec fun Context.findActivity(): ComponentActivity? = when (this) {
+    is ComponentActivity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
