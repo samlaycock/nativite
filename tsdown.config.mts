@@ -57,6 +57,7 @@ export default defineConfig([
       "plugins/calendar/index": "./src/plugins/calendar/index.ts",
       "plugins/contacts/index": "./src/plugins/contacts/index.ts",
       "plugins/notifications/index": "./src/plugins/notifications/index.ts",
+      "plugins/secure-store/index": "./src/plugins/secure-store/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],
