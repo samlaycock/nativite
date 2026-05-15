@@ -12,6 +12,7 @@ Deep imports outside the listed exports are unsupported implementation details.
 - `nativite/chrome`
 - `nativite/css`
 - `nativite/background`
+- `nativite/test`
 - `nativite/plugins/contacts`
 - `nativite/plugins/calendar`
 - `nativite/plugins/notifications`
@@ -29,6 +30,8 @@ low-level JS/native bridge. `nativite/chrome` exposes the declarative native
 chrome API. `nativite/css` exposes CSS variable helpers. `nativite/utils`
 exposes compile-time platform helpers. `nativite/background` exposes background
 task definitions and WebView runtime scheduling controls.
+`nativite/test` exposes test-only JavaScript helpers for local stub-host app
+tests and explicitly named coordinator-backed native harness commands.
 `nativite/plugins/contacts`, `nativite/plugins/calendar`,
 `nativite/plugins/notifications`, `nativite/plugins/secure-store`,
 `nativite/plugins/local-auth`, `nativite/plugins/system-controls`,

@@ -135,6 +135,7 @@ export default defineConfig([
       "plugins/haptics/index": "./src/plugins/haptics/index.ts",
       "plugins/app-integrity/index": "./src/plugins/app-integrity/index.ts",
       "plugins/capture-protection/index": "./src/plugins/capture-protection/index.ts",
+      "test/index": "./src/test/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],
