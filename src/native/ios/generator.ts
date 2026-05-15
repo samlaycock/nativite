@@ -3,7 +3,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { BackgroundTaskManifest } from "../../background.ts";
-import type { NativiteConfig, NativiteDesktopWebEngine } from "../../index.ts";
+import type {
+  NativiteConfig,
+  NativiteDesktopWebEngine,
+  NativiteMacOSPlatformConfig,
+} from "../../index.ts";
 import type { NativitePluginMode } from "../../index.ts";
 
 import { resolveConfigForPlatform } from "../../platforms/registry.ts";
@@ -114,8 +118,7 @@ function resolveAppleWebEngine(
 ): NativiteDesktopWebEngine {
   if (targetPlatform !== "macos") return "system";
   const entry = (config.platforms ?? []).find(
-    (platform): platform is { platform: "macos"; webEngine?: NativiteDesktopWebEngine } =>
-      platform.platform === "macos",
+    (platform): platform is NativiteMacOSPlatformConfig => platform.platform === "macos",
   );
   return entry?.webEngine ?? "system";
 }
