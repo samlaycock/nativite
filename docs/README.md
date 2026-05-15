@@ -43,6 +43,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Client Bridge](./shared/client-bridge.md) — Low-level RPC and event subscription API
 - [CSS Variables Module](./shared/css-vars-module.md) — Observable access to `--nv-*` variables
 - [Background Tasks](./shared/background-tasks.md) — JavaScript task authoring API and manifest model
+- [JavaScript Test Utilities](./shared/test-utilities.md) — `nativite/test` local stub host and native harness helpers
 - [Contacts Plugin](./shared/contacts-plugin.md) — First-party native address-book plugin API and platform behavior
 - [Calendar Plugin](./shared/calendar-plugin.md) — First-party native calendar, event, and reminder plugin API
 - [Notifications Plugin](./shared/notifications-plugin.md) — First-party native local notifications plugin API and platform behavior

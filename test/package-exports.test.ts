@@ -14,6 +14,7 @@ describe("package exports", () => {
       "./chrome",
       "./css",
       "./background",
+      "./test",
       "./plugins/contacts",
       "./plugins/calendar",
       "./plugins/notifications",
@@ -29,6 +30,10 @@ describe("package exports", () => {
 
   it("exports the css subpath", () => {
     expect(pkg.exports?.["./css"]).toBeDefined();
+  });
+
+  it("exports the test subpath", () => {
+    expect(pkg.exports?.["./test"]).toBeDefined();
   });
 
   it("does not export the css-vars subpath", () => {

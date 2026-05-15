@@ -61,6 +61,10 @@
       "types": "./dist/background.d.ts",
       "import": "./dist/background.mjs"
     },
+    "./test": {
+      "types": "./dist/test/index.d.ts",
+      "import": "./dist/test/index.mjs"
+    },
     "./plugins/contacts": {
       "types": "./dist/plugins/contacts/index.d.ts",
       "import": "./dist/plugins/contacts/index.mjs"
