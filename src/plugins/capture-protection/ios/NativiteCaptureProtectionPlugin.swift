@@ -25,7 +25,7 @@ private func captureProtectionFailure(_ code: String, _ message: String, operati
     .flatMap { String(data: $0, encoding: .utf8) }
     ?? "{\"code\":\"operation-failed\",\"message\":\"Capture protection operation failed\",\"platform\":\"ios\",\"operation\":\"\(operation)\"}"
 
-  NSError(
+  return NSError(
     domain: nativiteCaptureProtectionErrorDomain,
     code: 1,
     userInfo: [NSLocalizedDescriptionKey: jsonMessage]

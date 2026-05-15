@@ -122,6 +122,7 @@ describe("capture protection plugin", () => {
     );
 
     expect(source).toContain("JSONSerialization.data(withJSONObject: payload)");
+    expect(source).toContain("return NSError(");
     expect(source).toContain("NSLocalizedDescriptionKey: jsonMessage");
     expect(source).toContain("var observerTokens: [NSObjectProtocol] = []");
     expect(source).toContain("NotificationCenter.default.removeObserver(token)");
