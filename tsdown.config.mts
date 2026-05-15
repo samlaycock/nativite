@@ -85,6 +85,14 @@ export default defineConfig([
         to: "./dist/plugins/system-controls/android",
       },
       {
+        from: "./src/plugins/haptics/ios/*.swift",
+        to: "./dist/plugins/haptics/ios",
+      },
+      {
+        from: "./src/plugins/haptics/android/*.kt",
+        to: "./dist/plugins/haptics/android",
+      },
+      {
         from: "./src/plugins/app-integrity/ios/*.swift",
         to: "./dist/plugins/app-integrity/ios",
       },
@@ -124,6 +132,7 @@ export default defineConfig([
       "plugins/secure-store/index": "./src/plugins/secure-store/index.ts",
       "plugins/local-auth/index": "./src/plugins/local-auth/index.ts",
       "plugins/system-controls/index": "./src/plugins/system-controls/index.ts",
+      "plugins/haptics/index": "./src/plugins/haptics/index.ts",
       "plugins/app-integrity/index": "./src/plugins/app-integrity/index.ts",
       "plugins/capture-protection/index": "./src/plugins/capture-protection/index.ts",
       utils: "./src/utils.ts",

@@ -20,6 +20,7 @@ describe("package exports", () => {
       "./plugins/secure-store",
       "./plugins/local-auth",
       "./plugins/system-controls",
+      "./plugins/haptics",
       "./plugins/app-integrity",
       "./plugins/capture-protection",
       "./globals",

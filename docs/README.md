@@ -49,6 +49,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Secure Store Plugin](./shared/secure-store-plugin.md) — First-party Keychain and Keystore-backed secure string storage
 - [Local Auth Plugin](./shared/local-auth-plugin.md) — First-party native biometric and device-credential user-presence prompts
 - [System Controls Plugin](./shared/system-controls-plugin.md) — First-party keep-awake, orientation, brightness, and power status controls
+- [Haptics Plugin](./shared/haptics-plugin.md) — First-party native semantic haptic feedback
 - [App Integrity Plugin](./shared/app-integrity-plugin.md) — First-party App Attest and Play Integrity attestation bridge
 - [Capture Protection Plugin](./shared/capture-protection-plugin.md) — First-party screen capture prevention and capture detection bridge
 - [Native Test Scripts](./shared/native-test-scripts.md) — Bun commands for running Swift and Kotlin runtime tests
