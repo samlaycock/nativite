@@ -610,7 +610,6 @@ function backgroundRuntimePlugin(): NativitePlugin {
   return {
     name: "nativite-background-runtime",
     rootDir,
-    fingerprint: "background-runtime-v1",
     platforms: {
       ios: {
         sources: [
