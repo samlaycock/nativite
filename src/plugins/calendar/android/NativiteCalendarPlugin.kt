@@ -32,6 +32,9 @@ private fun unsupported(operation: String): IllegalStateException =
 private fun permissionDenied(operation: String): IllegalStateException =
     calendarError("permission-denied", "Calendar permission has not been granted.", operation)
 
+private fun invalidArguments(error: Exception, operation: String): IllegalStateException =
+    calendarError("invalid-arguments", error.message ?: "Invalid calendar arguments.", operation)
+
 private fun register(bridge: Any, method: String, handler: CalendarHandler) {
     val registerMethod = bridge.javaClass.methods.first {
         it.name == "register" && it.parameterTypes.size == 3
@@ -231,7 +234,13 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
             context == null -> completion(Result.failure(calendarError("native-unavailable", "Android context is unavailable.", "queryEvents")))
             !hasPermission(context, Manifest.permission.READ_CALENDAR) -> completion(Result.failure(permissionDenied("queryEvents")))
             args !is JSONObject -> completion(Result.failure(calendarError("invalid-arguments", "queryEvents requires options.", "queryEvents")))
-            else -> completion(Result.success(mapOf("events" to queryEvents(context, args))))
+            else -> {
+                try {
+                    completion(Result.success(mapOf("events" to queryEvents(context, args))))
+                } catch (error: Exception) {
+                    completion(Result.failure(invalidArguments(error, "queryEvents")))
+                }
+            }
         }
     }
 
@@ -242,12 +251,16 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
             !hasPermission(context, Manifest.permission.WRITE_CALENDAR) -> completion(Result.failure(permissionDenied("createEvent")))
             args !is JSONObject -> completion(Result.failure(calendarError("invalid-arguments", "createEvent requires an event.", "createEvent")))
             else -> {
-                val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, eventValues(args))
-                val id = uri?.lastPathSegment
-                if (id == null) {
-                    completion(Result.failure(calendarError("operation-failed", "Failed to insert calendar event.", "createEvent")))
-                } else {
-                    completion(Result.success(mapOf("id" to id)))
+                try {
+                    val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, eventValues(args))
+                    val id = uri?.lastPathSegment
+                    if (id == null) {
+                        completion(Result.failure(calendarError("operation-failed", "Failed to insert calendar event.", "createEvent")))
+                    } else {
+                        completion(Result.success(mapOf("id" to id)))
+                    }
+                } catch (error: Exception) {
+                    completion(Result.failure(invalidArguments(error, "createEvent")))
                 }
             }
         }
@@ -266,11 +279,15 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
                     return@register
                 }
                 val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, rawId)
-                val rows = context.contentResolver.update(uri, eventValues(args), null, null)
-                if (rows == 0) {
-                    completion(Result.failure(calendarError("not-found", "Calendar event was not found.", "updateEvent")))
-                } else {
-                    completion(Result.success(mapOf("id" to args.getString("id"))))
+                try {
+                    val rows = context.contentResolver.update(uri, eventValues(args), null, null)
+                    if (rows == 0) {
+                        completion(Result.failure(calendarError("not-found", "Calendar event was not found.", "updateEvent")))
+                    } else {
+                        completion(Result.success(mapOf("id" to args.getString("id"))))
+                    }
+                } catch (error: Exception) {
+                    completion(Result.failure(invalidArguments(error, "updateEvent")))
                 }
             }
         }

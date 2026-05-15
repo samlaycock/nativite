@@ -99,6 +99,10 @@ describe("calendar plugin", () => {
     expect(source).toContain(
       'calendarError("operation-failed", "Failed to insert calendar event.", "createEvent")',
     );
+    expect(source).toContain("private fun invalidArguments(error: Exception, operation: String)");
+    expect(source).toContain('completion(Result.failure(invalidArguments(error, "queryEvents")))');
+    expect(source).toContain('completion(Result.failure(invalidArguments(error, "createEvent")))');
+    expect(source).toContain('completion(Result.failure(invalidArguments(error, "updateEvent")))');
     expect(source).toContain("private fun eventIdOrNull(input: JSONObject): Long?");
     expect(source).toContain("Event id must be a numeric string.");
     expect(source).not.toContain('args.getString("id").toLong()');
