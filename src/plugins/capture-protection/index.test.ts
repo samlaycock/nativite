@@ -137,4 +137,22 @@ describe("capture protection plugin", () => {
     expect(source).toContain("state.observerTokens.append");
     expect(source).toContain("[weak bridge]");
   });
+
+  it("dispatches iOS state reads through the main queue", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "src/plugins/capture-protection/ios/NativiteCaptureProtectionPlugin.swift",
+      ),
+      "utf-8",
+    );
+
+    expect(source).toContain("UIScreen.main.isCaptured");
+    expect(source).toContain(
+      'bridge.register(namespace: "captureProtection", method: "allowCapture") { args, completion in\n    DispatchQueue.main.async {',
+    );
+    expect(source).toContain(
+      'bridge.register(namespace: "captureProtection", method: "getState") { _, completion in\n    DispatchQueue.main.async {',
+    );
+  });
 });

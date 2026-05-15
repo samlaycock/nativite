@@ -92,11 +92,15 @@ func registerNativiteCaptureProtectionPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "captureProtection", method: "allowCapture") { args, completion in
-    state.keys.remove(captureProtectionKey(from: args))
-    completion(.success(captureProtectionState(state)))
+    DispatchQueue.main.async {
+      state.keys.remove(captureProtectionKey(from: args))
+      completion(.success(captureProtectionState(state)))
+    }
   }
 
   bridge.register(namespace: "captureProtection", method: "getState") { _, completion in
-    completion(.success(captureProtectionState(state)))
+    DispatchQueue.main.async {
+      completion(.success(captureProtectionState(state)))
+    }
   }
 }
