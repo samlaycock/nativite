@@ -8,6 +8,12 @@ function isSupportedIOSBackgroundTask(task: BackgroundTaskManifest["tasks"][numb
   );
 }
 
+function pluginOption(plugin: unknown, key: string): string | undefined {
+  if (typeof plugin !== "object" || plugin === null) return undefined;
+  const value = (plugin as Record<string, unknown>)[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 export function infoPlistMacOSTemplate(config: NativiteConfig): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -93,6 +99,12 @@ ${backgroundTaskIdentifiers.map((id) => `    <string>${id}</string>`).join("\n")
   <key>NSRemindersUsageDescription</key>
   <string>${config.app.name} needs reminders access for reminder features.</string>`
       : "";
+  const localAuthPlugin = config.plugins?.find((plugin) => plugin.name === "nativite-local-auth");
+  const localAuthXml = localAuthPlugin
+    ? `
+  <key>NSFaceIDUsageDescription</key>
+  <string>${pluginOption(localAuthPlugin, "faceIDUsageDescription") ?? `${config.app.name} uses Face ID for local user-presence verification.`}</string>`
+    : "";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -117,7 +129,7 @@ ${backgroundTaskIdentifiers.map((id) => `    <string>${id}</string>`).join("\n")
   <string>$(CURRENT_PROJECT_VERSION)</string>
   <key>LSRequiresIPhoneOS</key>
   <true/>
-  ${launchScreenXml}${backgroundTasksXml}${contactsXml}${calendarXml}
+  ${launchScreenXml}${backgroundTasksXml}${contactsXml}${calendarXml}${localAuthXml}
   <key>UISupportedInterfaceOrientations</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>

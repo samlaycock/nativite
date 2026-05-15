@@ -163,6 +163,18 @@ describe("infoPlistTemplate", () => {
     expect(output).not.toContain("NSUserNotificationUsageDescription");
   });
 
+  it("includes configurable Face ID usage description when local auth is configured", () => {
+    const output = infoPlistTemplate({
+      ...baseConfig,
+      plugins: [
+        { name: "nativite-local-auth", faceIDUsageDescription: "Verify before changing settings." },
+      ],
+    });
+
+    expect(output).toContain("<key>NSFaceIDUsageDescription</key>");
+    expect(output).toContain("Verify before changing settings.");
+  });
+
   it("excludes tasks without supported iOS metadata from scheduler identifiers", () => {
     const output = infoPlistTemplate(baseConfig, {
       version: 1,

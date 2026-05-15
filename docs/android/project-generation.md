@@ -62,6 +62,10 @@ The generator creates a complete Android Gradle project from the user's configur
 10. Writes `.hash-android` for dirty-check optimization.
 11. In non-dev generation modes, removes stale `assets/dev.json` so production builds do not carry dev server configuration.
 
+`AndroidManifest.xml` includes platform permissions required by configured
+first-party plugins, including contacts, calendar, notifications, and local auth
+`android.permission.USE_BIOMETRIC`.
+
 ## Toolchain Boundary
 
 The `gradle wrapper` step requires a `gradle` command on `PATH`. Nativite

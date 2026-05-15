@@ -77,6 +77,10 @@
       "types": "./dist/plugins/secure-store/index.d.ts",
       "import": "./dist/plugins/secure-store/index.mjs"
     },
+    "./plugins/local-auth": {
+      "types": "./dist/plugins/local-auth/index.d.ts",
+      "import": "./dist/plugins/local-auth/index.mjs"
+    },
     "./globals": {
       "types": "./dist/globals.d.ts"
     }

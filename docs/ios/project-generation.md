@@ -93,6 +93,8 @@ unless `minimumVersion` is provided.
 - `UILaunchScreen` (system white, or custom storyboard reference)
 - `UISupportedInterfaceOrientations` (portrait + both landscape)
 - `NSAppTransportSecurity` with `NSAllowsLocalNetworking` for dev server
+- First-party plugin usage descriptions such as contacts, calendar/reminders,
+  and local auth `NSFaceIDUsageDescription` when those plugins are configured
 
 ### macOS
 
