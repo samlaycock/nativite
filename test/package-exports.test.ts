@@ -16,6 +16,7 @@ describe("package exports", () => {
       "./background",
       "./plugins/contacts",
       "./plugins/calendar",
+      "./plugins/notifications",
       "./globals",
     ]);
   });

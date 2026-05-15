@@ -153,6 +153,16 @@ describe("infoPlistTemplate", () => {
     expect(output).toContain("TestApp needs reminders access for reminder features.");
   });
 
+  it("includes notifications usage description when the first-party notifications plugin is configured", () => {
+    const output = infoPlistTemplate({
+      ...baseConfig,
+      plugins: [{ name: "nativite-notifications" }],
+    });
+
+    expect(output).toContain("<key>NSUserNotificationsUsageDescription</key>");
+    expect(output).toContain("TestApp needs notification access for alerts and reminders.");
+  });
+
   it("excludes tasks without supported iOS metadata from scheduler identifiers", () => {
     const output = infoPlistTemplate(baseConfig, {
       version: 1,
