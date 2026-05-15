@@ -24,6 +24,13 @@ export function androidManifestTemplate(config: NativiteConfig): string {
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 `
     : "";
+  const includesLocalAuth =
+    config.plugins?.some((plugin) => plugin.name === "nativite-local-auth") ?? false;
+  const localAuthPermissions = includesLocalAuth
+    ? `
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+`
+    : "";
   const notificationsReceiver = includesNotifications
     ? `
         <receiver
@@ -36,7 +43,7 @@ export function androidManifestTemplate(config: NativiteConfig): string {
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-${contactsPermissions}${calendarPermissions}${notificationsPermissions}
+${contactsPermissions}${calendarPermissions}${notificationsPermissions}${localAuthPermissions}
 
     <application
         android:allowBackup="true"

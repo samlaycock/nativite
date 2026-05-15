@@ -130,6 +130,8 @@ export default defineBackgroundTask({
 
       expect(existsSync("dist/runtime/ViewController.swift")).toBe(true);
       expect(existsSync("dist/runtime/NativiteWebView.kt")).toBe(true);
+      expect(existsSync("dist/plugins/local-auth/ios/NativiteLocalAuthPlugin.swift")).toBe(true);
+      expect(existsSync("dist/plugins/local-auth/android/NativiteLocalAuthPlugin.kt")).toBe(true);
       expect(
         existsSync(
           join(

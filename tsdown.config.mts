@@ -36,6 +36,46 @@ export default defineConfig([
         to: "./dist/runtime",
         flatten: true,
       },
+      {
+        from: "./src/plugins/calendar/ios/*.swift",
+        to: "./dist/plugins/calendar/ios",
+      },
+      {
+        from: "./src/plugins/calendar/android/*.kt",
+        to: "./dist/plugins/calendar/android",
+      },
+      {
+        from: "./src/plugins/contacts/ios/*.swift",
+        to: "./dist/plugins/contacts/ios",
+      },
+      {
+        from: "./src/plugins/contacts/android/*.kt",
+        to: "./dist/plugins/contacts/android",
+      },
+      {
+        from: "./src/plugins/notifications/ios/*.swift",
+        to: "./dist/plugins/notifications/ios",
+      },
+      {
+        from: "./src/plugins/notifications/android/*.kt",
+        to: "./dist/plugins/notifications/android",
+      },
+      {
+        from: "./src/plugins/secure-store/ios/*.swift",
+        to: "./dist/plugins/secure-store/ios",
+      },
+      {
+        from: "./src/plugins/secure-store/android/*.kt",
+        to: "./dist/plugins/secure-store/android",
+      },
+      {
+        from: "./src/plugins/local-auth/ios/*.swift",
+        to: "./dist/plugins/local-auth/ios",
+      },
+      {
+        from: "./src/plugins/local-auth/android/*.kt",
+        to: "./dist/plugins/local-auth/android",
+      },
     ],
   },
   {
@@ -58,6 +98,7 @@ export default defineConfig([
       "plugins/contacts/index": "./src/plugins/contacts/index.ts",
       "plugins/notifications/index": "./src/plugins/notifications/index.ts",
       "plugins/secure-store/index": "./src/plugins/secure-store/index.ts",
+      "plugins/local-auth/index": "./src/plugins/local-auth/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],

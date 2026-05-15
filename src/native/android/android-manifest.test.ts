@@ -63,4 +63,13 @@ describe("androidManifestTemplate", () => {
     expect(output).toContain("dev.nativite.plugins.notifications.NativiteNotificationReceiver");
     expect(output).toContain('android:exported="false"');
   });
+
+  it("declares biometric permission when the first-party local auth plugin is configured", () => {
+    const output = androidManifestTemplate({
+      ...androidConfig,
+      plugins: [{ name: "nativite-local-auth" }],
+    });
+
+    expect(output).toContain("android.permission.USE_BIOMETRIC");
+  });
 });
