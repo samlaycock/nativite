@@ -192,6 +192,9 @@ private fun eventValues(input: JSONObject): ContentValues =
         put(CalendarContract.Events.EVENT_TIMEZONE, input.stringOrNull("timeZone") ?: TimeZone.getDefault().id)
     }
 
+private fun eventIdOrNull(input: JSONObject): Long? =
+    input.stringOrNull("id")?.toLongOrNull()
+
 fun registerNativiteCalendarPlugin(bridge: Any) {
     register(bridge, "getPermissionStatus") { args, completion ->
         val context = applicationContextOrNull(bridge)
@@ -240,8 +243,12 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
             args !is JSONObject -> completion(Result.failure(calendarError("invalid-arguments", "createEvent requires an event.", "createEvent")))
             else -> {
                 val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, eventValues(args))
-                val id = uri?.lastPathSegment ?: ""
-                completion(Result.success(mapOf("id" to id)))
+                val id = uri?.lastPathSegment
+                if (id == null) {
+                    completion(Result.failure(calendarError("operation-failed", "Failed to insert calendar event.", "createEvent")))
+                } else {
+                    completion(Result.success(mapOf("id" to id)))
+                }
             }
         }
     }
@@ -253,7 +260,12 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
             !hasPermission(context, Manifest.permission.WRITE_CALENDAR) -> completion(Result.failure(permissionDenied("updateEvent")))
             args !is JSONObject || !args.has("id") -> completion(Result.failure(calendarError("invalid-arguments", "updateEvent requires an id.", "updateEvent")))
             else -> {
-                val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, args.getString("id").toLong())
+                val rawId = eventIdOrNull(args)
+                if (rawId == null) {
+                    completion(Result.failure(calendarError("invalid-arguments", "Event id must be a numeric string.", "updateEvent")))
+                    return@register
+                }
+                val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, rawId)
                 val rows = context.contentResolver.update(uri, eventValues(args), null, null)
                 if (rows == 0) {
                     completion(Result.failure(calendarError("not-found", "Calendar event was not found.", "updateEvent")))
@@ -271,7 +283,12 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
             !hasPermission(context, Manifest.permission.WRITE_CALENDAR) -> completion(Result.failure(permissionDenied("deleteEvent")))
             args !is JSONObject || !args.has("id") -> completion(Result.failure(calendarError("invalid-arguments", "deleteEvent requires an id.", "deleteEvent")))
             else -> {
-                val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, args.getString("id").toLong())
+                val rawId = eventIdOrNull(args)
+                if (rawId == null) {
+                    completion(Result.failure(calendarError("invalid-arguments", "Event id must be a numeric string.", "deleteEvent")))
+                    return@register
+                }
+                val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, rawId)
                 val deleted = context.contentResolver.delete(uri, null, null) > 0
                 completion(Result.success(mapOf("deleted" to deleted)))
             }
@@ -283,7 +300,12 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
         if (context == null || args !is JSONObject || !args.has("id")) {
             completion(Result.failure(calendarError("invalid-arguments", "openEvent requires an id.", "openEvent")))
         } else {
-            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, args.getString("id").toLong())
+            val rawId = eventIdOrNull(args)
+            if (rawId == null) {
+                completion(Result.failure(calendarError("invalid-arguments", "Event id must be a numeric string.", "openEvent")))
+                return@register
+            }
+            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, rawId)
             val intent = Intent(Intent.ACTION_VIEW).setData(uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
             completion(Result.success(mapOf("opened" to true)))
