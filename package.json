@@ -69,6 +69,10 @@
       "types": "./dist/plugins/calendar/index.d.ts",
       "import": "./dist/plugins/calendar/index.mjs"
     },
+    "./plugins/notifications": {
+      "types": "./dist/plugins/notifications/index.d.ts",
+      "import": "./dist/plugins/notifications/index.mjs"
+    },
     "./globals": {
       "types": "./dist/globals.d.ts"
     }

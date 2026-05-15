@@ -51,4 +51,13 @@ describe("androidManifestTemplate", () => {
     expect(output).toContain("android.permission.READ_CALENDAR");
     expect(output).toContain("android.permission.WRITE_CALENDAR");
   });
+
+  it("declares post notifications permission when the first-party notifications plugin is configured", () => {
+    const output = androidManifestTemplate({
+      ...androidConfig,
+      plugins: [{ name: "nativite-notifications" }],
+    });
+
+    expect(output).toContain("android.permission.POST_NOTIFICATIONS");
+  });
 });

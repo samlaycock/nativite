@@ -93,6 +93,12 @@ ${backgroundTaskIdentifiers.map((id) => `    <string>${id}</string>`).join("\n")
   <key>NSRemindersUsageDescription</key>
   <string>${config.app.name} needs reminders access for reminder features.</string>`
       : "";
+  const notificationsXml =
+    (config.plugins?.some((plugin) => plugin.name === "nativite-notifications") ?? false)
+      ? `
+  <key>NSUserNotificationsUsageDescription</key>
+  <string>${config.app.name} needs notification access for alerts and reminders.</string>`
+      : "";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -118,7 +124,7 @@ ${backgroundTaskIdentifiers.map((id) => `    <string>${id}</string>`).join("\n")
   <string>$(CURRENT_PROJECT_VERSION)</string>
   <key>LSRequiresIPhoneOS</key>
   <true/>
-  ${launchScreenXml}${backgroundTasksXml}${contactsXml}${calendarXml}
+  ${launchScreenXml}${backgroundTasksXml}${contactsXml}${calendarXml}${notificationsXml}
   <key>UISupportedInterfaceOrientations</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>

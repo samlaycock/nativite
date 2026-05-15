@@ -56,6 +56,7 @@ export default defineConfig([
       "css-vars/index": "./src/css-vars/index.ts",
       "plugins/calendar/index": "./src/plugins/calendar/index.ts",
       "plugins/contacts/index": "./src/plugins/contacts/index.ts",
+      "plugins/notifications/index": "./src/plugins/notifications/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],
