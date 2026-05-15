@@ -70,6 +70,11 @@ describe("calendar plugin", () => {
     expect(source).toContain("EKEventEditViewController");
     expect(source).toContain("editController.editViewDelegate = delegate");
     expect(source).toContain("eventEditViewController(_ controller: EKEventEditViewController");
+    expect(source).toContain("objc_setAssociatedObject");
+    expect(source).toContain("calendarEventEditDelegateKey");
+    expect(source).toContain("calendarEventViewDismissTargetKey");
+    expect(source).not.toContain("private var activeEventEditDelegate");
+    expect(source).not.toContain("private var activeEventViewDismissTarget");
     expect(source).toContain('let mode = options["mode"] as? String ?? "view"');
     expect(source).toContain("EKEventViewController");
     expect(source).toContain("queryEvents requires options.");
@@ -106,6 +111,13 @@ describe("calendar plugin", () => {
     expect(source).toContain("private fun eventIdOrNull(input: JSONObject): Long?");
     expect(source).toContain("Event id must be a numeric string.");
     expect(source).not.toContain('args.getString("id").toLong()');
+    expect(source).toContain("ActivityNotFoundException");
+    expect(source).toContain(
+      'calendarError("native-unavailable", "Android context is unavailable.", "openEvent")',
+    );
+    expect(source).toContain(
+      'calendarError("native-unavailable", "No Android calendar app is available.", "openEvent")',
+    );
     expect(source).toContain("Intent(Intent.ACTION_VIEW)");
     expect(source).toContain('unsupported("createReminder")');
     expect(source).not.toContain('if (kind == "reminders") Manifest.permission.READ_CALENDAR');

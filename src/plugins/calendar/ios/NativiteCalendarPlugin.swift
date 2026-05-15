@@ -1,11 +1,12 @@
 import EventKit
 import EventKitUI
 import Foundation
+import ObjectiveC
 import UIKit
 
 private let nativiteCalendarErrorDomain = "NativiteCalendar"
-private var activeEventEditDelegate: CalendarEventEditDelegate?
-private var activeEventViewDismissTarget: CalendarEventViewDismissTarget?
+private var calendarEventEditDelegateKey: UInt8 = 0
+private var calendarEventViewDismissTargetKey: UInt8 = 0
 
 private func calendarError(_ code: String, _ message: String, operation: String) -> NSError {
   let payload = [
@@ -188,7 +189,7 @@ private func topViewController() -> UIViewController? {
 private final class CalendarEventEditDelegate: NSObject, EKEventEditViewDelegate {
   func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
     controller.dismiss(animated: true) {
-      activeEventEditDelegate = nil
+      objc_setAssociatedObject(controller, &calendarEventEditDelegateKey, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
     }
   }
 }
@@ -201,8 +202,9 @@ private final class CalendarEventViewDismissTarget: NSObject {
   }
 
   @objc func dismiss() {
-    controller?.dismiss(animated: true) {
-      activeEventViewDismissTarget = nil
+    guard let controller else { return }
+    controller.dismiss(animated: true) {
+      objc_setAssociatedObject(controller, &calendarEventViewDismissTargetKey, nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
     }
   }
 }
@@ -349,7 +351,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       if mode == "edit" {
         let editController = EKEventEditViewController()
         let delegate = CalendarEventEditDelegate()
-        activeEventEditDelegate = delegate
+        objc_setAssociatedObject(editController, &calendarEventEditDelegateKey, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         editController.editViewDelegate = delegate
         editController.eventStore = store
         editController.event = event
@@ -360,7 +362,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
         viewController.allowsEditing = false
         let navigationController = UINavigationController(rootViewController: viewController)
         let dismissTarget = CalendarEventViewDismissTarget(controller: navigationController)
-        activeEventViewDismissTarget = dismissTarget
+        objc_setAssociatedObject(navigationController, &calendarEventViewDismissTargetKey, dismissTarget, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         viewController.navigationItem.leftBarButtonItem = UIBarButtonItem(
           barButtonSystemItem: .done,
           target: dismissTarget,
