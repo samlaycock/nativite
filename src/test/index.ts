@@ -179,7 +179,14 @@ async function handleBridgeCall(
   callHistory.push(call);
 
   const handler = handlers.get(handlerKey(call.namespace, call.method));
-  if (!handler) return { result: undefined };
+  if (!handler) {
+    return {
+      error: {
+        code: "NATIVE_UNAVAILABLE",
+        message: `No nativeTest bridge handler registered for ${call.namespace}.${call.method}`,
+      },
+    };
+  }
 
   try {
     return { result: await handler(call.args, call) };
@@ -241,7 +248,9 @@ export const nativeTest: NativeTestHost = {
       const key = handlerKey(namespace, method);
       handlers.set(key, handler);
       return () => {
-        handlers.delete(key);
+        if (handlers.get(key) === handler) {
+          handlers.delete(key);
+        }
       };
     },
     calls(namespace?: string, method?: string): readonly NativeTestBridgeCall[] {
