@@ -9,10 +9,26 @@ private class CaptureProtectionState {
     val keys = mutableSetOf<String>()
 }
 
+private fun captureProtectionError(code: String, message: String, operation: String): IllegalStateException =
+    IllegalStateException(
+        JSONObject(
+            mapOf(
+                "code" to code,
+                "message" to message,
+                "platform" to "android",
+                "operation" to operation,
+            ),
+        ).toString(),
+    )
+
 private fun register(bridge: Any, method: String, handler: CaptureProtectionHandler) {
-    val registerMethod = bridge.javaClass.methods.first {
+    val registerMethod = bridge.javaClass.methods.firstOrNull {
         it.name == "register" && it.parameterTypes.size == 3
-    }
+    } ?: throw captureProtectionError(
+        "native-unavailable",
+        "Nativite bridge does not expose the expected plugin registration method.",
+        "register",
+    )
     registerMethod.invoke(bridge, "captureProtection", method, handler)
 }
 
@@ -20,9 +36,6 @@ private fun activityOrNull(bridge: Any): android.app.Activity? {
     val accessor = bridge.javaClass.methods.firstOrNull { it.name == "activityOrNull" }
     return accessor?.invoke(bridge) as? android.app.Activity
 }
-
-private fun captureProtectionError(code: String, message: String): IllegalStateException =
-    IllegalStateException("$code: $message")
 
 private fun keyFromArgs(args: Any?): String {
     val key = (args as? JSONObject)?.optString("key")?.trim().orEmpty()
@@ -65,7 +78,7 @@ fun registerNativiteCaptureProtectionPlugin(bridge: Any) {
     register(bridge, "preventCapture") { args, completion ->
         val activity = activityOrNull(bridge)
         if (activity == null) {
-            completion(Result.failure(captureProtectionError("native-unavailable", "Capture prevention requires a foreground Android activity.")))
+            completion(Result.failure(captureProtectionError("native-unavailable", "Capture prevention requires a foreground Android activity.", "preventCapture")))
             return@register
         }
 
@@ -80,7 +93,7 @@ fun registerNativiteCaptureProtectionPlugin(bridge: Any) {
     register(bridge, "allowCapture") { args, completion ->
         val activity = activityOrNull(bridge)
         if (activity == null) {
-            completion(Result.failure(captureProtectionError("native-unavailable", "Capture prevention requires a foreground Android activity.")))
+            completion(Result.failure(captureProtectionError("native-unavailable", "Capture prevention requires a foreground Android activity.", "allowCapture")))
             return@register
         }
 
