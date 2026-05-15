@@ -29,6 +29,13 @@ describe("NativiteBridge.kt", () => {
     expect(kt).toContain("fun requestPermission(permission: String, requestCode: Int");
     expect(kt).toContain("ActivityCompat.requestPermissions");
     expect(kt).toContain(
+      "private val permissionCompletions = ConcurrentHashMap<Int, MutableList<(Boolean) -> Unit>>()",
+    );
+    expect(kt).toContain("val shouldRequest = synchronized(permissionCompletions)");
+    expect(kt).toContain("completions.add(completion)");
+    expect(kt).toContain("completions.size == 1");
+    expect(kt).toContain("completions.forEach { completion -> completion(granted) }");
+    expect(kt).toContain(
       "fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray): Boolean",
     );
     expect(kt).toContain("PackageManager.PERMISSION_GRANTED");
