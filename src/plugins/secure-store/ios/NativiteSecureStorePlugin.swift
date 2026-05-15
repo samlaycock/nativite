@@ -117,18 +117,30 @@ func registerNativiteSecureStorePlugin(_ bridge: NativiteBridge) {
         throw secureStoreError("value-too-large", "Secure store values are limited to \(maxSecureStoreValueBytes) bytes.", operation: operation)
       }
 
-      let itemService = service(args)
-      SecItemDelete(baseQuery(service: itemService, key: key) as CFDictionary)
-      var query = baseQuery(service: itemService, key: key)
-      query[kSecValueData as String] = data
       if let control = try accessControl(args, operation: operation) {
+        let itemService = service(args)
+        var query = baseQuery(service: itemService, key: key)
+        query[kSecValueData as String] = data
         query[kSecAttrAccessControl as String] = control
-      } else {
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemDelete(baseQuery(service: itemService, key: key) as CFDictionary)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else { throw keychainStatusError(status, operation: operation) }
+        completion(.success(["stored": true]))
+        return
       }
 
-      let status = SecItemAdd(query as CFDictionary, nil)
-      guard status == errSecSuccess else { throw keychainStatusError(status, operation: operation) }
+      let itemService = service(args)
+      let query = baseQuery(service: itemService, key: key)
+      let updateStatus = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+      if updateStatus == errSecItemNotFound {
+        var addQuery = query
+        addQuery[kSecValueData as String] = data
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else { throw keychainStatusError(addStatus, operation: operation) }
+      } else {
+        guard updateStatus == errSecSuccess else { throw keychainStatusError(updateStatus, operation: operation) }
+      }
       completion(.success(["stored": true]))
     } catch {
       completion(.failure(error))
