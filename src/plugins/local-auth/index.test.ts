@@ -89,4 +89,33 @@ describe("local auth plugin", () => {
     expect(callbackSource).not.toContain("completion(");
     expect(callbackSource).toContain("Non-terminal callback");
   });
+
+  it("uses Android authentication errors as the single negative-button terminal path", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/android/NativiteLocalAuthPlugin.kt"),
+      "utf-8",
+    );
+    const negativeButtonSource = source.slice(
+      source.indexOf("builder.setNegativeButton"),
+      source.indexOf("builder.build().authenticate"),
+    );
+
+    expect(negativeButtonSource).not.toContain("completion(");
+    expect(negativeButtonSource).not.toContain("activeCancellation = null");
+    expect(negativeButtonSource).toContain("BIOMETRIC_ERROR_NEGATIVE_BUTTON");
+  });
+
+  it("aligns iOS enrollment with default authentication availability", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/ios/NativiteLocalAuthPlugin.swift"),
+      "utf-8",
+    );
+    const isEnrolledSource = source.slice(
+      source.indexOf('method: "isEnrolled"'),
+      source.indexOf('method: "getSupportedTypes"'),
+    );
+
+    expect(isEnrolledSource).toContain(".deviceOwnerAuthenticationWithBiometrics");
+    expect(isEnrolledSource).toContain(".deviceOwnerAuthentication");
+  });
 });

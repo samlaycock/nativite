@@ -64,8 +64,10 @@ func registerNativiteLocalAuthPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "localAuth", method: "isEnrolled") { _, completion in
+    let context = LAContext()
     var error: NSError?
-    let enrolled = LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+    let enrolled = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+      || context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
     completion(.success(["enrolled": enrolled, "platform": "ios"]))
   }
 

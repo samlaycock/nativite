@@ -122,8 +122,7 @@ fun registerNativiteLocalAuthPlugin(bridge: Any) {
             builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
         } else {
             builder.setNegativeButton(cancelTitle.ifBlank { "Cancel" }, activity.mainExecutor) { _, _ ->
-                activeCancellation = null
-                completion(Result.success(mapOf("status" to "cancelled", "success" to false, "platform" to "android")))
+                // onAuthenticationError(BIOMETRIC_ERROR_NEGATIVE_BUTTON) is the terminal path.
             }
         }
 
