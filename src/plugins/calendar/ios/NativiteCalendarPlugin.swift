@@ -26,6 +26,14 @@ private func calendarError(_ code: String, _ message: String, operation: String)
   )
 }
 
+private func calendarOperationError(_ error: Error, operation: String) -> NSError {
+  let nsError = error as NSError
+  if nsError.domain == nativiteCalendarErrorDomain {
+    return nsError
+  }
+  return calendarError("operation-failed", error.localizedDescription, operation: operation)
+}
+
 private func requestedKind(_ args: Any?) -> String {
   guard let options = args as? [String: Any], let kind = options["kind"] as? String else {
     return "events"
@@ -96,6 +104,14 @@ private func sourceType(_ source: EKSource) -> String {
 }
 
 private func calendarDictionary(_ calendar: EKCalendar) -> [String: Any] {
+  var entityTypes: [String] = []
+  if calendar.type == .birthday || calendar.allowedEntityTypes.contains(.event) {
+    entityTypes.append("event")
+  }
+  if calendar.allowedEntityTypes.contains(.reminder) {
+    entityTypes.append("reminder")
+  }
+
   return [
     "id": calendar.calendarIdentifier,
     "title": calendar.title,
@@ -106,7 +122,7 @@ private func calendarDictionary(_ calendar: EKCalendar) -> [String: Any] {
       "type": sourceType(calendar.source),
     ],
     "allowsContentModifications": calendar.allowsContentModifications,
-    "entityTypes": [calendar.type == .birthday ? "event" : calendar.allowedEntityTypes.contains(.reminder) ? "reminder" : "event"],
+    "entityTypes": entityTypes.isEmpty ? ["event"] : entityTypes,
     "platform": "ios",
   ]
 }
@@ -266,7 +282,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       let events = Array(store.events(matching: predicate).prefix(pageSize)).map(eventDictionary)
       completion(.success(["events": events]))
     } catch {
-      completion(.failure(calendarError("operation-failed", error.localizedDescription, operation: "queryEvents")))
+      completion(.failure(calendarOperationError(error, operation: "queryEvents")))
     }
   }
 
@@ -285,7 +301,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       try store.save(event, span: .futureEvents, commit: true)
       completion(.success(["id": event.eventIdentifier ?? ""]))
     } catch {
-      completion(.failure(calendarError("operation-failed", error.localizedDescription, operation: "createEvent")))
+      completion(.failure(calendarOperationError(error, operation: "createEvent")))
     }
   }
 
@@ -307,7 +323,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       try store.save(event, span: .futureEvents, commit: true)
       completion(.success(["id": event.eventIdentifier ?? id]))
     } catch {
-      completion(.failure(calendarError("operation-failed", error.localizedDescription, operation: "updateEvent")))
+      completion(.failure(calendarOperationError(error, operation: "updateEvent")))
     }
   }
 
@@ -328,7 +344,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       try store.remove(event, span: .futureEvents, commit: true)
       completion(.success(["deleted": true]))
     } catch {
-      completion(.failure(calendarError("operation-failed", error.localizedDescription, operation: "deleteEvent")))
+      completion(.failure(calendarOperationError(error, operation: "deleteEvent")))
     }
   }
 
@@ -391,7 +407,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       try store.save(reminder, commit: true)
       completion(.success(["id": reminder.calendarItemIdentifier]))
     } catch {
-      completion(.failure(calendarError("operation-failed", error.localizedDescription, operation: "createReminder")))
+      completion(.failure(calendarOperationError(error, operation: "createReminder")))
     }
   }
 
@@ -413,7 +429,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       try store.save(reminder, commit: true)
       completion(.success(["id": reminder.calendarItemIdentifier]))
     } catch {
-      completion(.failure(calendarError("operation-failed", error.localizedDescription, operation: "updateReminder")))
+      completion(.failure(calendarOperationError(error, operation: "updateReminder")))
     }
   }
 
@@ -434,7 +450,7 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       try store.remove(reminder, commit: true)
       completion(.success(["deleted": true]))
     } catch {
-      completion(.failure(calendarError("operation-failed", error.localizedDescription, operation: "deleteReminder")))
+      completion(.failure(calendarOperationError(error, operation: "deleteReminder")))
     }
   }
 }

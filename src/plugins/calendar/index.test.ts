@@ -63,7 +63,19 @@ describe("calendar plugin", () => {
     expect(source).toContain("EKEventStore.authorizationStatus(for: entityType)");
     expect(source).toContain("requestFullAccessToEvents");
     expect(source).toContain("requestFullAccessToReminders");
+    expect(source).toContain(
+      "private func calendarOperationError(_ error: Error, operation: String) -> NSError",
+    );
+    expect(source).toContain("if nsError.domain == nativiteCalendarErrorDomain");
+    expect(source).toContain('calendarOperationError(error, operation: "queryEvents")');
+    expect(source).toContain('calendarOperationError(error, operation: "createEvent")');
+    expect(source).toContain('calendarOperationError(error, operation: "updateEvent")');
+    expect(source).toContain('calendarOperationError(error, operation: "createReminder")');
+    expect(source).toContain('calendarOperationError(error, operation: "updateReminder")');
     expect(source).toContain("store.calendars(for: type)");
+    expect(source).toContain("var entityTypes: [String] = []");
+    expect(source).toContain("calendar.allowedEntityTypes.contains(.event)");
+    expect(source).toContain("calendar.allowedEntityTypes.contains(.reminder)");
     expect(source).toContain("predicateForEvents(withStart: startDate, end: endDate");
     expect(source).toContain("store.save(event, span: .futureEvents, commit: true)");
     expect(source).toContain("store.remove(event, span: .futureEvents, commit: true)");
