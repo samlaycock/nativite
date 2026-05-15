@@ -84,6 +84,14 @@ export default defineConfig([
         from: "./src/plugins/system-controls/android/*.kt",
         to: "./dist/plugins/system-controls/android",
       },
+      {
+        from: "./src/plugins/app-integrity/ios/*.swift",
+        to: "./dist/plugins/app-integrity/ios",
+      },
+      {
+        from: "./src/plugins/app-integrity/android/*.kt",
+        to: "./dist/plugins/app-integrity/android",
+      },
     ],
   },
   {
@@ -108,6 +116,7 @@ export default defineConfig([
       "plugins/secure-store/index": "./src/plugins/secure-store/index.ts",
       "plugins/local-auth/index": "./src/plugins/local-auth/index.ts",
       "plugins/system-controls/index": "./src/plugins/system-controls/index.ts",
+      "plugins/app-integrity/index": "./src/plugins/app-integrity/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],
