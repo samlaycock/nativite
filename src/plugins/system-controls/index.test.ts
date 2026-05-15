@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { NativiteConfig } from "../../index.ts";
 
@@ -64,5 +66,64 @@ describe("system controls plugin", () => {
     expect(resolved.platforms.android.registrars).toContain(
       "dev.nativite.plugins.systemcontrols.registerNativiteSystemControlsPlugin",
     );
+  });
+
+  it("keeps Android UI mutations on the activity UI thread", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/system-controls/android/NativiteSystemControlsPlugin.kt"),
+      "utf-8",
+    );
+
+    expect(source).toContain("activity.runOnUiThread");
+    expect(source).toContain("activity.requestedOrientation = request");
+    expect(source).toContain("activity.window.attributes = params");
+  });
+
+  it("scopes Android mutable runtime state per plugin registration", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/system-controls/android/NativiteSystemControlsPlugin.kt"),
+      "utf-8",
+    );
+    const topLevelSource = source.slice(
+      0,
+      source.indexOf("fun registerNativiteSystemControlsPlugin"),
+    );
+
+    expect(topLevelSource).toContain("private class SystemControlsState");
+    expect(topLevelSource).not.toContain("private val keepAwakeKeys");
+    expect(topLevelSource).not.toContain("private var orientationLock");
+    expect(topLevelSource).not.toContain("private var originalBrightness");
+    expect(source).toContain("val state = SystemControlsState()");
+    expect(source).toContain("synchronized(state)");
+  });
+
+  it("uses API-aware Android display access for orientation reads", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/system-controls/android/NativiteSystemControlsPlugin.kt"),
+      "utf-8",
+    );
+
+    expect(source).toContain("Build.VERSION.SDK_INT >= Build.VERSION_CODES.R");
+    expect(source).toContain("activity.display?.rotation");
+    expect(source).toContain('@Suppress("DEPRECATION")');
+  });
+
+  it("scopes iOS mutable runtime state and restores one-shot battery monitoring", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/system-controls/ios/NativiteSystemControlsPlugin.swift"),
+      "utf-8",
+    );
+    const topLevelSource = source.slice(
+      0,
+      source.indexOf("func registerNativiteSystemControlsPlugin"),
+    );
+
+    expect(topLevelSource).toContain("private final class SystemControlsState");
+    expect(topLevelSource).not.toContain("private var keepAwakeKeys");
+    expect(topLevelSource).not.toContain("private var orientationLock");
+    expect(topLevelSource).not.toContain("private var originalBrightness");
+    expect(source).toContain("let state = SystemControlsState()");
+    expect(source).toContain("let wasBatteryMonitoringEnabled");
+    expect(source).toContain("UIDevice.current.isBatteryMonitoringEnabled = false");
   });
 });
