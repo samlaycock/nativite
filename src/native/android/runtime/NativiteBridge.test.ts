@@ -20,6 +20,11 @@ describe("NativiteBridge.kt", () => {
     expect(kt).toContain("WebViewCompat.postWebMessage");
   });
 
+  it("exposes the attached activity for plugin runtime permission prompts", () => {
+    expect(kt).toContain("fun activityOrNull(): ComponentActivity?");
+    expect(kt).toContain("private tailrec fun Context.findActivity()");
+  });
+
   it("handles chrome setState messages", () => {
     expect(kt).toContain('namespace == "__chrome__" && method == "__chrome_set_state__"');
     expect(kt).toContain("chromeState.value = state");

@@ -51,10 +51,12 @@ export default defineConfig({
 
 ## Platform Generation
 
-When the plugin is present, iOS generation includes the
-`UserNotifications` framework and an `NSUserNotificationsUsageDescription`
-Info.plist entry. Android generation includes
-`android.permission.POST_NOTIFICATIONS` and the notifications Kotlin source.
+When the plugin is present, iOS generation includes the `UserNotifications`
+framework. iOS notification permission is requested through
+`UNUserNotificationCenter` and does not use an Info.plist usage-description key.
+Android generation includes `android.permission.POST_NOTIFICATIONS`, the
+notifications Kotlin source, and the broadcast receiver used by scheduled local
+notification alarms.
 
 Unsupported operations fail with structured native errors:
 
