@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { BackgroundTaskManifest } from "../../background.ts";
-import type { NativiteConfig } from "../../index.ts";
+import type { NativiteConfig, NativiteDesktopWebEngine } from "../../index.ts";
 import type { NativitePluginMode } from "../../index.ts";
 
 import { resolveConfigForPlatform } from "../../platforms/registry.ts";
@@ -63,7 +63,7 @@ function generationHashInputs(
       content: mainEntryTemplate({ toolbarStyle: config.defaultChrome?.toolbar?.toolbarStyle }),
     },
     { name: "AppDelegate.swift", content: appDelegateTemplate(config) },
-    { name: "NativiteConfig.swift", content: nativiteConfigTemplate(config) },
+    { name: "NativiteConfig.swift", content: nativiteConfigTemplate(config, targetPlatform) },
     {
       name: "NativiteBackgroundTasks.swift",
       content: readRuntimeFile("NativiteBackgroundTasks.swift"),
@@ -108,12 +108,28 @@ function generationHashInputs(
   ].filter((input) => input !== undefined);
 }
 
-function nativiteConfigTemplate(config: NativiteConfig): string {
+function resolveAppleWebEngine(
+  config: NativiteConfig,
+  targetPlatform: AppleTargetPlatform,
+): NativiteDesktopWebEngine {
+  if (targetPlatform !== "macos") return "system";
+  const entry = (config.platforms ?? []).find(
+    (platform): platform is { platform: "macos"; webEngine?: NativiteDesktopWebEngine } =>
+      platform.platform === "macos",
+  );
+  return entry?.webEngine ?? "system";
+}
+
+function nativiteConfigTemplate(
+  config: NativiteConfig,
+  targetPlatform: AppleTargetPlatform,
+): string {
   const otaEnabled = Boolean(config.updates);
   const otaServerURL = config.updates?.url ?? "";
   const otaChannel = config.updates?.channel ?? "";
   const otaSigningPublicKey = config.updates?.signingPublicKey ?? "";
   const otaAllowInsecureHTTP = config.updates?.allowInsecureHTTP ?? false;
+  const webEngine = resolveAppleWebEngine(config, targetPlatform);
   const defaultChromeStateJSON = config.defaultChrome
     ? JSON.stringify(JSON.stringify(config.defaultChrome))
     : "nil";
@@ -126,6 +142,7 @@ enum NativiteConfig {
     static let otaSigningPublicKey: String = ${JSON.stringify(otaSigningPublicKey)}
     static let otaAllowInsecureHTTP: Bool = ${otaAllowInsecureHTTP}
     static let appVersion: String = ${JSON.stringify(config.app.version)}
+    static let webEngine: String = ${JSON.stringify(webEngine)}
     static let defaultChromeStateJSON: String? = ${defaultChromeStateJSON}
 }
 `;
@@ -247,7 +264,10 @@ export async function generateProject(
     mainEntryTemplate({ toolbarStyle: config.defaultChrome?.toolbar?.toolbarStyle }),
   );
   writeFileSync(join(appDir, "AppDelegate.swift"), appDelegateTemplate(config));
-  writeFileSync(join(appDir, "NativiteConfig.swift"), nativiteConfigTemplate(config));
+  writeFileSync(
+    join(appDir, "NativiteConfig.swift"),
+    nativiteConfigTemplate(config, targetPlatform),
+  );
   writeFileSync(
     join(appDir, "NativiteBackgroundTasks.swift"),
     readRuntimeFile("NativiteBackgroundTasks.swift"),

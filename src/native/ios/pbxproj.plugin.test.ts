@@ -149,4 +149,40 @@ describe("pbxprojTemplate (plugins)", () => {
     expect(pbxproj).toContain("JavaScriptCore.framework");
     expect(pbxproj).toContain("BackgroundTasks.framework");
   });
+
+  it("embeds the macOS Chromium framework only when Chromium is selected", () => {
+    const resolvedPlugins: ResolvedNativitePlugins = {
+      plugins: [],
+      platforms: {
+        ios: { sources: [], resources: [], registrars: [], dependencies: [] },
+        macos: { sources: [], resources: [], registrars: [], dependencies: [] },
+        android: { sources: [], resources: [], registrars: [], dependencies: [] },
+      },
+    };
+    const chromiumConfig = NativiteConfigSchema.parse({
+      ...baseConfig,
+      platforms: [macos({ webEngine: "chromium" })],
+    });
+    const systemConfig = NativiteConfigSchema.parse({
+      ...baseConfig,
+      platforms: [macos()],
+    });
+
+    const chromiumPbxproj = pbxprojTemplate(
+      chromiumConfig,
+      resolvedPlugins,
+      "/tmp/demo/.nativite/macos",
+      "macos",
+    );
+    const systemPbxproj = pbxprojTemplate(
+      systemConfig,
+      resolvedPlugins,
+      "/tmp/demo/.nativite/macos",
+      "macos",
+    );
+
+    expect(chromiumPbxproj).toContain("Chromium Embedded Framework.framework");
+    expect(chromiumPbxproj).toContain("Embed Chromium Framework");
+    expect(systemPbxproj).not.toContain("Chromium Embedded Framework.framework");
+  });
 });

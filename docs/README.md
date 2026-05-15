@@ -57,6 +57,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [CLI Dev Command](./shared/cli-dev.md) — Optional native development status dashboard
 - [CLI Build Command](./shared/cli-build.md) — Production native build output and next steps
 - [Vite Plugin](./shared/vite-plugin.md) — Build pipeline, dev server routing, HMR
+- [Desktop Web Engines](./shared/desktop-web-engines.md) — Desktop-only system and Chromium web engine selection
 - [Platform Registry](./shared/platform-registry.md) — Platform plugin resolution and config merging
 - [Inter-Webview Messaging](./shared/inter-webview-messaging.md) — Communication between main and child webviews
 - [Plugin System](./shared/plugin-system.md) — Third-party native capability registration

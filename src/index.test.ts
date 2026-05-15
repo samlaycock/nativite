@@ -67,9 +67,23 @@ describe("NativiteConfigSchema", () => {
 
     expect(minimumVersionFor(result, "ios")).toBe("17.0");
     expect(minimumVersionFor(result, "macos")).toBe("14.0");
+    expect(result.platforms?.find((entry) => entry.platform === "macos")).toMatchObject({
+      webEngine: "system",
+    });
     expect(result.platforms?.find((entry) => entry.platform === "android")).toMatchObject({
       minSdk: 26,
       targetSdk: 36,
+    });
+  });
+
+  it("accepts Chromium as an explicit macOS desktop web engine", () => {
+    const result = NativiteConfigSchema.parse({
+      ...baseUserConfig,
+      platforms: [macos({ webEngine: "chromium" })],
+    });
+
+    expect(result.platforms?.find((entry) => entry.platform === "macos")).toMatchObject({
+      webEngine: "chromium",
     });
   });
 
@@ -202,6 +216,31 @@ describe("NativiteConfigSchema", () => {
       NativiteConfigSchema.parse({
         ...baseUserConfig,
         platforms: [ios({ minimumVersion: "17.0" }), ios({ minimumVersion: "18.0" })],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects Chromium web engine configuration for mobile targets", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platforms: [{ platform: "ios", webEngine: "chromium" }],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platforms: [{ platform: "android", webEngine: "chromium" }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects unsupported macOS web engine values", () => {
+    expect(() =>
+      NativiteConfigSchema.parse({
+        ...baseUserConfig,
+        platforms: [{ platform: "macos", webEngine: "gecko" }],
       }),
     ).toThrow();
   });
