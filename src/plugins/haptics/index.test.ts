@@ -79,4 +79,20 @@ describe("haptics plugin", () => {
     expect(source).toContain("HapticFeedbackConstants.REJECT");
     expect(source).not.toContain("android.permission.VIBRATE");
   });
+
+  it("guards Android API-specific semantic haptic constants", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/haptics/android/NativiteHapticsPlugin.kt"),
+      "utf-8",
+    );
+
+    expect(source).toContain(
+      '"rigid" ->\n            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)',
+    );
+    expect(source).toContain(
+      '"warning" ->\n            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)',
+    );
+    expect(source).toContain("HapticFeedbackConstants.LONG_PRESS");
+    expect(source).toContain("HapticFeedbackConstants.VIRTUAL_KEY");
+  });
 });
