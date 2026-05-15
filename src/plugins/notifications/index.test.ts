@@ -92,6 +92,7 @@ describe("notifications plugin", () => {
     expect(androidSource).toContain("return@register");
     expect(androidSource).toContain("AlarmManager.RTC_WAKEUP");
     expect(androidSource).toContain("class NativiteNotificationReceiver : BroadcastReceiver()");
+    expect(androidSource).toContain("pendingNotifications.remove(id)\n        return id");
     expect(androidSource).toContain("ConcurrentHashMap");
     expect(androidSource).toContain("NotificationChannel(");
     expect(androidSource).toContain("NotificationCompat.Builder");
