@@ -26,6 +26,24 @@ class ViewController: UIViewController {
   }
   override var prefersStatusBarHidden: Bool { chromeState?.statusBarHidden ?? false }
   override var prefersHomeIndicatorAutoHidden: Bool { chromeState?.homeIndicatorHidden ?? false }
+  override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+    switch UserDefaults.standard.string(forKey: "NativiteSystemControlsOrientationLock") {
+    case "portrait", "portrait-up":
+      return .portrait
+    case "portrait-down":
+      return .portraitUpsideDown
+    case "landscape":
+      return .landscape
+    case "landscape-left":
+      return .landscapeLeft
+    case "landscape-right":
+      return .landscapeRight
+    case "all":
+      return .all
+    default:
+      return .allButUpsideDown
+    }
+  }
 
   override func viewDidLoad() {
     super.viewDidLoad()

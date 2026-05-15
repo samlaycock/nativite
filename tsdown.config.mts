@@ -76,6 +76,14 @@ export default defineConfig([
         from: "./src/plugins/local-auth/android/*.kt",
         to: "./dist/plugins/local-auth/android",
       },
+      {
+        from: "./src/plugins/system-controls/ios/*.swift",
+        to: "./dist/plugins/system-controls/ios",
+      },
+      {
+        from: "./src/plugins/system-controls/android/*.kt",
+        to: "./dist/plugins/system-controls/android",
+      },
     ],
   },
   {
@@ -99,6 +107,7 @@ export default defineConfig([
       "plugins/notifications/index": "./src/plugins/notifications/index.ts",
       "plugins/secure-store/index": "./src/plugins/secure-store/index.ts",
       "plugins/local-auth/index": "./src/plugins/local-auth/index.ts",
+      "plugins/system-controls/index": "./src/plugins/system-controls/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],

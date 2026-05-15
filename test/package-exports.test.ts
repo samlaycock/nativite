@@ -19,6 +19,7 @@ describe("package exports", () => {
       "./plugins/notifications",
       "./plugins/secure-store",
       "./plugins/local-auth",
+      "./plugins/system-controls",
       "./globals",
     ]);
   });
