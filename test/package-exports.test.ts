@@ -21,6 +21,7 @@ describe("package exports", () => {
       "./plugins/local-auth",
       "./plugins/system-controls",
       "./plugins/app-integrity",
+      "./plugins/capture-protection",
       "./globals",
     ]);
   });

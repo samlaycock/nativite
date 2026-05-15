@@ -139,6 +139,12 @@ export default defineBackgroundTask({
         true,
       );
       expect(
+        existsSync("dist/plugins/capture-protection/ios/NativiteCaptureProtectionPlugin.swift"),
+      ).toBe(true);
+      expect(
+        existsSync("dist/plugins/capture-protection/android/NativiteCaptureProtectionPlugin.kt"),
+      ).toBe(true);
+      expect(
         existsSync(
           join(
             projectRoots.get("ios")!,
