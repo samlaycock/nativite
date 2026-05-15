@@ -27,8 +27,8 @@ The iOS bridge uses Apple's `DeviceCheck` `DCAppAttestService`.
 
 - `isAppAttestAvailable()` returns whether App Attest is supported on the current device.
 - `generateAppAttestKey()` creates an App Attest key and returns its `keyId`.
-- `attestAppAttestKey({ keyId, challengeBase64 })` returns an `attestationObjectBase64` value for backend verification.
-- `generateAppAttestAssertion({ keyId, clientDataHashBase64 })` returns an `assertionObjectBase64` value for backend verification.
+- `attestAppAttestKey({ keyId, challengeBase64 })` accepts a server-issued challenge encoded as base64, hashes it with SHA-256 natively, and returns an `attestationObjectBase64` value for backend verification.
+- `generateAppAttestAssertion({ keyId, clientDataHashBase64 })` accepts an app-controlled SHA-256 client-data hash encoded as base64 and returns an `assertionObjectBase64` value for backend verification.
 
 Apps are responsible for persisting the `keyId`, for example with a secure storage plugin. Simulators and unsupported devices return a structured `unsupported-device` availability error.
 

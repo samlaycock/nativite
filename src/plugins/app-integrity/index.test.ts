@@ -73,6 +73,16 @@ describe("app integrity plugin", () => {
       "utf-8",
     );
 
+    expect(source).toContain("import CryptoKit");
+    expect(source).toContain("private func sha256Data");
+    expect(source).toContain("let clientDataHash = sha256Data(challenge)");
+    expect(source).toContain("completion(.failure(appIntegrityFailure(");
+    expect(
+      source.slice(
+        source.indexOf("private func requireAppAttestSupport"),
+        source.indexOf("private func sha256Data"),
+      ),
+    ).not.toContain("completion(.success(appAttestUnavailable()))");
     expect(source).toContain("DCAppAttestService.shared.isSupported");
     expect(source).toContain("generateKey");
     expect(source).toContain("attestKey");
@@ -86,10 +96,15 @@ describe("app integrity plugin", () => {
       "utf-8",
     );
 
+    expect(source).toContain('IntegrityErrorCode.TOO_MANY_REQUESTS -> "quota-exceeded"');
+    expect(source).toContain('StandardIntegrityErrorCode.TOO_MANY_REQUESTS -> "quota-exceeded"');
+    expect(source).toContain(
+      "AtomicReference<StandardIntegrityManager.StandardIntegrityTokenProvider?>",
+    );
     expect(source).toContain("IntegrityManagerFactory.createStandard");
-    expect(source).toContain("PrepareIntegrityTokenRequest.builder()");
-    expect(source).toContain("StandardIntegrityTokenRequest.builder()");
+    expect(source).toContain("StandardIntegrityManager.PrepareIntegrityTokenRequest.builder()");
+    expect(source).toContain("StandardIntegrityManager.StandardIntegrityTokenRequest.builder()");
     expect(source).toContain("requestIntegrityToken");
-    expect(source).toContain('"rate-limited"');
+    expect(source).not.toContain("error.message?.contains");
   });
 });
