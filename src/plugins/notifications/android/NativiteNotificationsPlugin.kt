@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.ConcurrentHashMap
 
 private typealias NotificationsHandler = (args: Any?, completion: (Result<Any?>) -> Unit) -> Unit
@@ -29,6 +30,8 @@ private const val EXTRA_CHANNEL_ID = "dev.nativite.plugins.notifications.CHANNEL
 private const val EXTRA_DATA = "dev.nativite.plugins.notifications.DATA"
 
 private val pendingNotifications = ConcurrentHashMap<String, Map<String, Any?>>()
+private val notificationRequestCodes = ConcurrentHashMap<String, Int>()
+private val nextNotificationRequestCode = AtomicInteger(10_000)
 private var foregroundPolicy: Map<String, Any?> = mapOf(
     "showAlert" to true,
     "playSound" to true,
@@ -133,7 +136,8 @@ private fun createNotificationChannel(context: Context, args: Any?): String {
     return id
 }
 
-private fun notificationId(id: String): Int = id.hashCode()
+private fun notificationId(id: String): Int =
+    notificationRequestCodes.computeIfAbsent(id) { nextNotificationRequestCode.getAndIncrement() }
 
 private fun contentObject(options: JSONObject): JSONObject = options.optJSONObject("content") ?: JSONObject()
 
@@ -187,6 +191,29 @@ private fun postNotification(context: Context, id: String, title: String, body: 
     NotificationManagerCompat.from(context).notify(notificationId(id), notification)
 }
 
+private fun scheduleExactAlarm(context: Context, triggerAt: Long, pendingIntent: PendingIntent) {
+    val alarmManager = context.getSystemService(AlarmManager::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+        throw notificationsError(
+            "permission-denied",
+            "Exact alarm permission is required to schedule local notifications on this Android version.",
+            "scheduleNotification",
+        )
+    }
+
+    when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        }
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT -> {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        }
+        else -> {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        }
+    }
+}
+
 private fun scheduleNotification(context: Context, args: Any?): String {
     if (!hasPostNotificationsPermission(context)) {
         throw notificationsError(
@@ -211,8 +238,7 @@ private fun scheduleNotification(context: Context, args: Any?): String {
         pendingNotifications.remove(id)
         return id
     } else {
-        val alarmManager = context.getSystemService(AlarmManager::class.java)
-        alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        scheduleExactAlarm(context, triggerAt, pendingIntent)
     }
 
     pendingNotifications[id] = mapOf(

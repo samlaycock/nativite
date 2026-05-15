@@ -21,6 +21,7 @@ export function androidManifestTemplate(config: NativiteConfig): string {
   const notificationsPermissions = includesNotifications
     ? `
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 `
     : "";
   const notificationsReceiver = includesNotifications
