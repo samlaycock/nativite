@@ -1,6 +1,9 @@
 import org.json.JSONObject
 
-fun registerNativiteBackgroundBridge(bridge: NativiteBridge) {
+fun registerNativiteBackgroundBridge(
+    bridge: NativiteBridge,
+    loadManifest: (android.content.Context) -> List<NativiteBackgroundTask> = NativiteBackgroundTasks::loadManifest,
+) {
     bridge.register(namespace = "__background__", method = "schedule") { args, completion ->
         val context = bridge.applicationContextOrNull()
         val request = args as? JSONObject
@@ -10,7 +13,7 @@ fun registerNativiteBackgroundBridge(bridge: NativiteBridge) {
             return@register
         }
         val tasks = try {
-            NativiteBackgroundTasks.loadManifest(context)
+            loadManifest(context)
         } catch (err: Exception) {
             completion(Result.failure(err))
             return@register

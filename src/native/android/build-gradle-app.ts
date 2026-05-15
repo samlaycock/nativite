@@ -29,7 +29,10 @@ function sourceSetEntries(
 }
 
 function versionCatalogAccessor(alias: string): string {
-  return alias.replace(/[A-Z]/g, (char) => `.${char.toLowerCase()}`).replaceAll("-", ".");
+  return alias
+    .replace(/(?<!^)[A-Z]/g, (char) => `.${char.toLowerCase()}`)
+    .replaceAll("-", ".")
+    .toLowerCase();
 }
 
 function pluginDependencyEntries(

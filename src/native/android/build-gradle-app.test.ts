@@ -57,6 +57,23 @@ describe("buildGradleAppTemplate", () => {
     expect(output).toContain('add("implementation", libs.androidx.work.runtime.ktx)');
   });
 
+  it("converts uppercase-leading version catalog aliases without a leading dot", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 36, {
+      sourceDirs: [],
+      resourceDirs: [],
+      dependencies: [
+        {
+          kind: "version-catalog",
+          alias: "QuickJSKt",
+          configuration: "implementation",
+        },
+      ],
+    });
+
+    expect(output).toContain('add("implementation", libs.quick.j.s.kt)');
+    expect(output).not.toContain("libs..");
+  });
+
   it("enables Compose build feature", () => {
     const output = buildGradleAppTemplate(androidConfig, 26, 36);
     expect(output).toContain("compose = true");
