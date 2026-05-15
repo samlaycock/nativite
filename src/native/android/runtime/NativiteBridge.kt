@@ -1,9 +1,11 @@
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
+import androidx.core.app.ActivityCompat
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.webkit.WebMessageCompat
@@ -22,6 +24,7 @@ open class NativiteBridge {
     private val handlers = mutableMapOf<String, NativiteHandler>()
     private var applicationContext: Context? = null
     private var activity: ComponentActivity? = null
+    private val permissionCompletions = mutableMapOf<Int, (Boolean) -> Unit>()
 
     private var primaryWebView: WebView? = null
     private var primaryPort: WebMessagePortCompat? = null
@@ -51,6 +54,19 @@ open class NativiteBridge {
     fun applicationContextOrNull(): Context? = applicationContext
 
     fun activityOrNull(): ComponentActivity? = activity
+
+    fun requestPermission(permission: String, requestCode: Int, completion: (Boolean) -> Unit): Boolean {
+        val currentActivity = activity ?: return false
+        permissionCompletions[requestCode] = completion
+        ActivityCompat.requestPermissions(currentActivity, arrayOf(permission), requestCode)
+        return true
+    }
+
+    fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray): Boolean {
+        val completion = permissionCompletions.remove(requestCode) ?: return false
+        completion(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+        return true
+    }
 
     private fun registerBuiltinHandlers() {
         register(namespace = "__nativite__", method = "__ping__") { _, completion ->

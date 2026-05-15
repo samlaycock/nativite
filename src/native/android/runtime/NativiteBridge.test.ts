@@ -25,6 +25,15 @@ describe("NativiteBridge.kt", () => {
     expect(kt).toContain("private tailrec fun Context.findActivity()");
   });
 
+  it("routes runtime permission results back to plugin completions", () => {
+    expect(kt).toContain("fun requestPermission(permission: String, requestCode: Int");
+    expect(kt).toContain("ActivityCompat.requestPermissions");
+    expect(kt).toContain(
+      "fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray): Boolean",
+    );
+    expect(kt).toContain("PackageManager.PERMISSION_GRANTED");
+  });
+
   it("handles chrome setState messages", () => {
     expect(kt).toContain('namespace == "__chrome__" && method == "__chrome_set_state__"');
     expect(kt).toContain("chromeState.value = state");

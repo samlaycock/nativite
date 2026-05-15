@@ -14,6 +14,15 @@ describe("mainActivityTemplate", () => {
     expect(output).toContain("class MainActivity : ComponentActivity()");
   });
 
+  it("forwards permission results to the bridge", () => {
+    const output = mainActivityTemplate(androidConfig);
+    expect(output).toContain("override fun onRequestPermissionsResult(");
+    expect(output).toContain("bridge.onRequestPermissionsResult(requestCode, grantResults)");
+    expect(output).toContain(
+      "super.onRequestPermissionsResult(requestCode, permissions, grantResults)",
+    );
+  });
+
   it("calls enableEdgeToEdge", () => {
     const output = mainActivityTemplate(androidConfig);
     expect(output).toContain("enableEdgeToEdge()");

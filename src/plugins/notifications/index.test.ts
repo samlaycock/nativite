@@ -87,7 +87,9 @@ describe("notifications plugin", () => {
     expect(iosSource).toContain("UNNotificationRequest(");
     expect(iosSource).toContain("UNNotificationCategory(");
     expect(androidSource).toContain("Manifest.permission.POST_NOTIFICATIONS");
-    expect(androidSource).toContain("ActivityCompat.requestPermissions");
+    expect(androidSource).toContain("ActivityCompat.shouldShowRequestPermissionRationale");
+    expect(androidSource).toContain('it.name == "requestPermission"');
+    expect(androidSource).toContain("return@register");
     expect(androidSource).toContain("AlarmManager.RTC_WAKEUP");
     expect(androidSource).toContain("class NativiteNotificationReceiver : BroadcastReceiver()");
     expect(androidSource).toContain("ConcurrentHashMap");
