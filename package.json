@@ -73,6 +73,10 @@
       "types": "./dist/plugins/notifications/index.d.ts",
       "import": "./dist/plugins/notifications/index.mjs"
     },
+    "./plugins/secure-store": {
+      "types": "./dist/plugins/secure-store/index.d.ts",
+      "import": "./dist/plugins/secure-store/index.mjs"
+    },
     "./globals": {
       "types": "./dist/globals.d.ts"
     }

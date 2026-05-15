@@ -46,6 +46,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Contacts Plugin](./shared/contacts-plugin.md) — First-party native address-book plugin API and platform behavior
 - [Calendar Plugin](./shared/calendar-plugin.md) — First-party native calendar, event, and reminder plugin API
 - [Notifications Plugin](./shared/notifications-plugin.md) — First-party native local notifications plugin API and platform behavior
+- [Secure Store Plugin](./shared/secure-store-plugin.md) — First-party Keychain and Keystore-backed secure string storage
 - [Native Test Scripts](./shared/native-test-scripts.md) — Bun commands for running Swift and Kotlin runtime tests
 - [CLI Init Command](./shared/cli-init.md) — One-command setup for existing Vite projects
 - [CLI Dev Command](./shared/cli-dev.md) — Optional native development status dashboard

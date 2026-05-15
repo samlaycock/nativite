@@ -17,6 +17,7 @@ describe("package exports", () => {
       "./plugins/contacts",
       "./plugins/calendar",
       "./plugins/notifications",
+      "./plugins/secure-store",
       "./globals",
     ]);
   });

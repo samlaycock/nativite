@@ -15,6 +15,7 @@ Deep imports outside the listed exports are unsupported implementation details.
 - `nativite/plugins/contacts`
 - `nativite/plugins/calendar`
 - `nativite/plugins/notifications`
+- `nativite/plugins/secure-store`
 - `nativite/globals`
 
 `nativite` is the public configuration and extension-authoring entrypoint.
@@ -23,10 +24,10 @@ low-level JS/native bridge. `nativite/chrome` exposes the declarative native
 chrome API. `nativite/css` exposes CSS variable helpers. `nativite/utils`
 exposes compile-time platform helpers. `nativite/background` exposes background
 task definitions and WebView runtime scheduling controls.
-`nativite/plugins/contacts`, `nativite/plugins/calendar`, and
-`nativite/plugins/notifications` expose first-party native capability plugins
-and typed client helpers. `nativite/globals` is types-only and has no
-JavaScript runtime condition.
+`nativite/plugins/contacts`, `nativite/plugins/calendar`,
+`nativite/plugins/notifications`, and `nativite/plugins/secure-store` expose
+first-party native capability plugins and typed client helpers.
+`nativite/globals` is types-only and has no JavaScript runtime condition.
 
 ESM is the primary package contract. JavaScript public entrypoints use the
 `import` condition and point at `.mjs` files in `dist`. CommonJS `require`
