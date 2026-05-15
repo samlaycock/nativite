@@ -1,0 +1,87 @@
+import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import type { NativiteConfig } from "../../index.ts";
+
+import { resolveNativitePlugins } from "../resolve.ts";
+import { calendar } from "./index.ts";
+
+function makeConfig(): NativiteConfig {
+  return {
+    app: {
+      name: "CalendarApp",
+      bundleId: "com.example.calendar",
+      version: "1.0.0",
+      buildNumber: 1,
+    },
+    platforms: [
+      { platform: "ios", minimumVersion: "17.0" },
+      { platform: "android", minSdk: 26 },
+    ],
+    plugins: [calendar],
+  };
+}
+
+describe("calendar plugin", () => {
+  it("exposes the first-party calendar plugin metadata", () => {
+    expect(calendar.name).toBe("nativite-calendar");
+    expect(calendar.bridge?.namespaces?.[0]?.name).toBe("calendar");
+    expect(calendar.bridge?.namespaces?.[0]?.methods).toContain("queryEvents");
+    expect(calendar.bridge?.namespaces?.[0]?.methods).toContain("createReminder");
+  });
+
+  it("resolves iOS and Android native contributions", async () => {
+    const resolved = await resolveNativitePlugins(makeConfig(), process.cwd(), "generate");
+
+    expect(
+      resolved.platforms.ios.sources.some((source) =>
+        source.absolutePath.includes("src/plugins/calendar/ios/NativiteCalendarPlugin.swift"),
+      ),
+    ).toBe(true);
+    expect(resolved.platforms.ios.registrars).toContain("registerNativiteCalendarPlugin");
+    expect(resolved.platforms.ios.dependencies).toEqual([
+      { name: "EventKit", weak: false },
+      { name: "EventKitUI", weak: false },
+    ]);
+    expect(
+      resolved.platforms.android.sources.some((source) =>
+        source.absolutePath.includes("src/plugins/calendar/android/NativiteCalendarPlugin.kt"),
+      ),
+    ).toBe(true);
+    expect(resolved.platforms.android.registrars).toContain(
+      "dev.nativite.plugins.calendar.registerNativiteCalendarPlugin",
+    );
+  });
+
+  it("implements iOS EventKit permission, calendar, event, and reminder operations", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/calendar/ios/NativiteCalendarPlugin.swift"),
+      "utf-8",
+    );
+
+    expect(source).toContain("EKEventStore.authorizationStatus(for: entityType)");
+    expect(source).toContain("requestFullAccessToEvents");
+    expect(source).toContain("requestFullAccessToReminders");
+    expect(source).toContain("store.calendars(for: type)");
+    expect(source).toContain("predicateForEvents(withStart: startDate, end: endDate");
+    expect(source).toContain("store.save(event, span: .futureEvents, commit: true)");
+    expect(source).toContain("store.remove(event, span: .futureEvents, commit: true)");
+    expect(source).toContain("EKEventEditViewController");
+    expect(source).toContain("EKReminder(eventStore: store)");
+  });
+
+  it("implements Android CalendarContract calendar and event operations", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/calendar/android/NativiteCalendarPlugin.kt"),
+      "utf-8",
+    );
+
+    expect(source).toContain("CalendarContract.Calendars.CONTENT_URI");
+    expect(source).toContain("CalendarContract.Events.CONTENT_URI");
+    expect(source).toContain("CalendarContract.Instances.CONTENT_URI");
+    expect(source).toContain("ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI");
+    expect(source).toContain("Intent(Intent.ACTION_VIEW)");
+    expect(source).toContain('unsupported("createReminder")');
+  });
+});

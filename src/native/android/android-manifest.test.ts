@@ -41,4 +41,14 @@ describe("androidManifestTemplate", () => {
     expect(output).not.toContain("android.permission.WRITE_CONTACTS");
     expect(output).not.toContain("android.permission.GET_ACCOUNTS");
   });
+
+  it("declares calendar permissions when the first-party calendar plugin is configured", () => {
+    const output = androidManifestTemplate({
+      ...androidConfig,
+      plugins: [{ name: "nativite-calendar" }],
+    });
+
+    expect(output).toContain("android.permission.READ_CALENDAR");
+    expect(output).toContain("android.permission.WRITE_CALENDAR");
+  });
 });
