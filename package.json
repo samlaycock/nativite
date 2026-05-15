@@ -85,6 +85,10 @@
       "types": "./dist/plugins/system-controls/index.d.ts",
       "import": "./dist/plugins/system-controls/index.mjs"
     },
+    "./plugins/app-integrity": {
+      "types": "./dist/plugins/app-integrity/index.d.ts",
+      "import": "./dist/plugins/app-integrity/index.mjs"
+    },
     "./globals": {
       "types": "./dist/globals.d.ts"
     }
