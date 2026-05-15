@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { NativiteConfig } from "../../index.ts";
 
@@ -62,5 +64,29 @@ describe("local auth plugin", () => {
     expect(resolved.platforms.android.registrars).toContain(
       "dev.nativite.plugins.localauth.registerNativiteLocalAuthPlugin",
     );
+  });
+
+  it("does not emit an iOS availability reason when fallback authentication is available", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/ios/NativiteLocalAuthPlugin.swift"),
+      "utf-8",
+    );
+
+    expect(source).toContain("guard !available, let error else");
+    expect(source).toContain('return ["available": available, "platform": "ios"]');
+  });
+
+  it("keeps Android failed biometric attempts non-terminal", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/android/NativiteLocalAuthPlugin.kt"),
+      "utf-8",
+    );
+    const callbackSource = source.slice(
+      source.indexOf("override fun onAuthenticationFailed()"),
+      source.indexOf('register(bridge, "cancel")'),
+    );
+
+    expect(callbackSource).not.toContain("completion(");
+    expect(callbackSource).toContain("Non-terminal callback");
   });
 });
