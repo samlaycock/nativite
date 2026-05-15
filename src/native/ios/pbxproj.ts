@@ -7,6 +7,7 @@ import type {
   ResolvedNativiteGradleDependency,
   ResolvedNativitePluginFile,
   ResolvedNativitePlugins,
+  ResolvedNativiteVersionCatalogDependency,
 } from "../../plugins/resolve.ts";
 
 import { DEFAULT_IOS_MINIMUM_VERSION, DEFAULT_MACOS_MINIMUM_VERSION } from "../../index.ts";
@@ -53,9 +54,12 @@ function resourceFileType(absolutePath: string): string {
 }
 
 function isFrameworkDependency(
-  dep: ResolvedNativiteFrameworkDependency | ResolvedNativiteGradleDependency,
+  dep:
+    | ResolvedNativiteFrameworkDependency
+    | ResolvedNativiteGradleDependency
+    | ResolvedNativiteVersionCatalogDependency,
 ): dep is ResolvedNativiteFrameworkDependency {
-  return dep.kind !== "gradle";
+  return dep.kind !== "gradle" && dep.kind !== "version-catalog";
 }
 
 // Static UUIDs — safe because the project is always fully regenerated from scratch.

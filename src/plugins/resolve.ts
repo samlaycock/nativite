@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type {
   NativiteApplePlatformContribution,
@@ -32,11 +33,25 @@ export type ResolvedNativiteGradleDependency = {
   configuration: string;
 };
 
+export type ResolvedNativiteVersionCatalogDependency = {
+  kind: "version-catalog";
+  alias: string;
+  configuration: string;
+};
+
 export type ResolvedNativitePlatformContribution = {
   sources: ResolvedNativitePluginFile[];
   resources: ResolvedNativitePluginFile[];
   registrars: string[];
-  dependencies: (ResolvedNativiteFrameworkDependency | ResolvedNativiteGradleDependency)[];
+  dependencies: (
+    | ResolvedNativiteFrameworkDependency
+    | ResolvedNativiteGradleDependency
+    | ResolvedNativiteVersionCatalogDependency
+  )[];
+  generatedAssets?: ResolvedNativitePluginFile[];
+  metadata?: Record<string, unknown>;
+  startupRegistrars?: string[];
+  buildEntries?: ResolvedNativitePluginFile[];
 };
 
 export type ResolvedNativitePlugin = {
@@ -61,6 +76,7 @@ export type ResolvedNativitePlugins = {
 
 const PLATFORM_KEYS = ["ios", "macos", "android"] as const;
 type PlatformKey = (typeof PLATFORM_KEYS)[number];
+const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 function hashString(input: string): string {
   return createHash("sha256").update(input).digest("hex");
@@ -103,6 +119,10 @@ function emptyPlatformContribution(): ResolvedNativitePlatformContribution {
     resources: [],
     registrars: [],
     dependencies: [],
+    generatedAssets: [],
+    metadata: {},
+    startupRegistrars: [],
+    buildEntries: [],
   };
 }
 
@@ -131,6 +151,24 @@ function mergeContributions(
       resources: [...(basePlatform?.resources ?? []), ...(extraPlatform?.resources ?? [])],
       registrars: [...(basePlatform?.registrars ?? []), ...(extraPlatform?.registrars ?? [])],
       dependencies: [...(basePlatform?.dependencies ?? []), ...(extraPlatform?.dependencies ?? [])],
+      generatedAssets: [
+        ...(basePlatform?.generatedAssets ?? []),
+        ...(extraPlatform?.generatedAssets ?? []),
+      ],
+      metadata: {
+        ...basePlatform?.metadata,
+        ...extraPlatform?.metadata,
+      },
+      appLifecycle:
+        basePlatform?.appLifecycle || extraPlatform?.appLifecycle
+          ? {
+              startup: [
+                ...(basePlatform?.appLifecycle?.startup ?? []),
+                ...(extraPlatform?.appLifecycle?.startup ?? []),
+              ],
+            }
+          : undefined,
+      buildEntries: [...(basePlatform?.buildEntries ?? []), ...(extraPlatform?.buildEntries ?? [])],
     };
   }
 
@@ -149,7 +187,7 @@ function normalizePathInput(input: NativitePluginFile): string {
 function normalizeFiles(
   pluginName: string,
   rootDir: string,
-  fileKind: "source" | "resource",
+  fileKind: "source" | "resource" | "generated asset" | "build entry",
   files: NativitePluginFile[] | undefined,
 ): ResolvedNativitePluginFile[] {
   if (!files || files.length === 0) return [];
@@ -183,6 +221,7 @@ function normalizeRegistrars(
   pluginName: string,
   entries: NativitePluginRegistrar[] | undefined,
   platform: PlatformKey,
+  allowQualifiedAppleSymbol = false,
 ): string[] {
   if (!entries || entries.length === 0) return [];
   const symbols = new Set<string>();
@@ -221,7 +260,11 @@ function normalizeRegistrars(
           "Expected a Kotlin function name or fully-qualified import like com.example.registerMyPlugin.",
       );
     }
-    if (platform !== "android" && !symbolPattern.test(symbol)) {
+    if (
+      platform !== "android" &&
+      !symbolPattern.test(symbol) &&
+      (!allowQualifiedAppleSymbol || !qualifiedSymbolPattern.test(symbol))
+    ) {
       throw new Error(
         `[nativite] Plugin "${pluginName}" registrar "${symbol}" is invalid. ` +
           "Expected a native function name like registerMyPlugin.",
@@ -258,15 +301,32 @@ function normalizeFrameworkDependencyInput(
 
 function normalizeGradleDependencyInput(
   dep: NativitePluginDependency,
-): ResolvedNativiteGradleDependency {
+): ResolvedNativiteGradleDependency | ResolvedNativiteVersionCatalogDependency {
   if (typeof dep === "string") {
     return { kind: "gradle", notation: dep, configuration: "implementation" };
   }
 
-  const candidate = dep as { kind?: unknown; notation?: unknown; configuration?: unknown };
+  const candidate = dep as {
+    kind?: unknown;
+    notation?: unknown;
+    alias?: unknown;
+    configuration?: unknown;
+  };
+  if (candidate.kind === "version-catalog") {
+    if (typeof candidate.alias !== "string") {
+      throw new Error("[nativite] Version-catalog dependency alias must be a string.");
+    }
+
+    return {
+      kind: "version-catalog",
+      alias: candidate.alias,
+      configuration:
+        typeof candidate.configuration === "string" ? candidate.configuration : "implementation",
+    };
+  }
   if (candidate.kind !== undefined && candidate.kind !== "gradle") {
     throw new Error(
-      `[nativite] Unsupported Android dependency kind ${JSON.stringify(candidate.kind)}. Use kind: "gradle".`,
+      `[nativite] Unsupported Android dependency kind ${JSON.stringify(candidate.kind)}. Use kind: "gradle" or "version-catalog".`,
     );
   }
   if (typeof candidate.notation !== "string") {
@@ -285,19 +345,29 @@ function normalizeDependencies(
   pluginName: string,
   entries: NativitePluginDependency[] | undefined,
   platform: PlatformKey,
-): (ResolvedNativiteFrameworkDependency | ResolvedNativiteGradleDependency)[] {
+): (
+  | ResolvedNativiteFrameworkDependency
+  | ResolvedNativiteGradleDependency
+  | ResolvedNativiteVersionCatalogDependency
+)[] {
   if (!entries || entries.length === 0) return [];
 
   if (platform === "android") {
-    const byDeclaration = new Map<string, ResolvedNativiteGradleDependency>();
+    const byDeclaration = new Map<
+      string,
+      ResolvedNativiteGradleDependency | ResolvedNativiteVersionCatalogDependency
+    >();
 
     for (const entry of entries) {
       const normalized = normalizeGradleDependencyInput(entry);
-      const notation = normalized.notation.trim();
+      const notation =
+        normalized.kind === "version-catalog"
+          ? normalized.alias.trim()
+          : normalized.notation.trim();
       const configuration = normalized.configuration.trim();
       if (notation.length === 0) {
         throw new Error(
-          `[nativite] Plugin "${pluginName}" declares a Gradle dependency with no notation.`,
+          `[nativite] Plugin "${pluginName}" declares an Android dependency with no notation or alias.`,
         );
       }
       if (configuration.length === 0) {
@@ -306,15 +376,17 @@ function normalizeDependencies(
         );
       }
 
-      byDeclaration.set(`${configuration}:${notation}`, {
-        kind: "gradle",
-        notation,
+      byDeclaration.set(`${normalized.kind}:${configuration}:${notation}`, {
+        ...normalized,
+        ...(normalized.kind === "version-catalog" ? { alias: notation } : { notation }),
         configuration,
       });
     }
 
     return [...byDeclaration.values()].sort((a, b) =>
-      `${a.configuration}:${a.notation}`.localeCompare(`${b.configuration}:${b.notation}`),
+      `${a.configuration}:${a.kind === "version-catalog" ? a.alias : a.notation}`.localeCompare(
+        `${b.configuration}:${b.kind === "version-catalog" ? b.alias : b.notation}`,
+      ),
     );
   }
 
@@ -355,6 +427,20 @@ function normalizePlatformContribution(
     resources: normalizeFiles(pluginName, rootDir, "resource", contribution.resources),
     registrars: normalizeRegistrars(pluginName, contribution.registrars, platform),
     dependencies: normalizeDependencies(pluginName, contribution.dependencies, platform),
+    generatedAssets: normalizeFiles(
+      pluginName,
+      rootDir,
+      "generated asset",
+      contribution.generatedAssets,
+    ),
+    metadata: contribution.metadata ?? {},
+    startupRegistrars: normalizeRegistrars(
+      pluginName,
+      contribution.appLifecycle?.startup,
+      platform,
+      true,
+    ),
+    buildEntries: normalizeFiles(pluginName, rootDir, "build entry", contribution.buildEntries),
   };
 }
 
@@ -367,8 +453,14 @@ function aggregatePlatform(
   const registrarSymbols = new Set<string>();
   const dependenciesByKey = new Map<
     string,
-    ResolvedNativiteFrameworkDependency | ResolvedNativiteGradleDependency
+    | ResolvedNativiteFrameworkDependency
+    | ResolvedNativiteGradleDependency
+    | ResolvedNativiteVersionCatalogDependency
   >();
+  const generatedAssetsByPath = new Map<string, ResolvedNativitePluginFile>();
+  const metadata: Record<string, unknown> = {};
+  const startupRegistrarSymbols = new Set<string>();
+  const buildEntriesByPath = new Map<string, ResolvedNativitePluginFile>();
 
   for (const plugin of plugins) {
     const current = plugin.platforms[platform];
@@ -390,8 +482,9 @@ function aggregatePlatform(
     }
 
     for (const dependency of current.dependencies) {
-      if (dependency.kind === "gradle") {
-        dependenciesByKey.set(`${dependency.configuration}:${dependency.notation}`, dependency);
+      if (dependency.kind === "gradle" || dependency.kind === "version-catalog") {
+        const key = dependency.kind === "version-catalog" ? dependency.alias : dependency.notation;
+        dependenciesByKey.set(`${dependency.kind}:${dependency.configuration}:${key}`, dependency);
         continue;
       }
 
@@ -405,6 +498,24 @@ function aggregatePlatform(
         dependenciesByKey.set(key, dependency);
       }
     }
+
+    for (const asset of current.generatedAssets ?? []) {
+      if (!generatedAssetsByPath.has(asset.absolutePath)) {
+        generatedAssetsByPath.set(asset.absolutePath, asset);
+      }
+    }
+
+    Object.assign(metadata, current.metadata ?? {});
+
+    for (const registrar of current.startupRegistrars ?? []) {
+      startupRegistrarSymbols.add(registrar);
+    }
+
+    for (const entry of current.buildEntries ?? []) {
+      if (!buildEntriesByPath.has(entry.absolutePath)) {
+        buildEntriesByPath.set(entry.absolutePath, entry);
+      }
+    }
   }
 
   return {
@@ -414,10 +525,28 @@ function aggregatePlatform(
     ),
     registrars: [...registrarSymbols],
     dependencies: [...dependenciesByKey.values()].sort((a, b) => {
-      const left = a.kind === "gradle" ? `${a.configuration}:${a.notation}` : a.name;
-      const right = b.kind === "gradle" ? `${b.configuration}:${b.notation}` : b.name;
+      const left =
+        a.kind === "gradle"
+          ? `${a.configuration}:${a.notation}`
+          : a.kind === "version-catalog"
+            ? `${a.configuration}:${a.alias}`
+            : a.name;
+      const right =
+        b.kind === "gradle"
+          ? `${b.configuration}:${b.notation}`
+          : b.kind === "version-catalog"
+            ? `${b.configuration}:${b.alias}`
+            : b.name;
       return left.localeCompare(right);
     }),
+    generatedAssets: [...generatedAssetsByPath.values()].sort((a, b) =>
+      a.absolutePath.localeCompare(b.absolutePath),
+    ),
+    metadata,
+    startupRegistrars: [...startupRegistrarSymbols],
+    buildEntries: [...buildEntriesByPath.values()].sort((a, b) =>
+      a.absolutePath.localeCompare(b.absolutePath),
+    ),
   };
 }
 
@@ -452,6 +581,10 @@ function computePluginFingerprint(
       resources: normalized[key].resources.map((r) => r.absolutePath),
       registrars: normalized[key].registrars,
       dependencies: normalized[key].dependencies,
+      generatedAssets: normalized[key].generatedAssets?.map((r) => r.absolutePath),
+      metadata: normalized[key].metadata,
+      startupRegistrars: normalized[key].startupRegistrars,
+      buildEntries: normalized[key].buildEntries?.map((r) => r.absolutePath),
     };
   }
 
@@ -463,6 +596,60 @@ function computePluginFingerprint(
       normalized: normalizedPlatforms,
     }),
   );
+}
+
+function backgroundRuntimePlugin(): NativitePlugin {
+  const sourceRoot = resolve(moduleDir, "..");
+  const sourceBackgroundBridge = resolve(
+    sourceRoot,
+    "native/ios/runtime/NativiteBackgroundBridge.swift",
+  );
+  const isSourceLayout = existsSync(sourceBackgroundBridge);
+  const rootDir = isSourceLayout ? sourceRoot : moduleDir;
+
+  return {
+    name: "nativite-background-runtime",
+    rootDir,
+    fingerprint: "background-runtime-v1",
+    platforms: {
+      ios: {
+        sources: [
+          isSourceLayout
+            ? "./native/ios/runtime/NativiteBackgroundBridge.swift"
+            : "./runtime/NativiteBackgroundBridge.swift",
+        ],
+        registrars: ["registerNativiteBackgroundBridge"],
+        appLifecycle: {
+          startup: ["NativiteBackgroundTaskRuntime.registerAll"],
+        },
+        metadata: {
+          infoPlist: {
+            BGTaskSchedulerPermittedIdentifiers: "backgroundTasks",
+            UIBackgroundModes: ["fetch"],
+          },
+        },
+        generatedAssets: [
+          isSourceLayout
+            ? "./native/ios/runtime/NativiteBackgroundTasks.swift"
+            : "./runtime/NativiteBackgroundTasks.swift",
+        ],
+        buildEntries: [isSourceLayout ? "./background.ts" : "./background.mjs"],
+      },
+      android: {
+        registrars: ["registerNativiteBackgroundBridge"],
+        dependencies: [
+          { kind: "version-catalog", alias: "quickjs-kt-android" },
+          { kind: "version-catalog", alias: "androidx-work-runtime-ktx" },
+        ],
+        generatedAssets: [
+          isSourceLayout
+            ? "./native/android/runtime/NativiteBackgroundTasks.kt"
+            : "./runtime/NativiteBackgroundTasks.kt",
+        ],
+        buildEntries: [isSourceLayout ? "./background.ts" : "./background.mjs"],
+      },
+    },
+  };
 }
 
 function getStaticContribution(plugin: NativitePlugin): NativitePluginContribution {
@@ -477,7 +664,10 @@ export async function resolveNativitePlugins(
   projectRoot: string,
   mode: NativitePluginMode,
 ): Promise<ResolvedNativitePlugins> {
-  const plugins: NativitePlugin[] = config.plugins ?? [];
+  const plugins: NativitePlugin[] =
+    (config.backgroundTasks ?? []).length > 0
+      ? [...(config.plugins ?? []), backgroundRuntimePlugin()]
+      : (config.plugins ?? []);
   const resolvedPlugins: ResolvedNativitePlugin[] = [];
 
   const configuredPlatforms = new Set((config.platforms ?? []).map((entry) => entry.platform));

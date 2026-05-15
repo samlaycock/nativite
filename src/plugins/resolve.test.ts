@@ -293,4 +293,56 @@ describe("resolveNativitePlugins", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("contributes background bridge runtime through the plugin system only when tasks are configured", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nativite-background-plugin-"));
+    try {
+      const baseConfig = makeBaseConfig();
+      const androidConfig: NativiteConfig = {
+        ...baseConfig,
+        platforms: [...(baseConfig.platforms ?? []), { platform: "android", minSdk: 26 }],
+      };
+
+      const withoutTasks = await resolveNativitePlugins(androidConfig, root, "generate");
+      expect(withoutTasks.plugins.map((plugin) => plugin.name)).not.toContain(
+        "nativite-background-runtime",
+      );
+      expect(withoutTasks.platforms.android.registrars).not.toContain(
+        "registerNativiteBackgroundBridge",
+      );
+
+      writeFileSync(join(root, "sync.task.ts"), "export default {}\n");
+      const withTasks = await resolveNativitePlugins(
+        {
+          ...androidConfig,
+          backgroundTasks: ["./sync.task.ts"],
+        },
+        root,
+        "generate",
+      );
+
+      expect(withTasks.plugins.map((plugin) => plugin.name)).toContain(
+        "nativite-background-runtime",
+      );
+      expect(withTasks.platforms.ios.registrars).toContain("registerNativiteBackgroundBridge");
+      expect(withTasks.platforms.android.registrars).toContain("registerNativiteBackgroundBridge");
+      expect(withTasks.platforms.android.dependencies).toContainEqual({
+        kind: "version-catalog",
+        alias: "quickjs-kt-android",
+        configuration: "implementation",
+      });
+      expect(withTasks.platforms.android.dependencies).toContainEqual({
+        kind: "version-catalog",
+        alias: "androidx-work-runtime-ktx",
+        configuration: "implementation",
+      });
+      expect(
+        withTasks.platforms.ios.buildEntries?.some((entry) =>
+          entry.absolutePath.endsWith("src/background.ts"),
+        ),
+      ).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
