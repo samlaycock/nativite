@@ -13,6 +13,7 @@ import androidx.webkit.WebMessagePortCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 typealias NativiteHandler = (args: Any?, completion: (Result<Any?>) -> Unit) -> Unit
 
@@ -24,7 +25,7 @@ open class NativiteBridge {
     private val handlers = mutableMapOf<String, NativiteHandler>()
     private var applicationContext: Context? = null
     private var activity: ComponentActivity? = null
-    private val permissionCompletions = mutableMapOf<Int, (Boolean) -> Unit>()
+    private val permissionCompletions = ConcurrentHashMap<Int, MutableList<(Boolean) -> Unit>>()
 
     private var primaryWebView: WebView? = null
     private var primaryPort: WebMessagePortCompat? = null
@@ -57,14 +58,23 @@ open class NativiteBridge {
 
     fun requestPermission(permission: String, requestCode: Int, completion: (Boolean) -> Unit): Boolean {
         val currentActivity = activity ?: return false
-        permissionCompletions[requestCode] = completion
-        ActivityCompat.requestPermissions(currentActivity, arrayOf(permission), requestCode)
+        val shouldRequest = synchronized(permissionCompletions) {
+            val completions = permissionCompletions.getOrPut(requestCode) { mutableListOf() }
+            completions.add(completion)
+            completions.size == 1
+        }
+        if (shouldRequest) {
+            ActivityCompat.requestPermissions(currentActivity, arrayOf(permission), requestCode)
+        }
         return true
     }
 
     fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray): Boolean {
-        val completion = permissionCompletions.remove(requestCode) ?: return false
-        completion(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+        val completions = synchronized(permissionCompletions) {
+            permissionCompletions.remove(requestCode)
+        } ?: return false
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        completions.forEach { completion -> completion(granted) }
         return true
     }
 

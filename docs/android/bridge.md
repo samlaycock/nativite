@@ -73,6 +73,15 @@ After the primary webview finishes loading and the message channel is attached, 
 
 Android advertises only the areas rendered by the Compose chrome root: `titleBar`, `navigation`, `toolbar`, `statusBar`, `homeIndicator`, `keyboard`, `tabBottomAccessory`, `sheets`, `drawers`, and `popovers`. Platform-specific areas that do not currently have Android renderers, including `sidebarPanel`, `menuBar`, and `appWindows`, are intentionally omitted so JavaScript filters them out before sending snapshots.
 
+## Runtime Permissions
+
+Plugins can request Android runtime permissions through
+`requestPermission(permission, requestCode, completion)`. The bridge stores
+in-flight completions by request code and forwards results from
+`MainActivity.onRequestPermissionsResult(...)`. When multiple callers request the
+same permission before Android returns a result, the bridge reuses the in-flight
+system prompt and completes every queued caller with the same grant result.
+
 ## WebView Attachment
 
 ```kotlin
