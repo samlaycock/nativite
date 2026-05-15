@@ -65,6 +65,10 @@
       "types": "./dist/plugins/contacts/index.d.ts",
       "import": "./dist/plugins/contacts/index.mjs"
     },
+    "./plugins/calendar": {
+      "types": "./dist/plugins/calendar/index.d.ts",
+      "import": "./dist/plugins/calendar/index.mjs"
+    },
     "./globals": {
       "types": "./dist/globals.d.ts"
     }

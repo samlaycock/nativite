@@ -139,6 +139,20 @@ describe("infoPlistTemplate", () => {
     expect(output).toContain("TestApp needs contacts access for contact-book features.");
   });
 
+  it("includes calendar and reminder usage descriptions when the first-party calendar plugin is configured", () => {
+    const output = infoPlistTemplate({
+      ...baseConfig,
+      plugins: [{ name: "nativite-calendar" }],
+    });
+
+    expect(output).toContain("<key>NSCalendarsFullAccessUsageDescription</key>");
+    expect(output).toContain("<key>NSCalendarsUsageDescription</key>");
+    expect(output).toContain("<key>NSRemindersFullAccessUsageDescription</key>");
+    expect(output).toContain("<key>NSRemindersUsageDescription</key>");
+    expect(output).toContain("TestApp needs calendar access for scheduling features.");
+    expect(output).toContain("TestApp needs reminders access for reminder features.");
+  });
+
   it("excludes tasks without supported iOS metadata from scheduler identifiers", () => {
     const output = infoPlistTemplate(baseConfig, {
       version: 1,

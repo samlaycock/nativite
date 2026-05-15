@@ -8,12 +8,20 @@ export function androidManifestTemplate(config: NativiteConfig): string {
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 `
     : "";
+  const includesCalendar =
+    config.plugins?.some((plugin) => plugin.name === "nativite-calendar") ?? false;
+  const calendarPermissions = includesCalendar
+    ? `
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+`
+    : "";
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-${contactsPermissions}
+${contactsPermissions}${calendarPermissions}
 
     <application
         android:allowBackup="true"
