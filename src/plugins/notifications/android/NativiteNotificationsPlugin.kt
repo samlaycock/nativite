@@ -71,13 +71,35 @@ private fun hasPostNotificationsPermission(context: Context): Boolean =
     Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-private fun permissionResponse(context: Context): Map<String, Any?> {
+private fun permissionResponse(
+    context: Context,
+    activity: androidx.activity.ComponentActivity? = null,
+): Map<String, Any?> {
     val granted = hasPostNotificationsPermission(context)
+    val canAskAgain = when {
+        granted -> false
+        Build.VERSION.SDK_INT < 33 -> false
+        activity != null -> ActivityCompat.shouldShowRequestPermissionRationale(
+            activity,
+            Manifest.permission.POST_NOTIFICATIONS,
+        )
+        else -> false
+    }
     return mapOf(
         "status" to if (granted) "granted" else "denied",
-        "canAskAgain" to (!granted && Build.VERSION.SDK_INT >= 33),
+        "canAskAgain" to canAskAgain,
         "platform" to "android",
     )
+}
+
+private fun requestPermission(
+    bridge: Any,
+    permission: String,
+    requestCode: Int,
+    completion: (Boolean) -> Unit,
+): Boolean {
+    val accessor = bridge.javaClass.methods.firstOrNull { it.name == "requestPermission" }
+    return accessor?.invoke(bridge, permission, requestCode, completion) as? Boolean ?: false
 }
 
 private fun argsObject(args: Any?): JSONObject = when (args) {
@@ -221,7 +243,7 @@ fun registerNativiteNotificationsPlugin(bridge: Any) {
             completion(Result.failure(notificationsError("native-unavailable", "Android application context is unavailable.", "getPermissionStatus")))
             return@register
         }
-        completion(Result.success(permissionResponse(context)))
+        completion(Result.success(permissionResponse(context, activityOrNull(bridge))))
     }
 
     register(bridge, "requestPermissions") { _, completion ->
@@ -236,13 +258,19 @@ fun registerNativiteNotificationsPlugin(bridge: Any) {
                 completion(Result.failure(notificationsError("native-unavailable", "Android activity is unavailable for notification permission prompts.", "requestPermissions")))
                 return@register
             }
-            ActivityCompat.requestPermissions(
-                activity,
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            val started = requestPermission(
+                bridge,
+                Manifest.permission.POST_NOTIFICATIONS,
                 NOTIFICATION_REQUEST_CODE,
-            )
+            ) {
+                completion(Result.success(permissionResponse(context, activity)))
+            }
+            if (!started) {
+                completion(Result.failure(notificationsError("native-unavailable", "Android permission callback bridge is unavailable.", "requestPermissions")))
+            }
+            return@register
         }
-        completion(Result.success(permissionResponse(context)))
+        completion(Result.success(permissionResponse(context, activityOrNull(bridge))))
     }
 
     register(bridge, "createChannel") { args, completion ->
