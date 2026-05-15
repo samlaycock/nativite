@@ -132,6 +132,8 @@ export default defineBackgroundTask({
       expect(existsSync("dist/runtime/NativiteWebView.kt")).toBe(true);
       expect(existsSync("dist/plugins/local-auth/ios/NativiteLocalAuthPlugin.swift")).toBe(true);
       expect(existsSync("dist/plugins/local-auth/android/NativiteLocalAuthPlugin.kt")).toBe(true);
+      expect(existsSync("dist/plugins/haptics/ios/NativiteHapticsPlugin.swift")).toBe(true);
+      expect(existsSync("dist/plugins/haptics/android/NativiteHapticsPlugin.kt")).toBe(true);
       expect(existsSync("dist/plugins/app-integrity/ios/NativiteAppIntegrityPlugin.swift")).toBe(
         true,
       );
