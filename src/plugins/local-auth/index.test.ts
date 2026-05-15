@@ -133,6 +133,26 @@ describe("local auth plugin", () => {
     expect(supportedTypesSource).toContain(".deviceOwnerAuthentication");
     expect(supportedTypesSource).toContain('"device-credential"');
     expect(supportedTypesSource).toContain("return deviceCredentialTypes");
+    expect(supportedTypesSource).toContain('return ["unknown"] + deviceCredentialTypes');
+  });
+
+  it("returns unavailable for missing iOS authentication reasons", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/ios/NativiteLocalAuthPlugin.swift"),
+      "utf-8",
+    );
+    const authenticateSource = source.slice(
+      source.indexOf('method: "authenticate"'),
+      source.indexOf('method: "cancel"'),
+    );
+    const missingReasonSource = authenticateSource.slice(
+      authenticateSource.indexOf("else {"),
+      authenticateSource.indexOf("let context = LAContext()"),
+    );
+
+    expect(missingReasonSource).toContain('"status": "unavailable"');
+    expect(missingReasonSource).toContain("Missing authentication reason.");
+    expect(missingReasonSource).not.toContain('"status": "failed"');
   });
 
   it("distinguishes Android biometric support from device credential support", () => {
@@ -150,5 +170,21 @@ describe("local auth plugin", () => {
     expect(supportedTypesSource).not.toContain("canAuthenticate(context)");
     expect(supportedTypesSource).toContain("canAuthenticateBiometric(context)");
     expect(supportedTypesSource).toContain("canAuthenticateDeviceCredential(context)");
+  });
+
+  it("aligns Android authentication with availability API level support", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/android/NativiteLocalAuthPlugin.kt"),
+      "utf-8",
+    );
+    const authenticateSource = source.slice(
+      source.indexOf('register(bridge, "authenticate")'),
+      source.indexOf('register(bridge, "cancel")'),
+    );
+
+    expect(authenticateSource).toContain("Build.VERSION.SDK_INT < Build.VERSION_CODES.Q");
+    expect(authenticateSource).toContain("Local authentication requires Android 10+");
+    expect(authenticateSource).not.toContain("Build.VERSION.SDK_INT < Build.VERSION_CODES.P");
+    expect(authenticateSource).not.toContain("Local authentication requires Android 9+");
   });
 });

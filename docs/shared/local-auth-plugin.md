@@ -76,7 +76,7 @@ authentication is available, including passcode-only devices. Cancellation
 invalidates the active `LAContext`.
 
 Android uses the platform `android.hardware.biometrics.BiometricPrompt`.
-Authentication requires Android 9 or newer. Device credentials are enabled on
+Authentication requires Android 10 or newer. Device credentials are enabled on
 Android 11 or newer when `disableDeviceFallback` is not set. Android cannot
 reliably distinguish the exact enrolled biometric class across devices, so it
 reports biometric type strings only when biometric authentication is enrolled,
