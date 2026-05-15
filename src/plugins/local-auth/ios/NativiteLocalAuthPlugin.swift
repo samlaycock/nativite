@@ -5,7 +5,7 @@ private func localAuthAvailability(_ context: LAContext = LAContext()) -> [Strin
   var error: NSError?
   let available = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
     || context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
-  guard let error else {
+  guard !available, let error else {
     return ["available": available, "platform": "ios"]
   }
 

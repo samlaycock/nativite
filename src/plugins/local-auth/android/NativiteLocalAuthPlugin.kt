@@ -142,7 +142,7 @@ fun registerNativiteLocalAuthPlugin(bridge: Any) {
                 }
 
                 override fun onAuthenticationFailed() {
-                    completion(Result.success(mapOf("status" to "failed", "success" to false, "platform" to "android", "error" to "Authentication failed.")))
+                    // Non-terminal callback: keep the prompt open so the user can retry.
                 }
             },
         )
