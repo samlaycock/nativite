@@ -74,6 +74,9 @@ describe("calendar plugin", () => {
     expect(source).toContain("EKEventViewController");
     expect(source).toContain("queryEvents requires options.");
     expect(source).toContain("createEvent requires an event.");
+    expect(source).toContain("openEvent requires an id.");
+    expect(source).toContain("createReminder requires a reminder.");
+    expect(source).toContain('operation: "updateReminder"');
     expect(source).toContain("EKReminder(eventStore: store)");
   });
 
@@ -92,6 +95,13 @@ describe("calendar plugin", () => {
     expect(source).toContain(
       'calendarError("not-found", "Calendar event was not found.", "updateEvent")',
     );
+    expect(source).toContain("val id = uri?.lastPathSegment");
+    expect(source).toContain(
+      'calendarError("operation-failed", "Failed to insert calendar event.", "createEvent")',
+    );
+    expect(source).toContain("private fun eventIdOrNull(input: JSONObject): Long?");
+    expect(source).toContain("Event id must be a numeric string.");
+    expect(source).not.toContain('args.getString("id").toLong()');
     expect(source).toContain("Intent(Intent.ACTION_VIEW)");
     expect(source).toContain('unsupported("createReminder")');
     expect(source).not.toContain('if (kind == "reminders") Manifest.permission.READ_CALENDAR');

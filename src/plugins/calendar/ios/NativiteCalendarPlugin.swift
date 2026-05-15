@@ -331,7 +331,11 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "calendar", method: "openEvent") { args, completion in
-    guard let options = args as? [String: Any], let id = options["id"] as? String, let event = store.event(withIdentifier: id) else {
+    guard let options = args as? [String: Any], let id = options["id"] as? String else {
+      completion(.failure(calendarError("invalid-arguments", "openEvent requires an id.", operation: "openEvent")))
+      return
+    }
+    guard let event = store.event(withIdentifier: id) else {
       completion(.failure(calendarError("not-found", "Calendar event was not found.", operation: "openEvent")))
       return
     }
@@ -371,8 +375,12 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "calendar", method: "createReminder") { args, completion in
-    guard hasAccess(.reminder), let input = args as? [String: Any] else {
+    guard hasAccess(.reminder) else {
       completion(.failure(calendarError("permission-denied", "Reminder permission has not been granted.", operation: "createReminder")))
+      return
+    }
+    guard let input = args as? [String: Any] else {
+      completion(.failure(calendarError("invalid-arguments", "createReminder requires a reminder.", operation: "createReminder")))
       return
     }
     do {
@@ -386,7 +394,11 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "calendar", method: "updateReminder") { args, completion in
-    guard hasAccess(.reminder), let input = args as? [String: Any], let id = input["id"] as? String else {
+    guard hasAccess(.reminder) else {
+      completion(.failure(calendarError("permission-denied", "Reminder permission has not been granted.", operation: "updateReminder")))
+      return
+    }
+    guard let input = args as? [String: Any], let id = input["id"] as? String else {
       completion(.failure(calendarError("invalid-arguments", "updateReminder requires an id.", operation: "updateReminder")))
       return
     }
@@ -404,7 +416,11 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "calendar", method: "deleteReminder") { args, completion in
-    guard hasAccess(.reminder), let options = args as? [String: Any], let id = options["id"] as? String else {
+    guard hasAccess(.reminder) else {
+      completion(.failure(calendarError("permission-denied", "Reminder permission has not been granted.", operation: "deleteReminder")))
+      return
+    }
+    guard let options = args as? [String: Any], let id = options["id"] as? String else {
       completion(.failure(calendarError("invalid-arguments", "deleteReminder requires an id.", operation: "deleteReminder")))
       return
     }
