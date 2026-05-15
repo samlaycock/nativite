@@ -59,7 +59,12 @@ private fun impactConstant(style: String, operation: String): Int =
         "light" -> HapticFeedbackConstants.KEYBOARD_TAP
         "medium" -> HapticFeedbackConstants.VIRTUAL_KEY
         "heavy" -> HapticFeedbackConstants.LONG_PRESS
-        "rigid" -> HapticFeedbackConstants.CONTEXT_CLICK
+        "rigid" ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                HapticFeedbackConstants.CONTEXT_CLICK
+            } else {
+                HapticFeedbackConstants.LONG_PRESS
+            }
         "soft" -> HapticFeedbackConstants.CLOCK_TICK
         else -> throw hapticsError("invalid-impact-style", "Unsupported impact feedback style: $style.", operation)
     }
@@ -72,7 +77,12 @@ private fun notificationConstant(style: String, operation: String): Int =
             } else {
                 HapticFeedbackConstants.VIRTUAL_KEY
             }
-        "warning" -> HapticFeedbackConstants.CONTEXT_CLICK
+        "warning" ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                HapticFeedbackConstants.CONTEXT_CLICK
+            } else {
+                HapticFeedbackConstants.VIRTUAL_KEY
+            }
         "error" ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 HapticFeedbackConstants.REJECT
