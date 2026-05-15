@@ -116,6 +116,8 @@ export const DEFAULT_MACOS_MINIMUM_VERSION = "14.0";
 export const DEFAULT_ANDROID_MIN_SDK = 26;
 export const DEFAULT_ANDROID_TARGET_SDK = 36;
 
+export type NativiteDesktopWebEngine = "system" | "chromium";
+
 export type NativiteRootConfigOverrides = {
   app?: Partial<{
     name: string;
@@ -162,6 +164,7 @@ export type NativiteIOSPlatformConfig = {
 export type NativiteMacOSPlatformConfig = {
   platform: "macos";
   minimumVersion: string;
+  webEngine: NativiteDesktopWebEngine;
   overrides?: NativiteRootConfigOverrides;
 };
 
@@ -279,13 +282,18 @@ export function ios(
  *
  * @example
  * platforms: [macos()]
- * platforms: [macos({ minimumVersion: "15.0" })]
+ * platforms: [macos({ minimumVersion: "15.0", webEngine: "chromium" })]
  */
 export function macos(
-  config: Partial<Omit<NativiteMacOSPlatformConfig, "platform" | "minimumVersion">> &
-    Pick<Partial<NativiteMacOSPlatformConfig>, "minimumVersion"> = {},
+  config: Partial<Omit<NativiteMacOSPlatformConfig, "platform" | "minimumVersion" | "webEngine">> &
+    Pick<Partial<NativiteMacOSPlatformConfig>, "minimumVersion" | "webEngine"> = {},
 ): NativiteMacOSPlatformConfig {
-  return { platform: "macos", minimumVersion: DEFAULT_MACOS_MINIMUM_VERSION, ...config };
+  return {
+    platform: "macos",
+    minimumVersion: DEFAULT_MACOS_MINIMUM_VERSION,
+    webEngine: "system",
+    ...config,
+  };
 }
 
 /**
@@ -663,6 +671,23 @@ export const NativiteConfigSchema = z
         }
       }
 
+      if (entry["webEngine"] !== undefined) {
+        if (entry.platform !== "macos") {
+          ctx.addIssue({
+            code: "custom",
+            path: ["platforms"],
+            message:
+              'webEngine is a desktop-only option and is currently supported only by the built-in "macos" platform.',
+          });
+        } else if (entry["webEngine"] !== "system" && entry["webEngine"] !== "chromium") {
+          ctx.addIssue({
+            code: "custom",
+            path: ["platforms"],
+            message: 'Built-in platform "macos" webEngine must be "system" or "chromium".',
+          });
+        }
+      }
+
       if (entry.platform === "ios") {
         if (entry["target"] !== undefined || entry["simulator"] !== undefined) {
           ctx.addIssue({
@@ -747,6 +772,7 @@ export const NativiteConfigSchema = z
         return {
           ...entry,
           minimumVersion: entry["minimumVersion"] ?? DEFAULT_MACOS_MINIMUM_VERSION,
+          webEngine: entry["webEngine"] ?? "system",
         } as NativiteMacOSPlatformConfig;
       }
       if (entry.platform === "android") {

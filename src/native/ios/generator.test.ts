@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { NativiteConfig } from "../../index.ts";
 
 import { baseConfig } from "../../../test/fixtures.ts";
+import { macos } from "../../index.ts";
 import { generateProject } from "./generator.ts";
 
 describe("generateProject", () => {
@@ -83,5 +84,37 @@ export default defineBackgroundTask({
         );
       },
     );
+  });
+
+  it("writes macOS Chromium web engine selection into generated Swift config", async () => {
+    const cwd = makeTempDir();
+    const config: NativiteConfig = {
+      ...baseConfig,
+      platforms: [macos({ webEngine: "chromium" })],
+    };
+
+    await generateProject(config, cwd, false, "generate", "macos");
+
+    const swift = readFileSync(
+      join(cwd, ".nativite", "macos", "TestApp", "NativiteConfig.swift"),
+      "utf-8",
+    );
+    expect(swift).toContain('static let webEngine: String = "chromium"');
+  });
+
+  it("keeps macOS system web engine as the generated default", async () => {
+    const cwd = makeTempDir();
+    const config: NativiteConfig = {
+      ...baseConfig,
+      platforms: [macos()],
+    };
+
+    await generateProject(config, cwd, false, "generate", "macos");
+
+    const swift = readFileSync(
+      join(cwd, ".nativite", "macos", "TestApp", "NativiteConfig.swift"),
+      "utf-8",
+    );
+    expect(swift).toContain('static let webEngine: String = "system"');
   });
 });

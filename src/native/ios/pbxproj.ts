@@ -106,10 +106,14 @@ const UUID = {
   javaScriptCoreBuildFile: "CC0000000000000000000004",
   backgroundTasksFileRef: "CC0000000000000000000005",
   backgroundTasksFrameworkBuildFile: "CC0000000000000000000006",
+  chromiumFrameworkFileRef: "CC0000000000000000000007",
+  chromiumFrameworkBuildFile: "CC0000000000000000000008",
   sourcesBuildPhase: "DD0000000000000000000001",
   frameworksBuildPhase: "DD0000000000000000000002",
   resourcesBuildPhase: "DD0000000000000000000003",
   copyDistBuildPhase: "DD0000000000000000000004",
+  embedChromiumBuildPhase: "DD0000000000000000000005",
+  chromiumEmbedBuildFile: "DD0000000000000000000006",
   projectDebugConfig: "EE0000000000000000000001",
   projectReleaseConfig: "EE0000000000000000000002",
   targetDebugConfig: "EE0000000000000000000003",
@@ -128,7 +132,7 @@ export function pbxprojTemplate(
   const platformConfig = resolveConfigForPlatform(config, targetPlatform);
   const platformEntry = (config.platforms ?? []).find(
     (platform) => platform.platform === targetPlatform,
-  ) as { minimumVersion?: string } | undefined;
+  ) as { minimumVersion?: string; webEngine?: "system" | "chromium" } | undefined;
   const appId = platformConfig.app.bundleId;
   const hasOta = Boolean(config.updates);
   const hasSplash = Boolean(config.splash) && targetPlatform === "ios";
@@ -136,6 +140,7 @@ export function pbxprojTemplate(
   const buildNumber = platformConfig.app.buildNumber;
 
   const isMacos = targetPlatform === "macos";
+  const usesChromium = isMacos && (platformEntry?.webEngine ?? "system") === "chromium";
 
   const deploymentTarget = isMacos
     ? (platformEntry?.minimumVersion ?? DEFAULT_MACOS_MINIMUM_VERSION)
@@ -343,6 +348,11 @@ export function pbxprojTemplate(
   const frameworkPhaseFiles = [
     `\t\t\t\t${UUID.webKitBuildFile} /* WebKit.framework in Frameworks */,`,
     `\t\t\t\t${UUID.javaScriptCoreBuildFile} /* JavaScriptCore.framework in Frameworks */,`,
+    ...(usesChromium
+      ? [
+          `\t\t\t\t${UUID.chromiumFrameworkBuildFile} /* Chromium Embedded Framework.framework in Frameworks */,`,
+        ]
+      : []),
     ...(isMacos
       ? []
       : [
@@ -427,6 +437,7 @@ ${hasSplash ? `\t\t${UUID.launchScreenBuildFile} /* LaunchScreen.storyboard in R
 \n${pluginResourceBuildFiles.join("\n")}
 \t\t${UUID.webKitBuildFile} /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.webKitFileRef} /* WebKit.framework */; };
 \t\t${UUID.javaScriptCoreBuildFile} /* JavaScriptCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.javaScriptCoreFileRef} /* JavaScriptCore.framework */; };
+${usesChromium ? `\t\t${UUID.chromiumFrameworkBuildFile} /* Chromium Embedded Framework.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.chromiumFrameworkFileRef} /* Chromium Embedded Framework.framework */; };\n\t\t${UUID.chromiumEmbedBuildFile} /* Chromium Embedded Framework.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.chromiumFrameworkFileRef} /* Chromium Embedded Framework.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };\n` : ""}
 ${isMacos ? "" : `\t\t${UUID.backgroundTasksFrameworkBuildFile} /* BackgroundTasks.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ${UUID.backgroundTasksFileRef} /* BackgroundTasks.framework */; };\n`}${frameworkBuildFiles.length > 0 ? `\n${frameworkBuildFiles.join("\n")}` : ""}
 /* End PBXBuildFile section */
 
@@ -439,6 +450,7 @@ ${sourceFileRefs}
 ${hasSplash ? `\t\t${UUID.launchScreenFile} /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };` : ""}
 \t\t${UUID.webKitFileRef} /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 \t\t${UUID.javaScriptCoreFileRef} /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+${usesChromium ? `\t\t${UUID.chromiumFrameworkFileRef} /* Chromium Embedded Framework.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "Chromium Embedded Framework.framework"; path = "native/chromium/macos/Chromium Embedded Framework.framework"; sourceTree = SOURCE_ROOT; };\n` : ""}
 ${isMacos ? "" : `\t\t${UUID.backgroundTasksFileRef} /* BackgroundTasks.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = BackgroundTasks.framework; path = System/Library/Frameworks/BackgroundTasks.framework; sourceTree = SDKROOT; };\n`}${frameworkFileRefs.length > 0 ? frameworkFileRefs.join("\n") : ""}
 /* End PBXFileReference section */
 
@@ -488,7 +500,7 @@ ${sourcesGroupChildren}
 \t\t\t\t${UUID.sourcesBuildPhase} /* Sources */,
 \t\t\t\t${UUID.frameworksBuildPhase} /* Frameworks */,
 \t\t\t\t${UUID.resourcesBuildPhase} /* Resources */,
-\t\t\t\t${UUID.copyDistBuildPhase} /* Copy Web Bundle */,
+${usesChromium ? `\t\t\t\t${UUID.embedChromiumBuildPhase} /* Embed Chromium Framework */,\n` : ""}\t\t\t\t${UUID.copyDistBuildPhase} /* Copy Web Bundle */,
 \t\t\t);
 \t\t\tbuildRules = (
 \t\t\t);
@@ -541,7 +553,25 @@ ${resourcePhaseFiles}
 \t\t};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
+${
+  usesChromium
+    ? `/* Begin PBXCopyFilesBuildPhase section */
+\t\t${UUID.embedChromiumBuildPhase} /* Embed Chromium Framework */ = {
+\t\t\tisa = PBXCopyFilesBuildPhase;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tdstPath = "";
+\t\t\tdstSubfolderSpec = 10;
+\t\t\tfiles = (
+\t\t\t\t${UUID.chromiumEmbedBuildFile} /* Chromium Embedded Framework.framework in Embed Frameworks */,
+\t\t\t);
+\t\t\tname = "Embed Chromium Framework";
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t};
+/* End PBXCopyFilesBuildPhase section */
+
+`
+    : ""
+}/* Begin PBXShellScriptBuildPhase section */
 \t\t${UUID.copyDistBuildPhase} /* Copy Web Bundle */ = {
 \t\t\tisa = PBXShellScriptBuildPhase;
 \t\t\tbuildActionMask = 2147483647;
