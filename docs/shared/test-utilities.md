@@ -80,3 +80,7 @@ expect(await nativeHarness.latestSnapshot()).toMatchObject({
 The coordinator-backed surface is intentionally grouped under `nativeHarness`
 so app authors do not accidentally add native-tooling requirements to fast
 browser-mode tests.
+
+The coordinator, native harness, message envelope, session-token rules,
+capability negotiation, timeout behavior, cancellation behavior, and native
+command mapping are defined in [Native Test Protocol](./native-test-protocol.md).
