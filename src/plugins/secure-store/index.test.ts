@@ -98,6 +98,22 @@ describe("secure store plugin", () => {
     expect(source).not.toContain("kSecUseOperationPrompt");
   });
 
+  it("uses update-first Apple writes for items without access control", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/secure-store/ios/NativiteSecureStorePlugin.swift"),
+      "utf-8",
+    );
+    const setItemSource = source.slice(
+      source.indexOf('method: "setItem"'),
+      source.indexOf('method: "getItem"'),
+    );
+
+    expect(setItemSource).toContain("SecItemUpdate");
+    expect(setItemSource).toContain("if updateStatus == errSecItemNotFound");
+    expect(setItemSource).toContain("SecItemAdd(addQuery as CFDictionary, nil)");
+    expect(setItemSource).toContain("kSecAttrAccessControl");
+  });
+
   it("guards Android bridge registration and caches encrypted preferences", () => {
     const source = readFileSync(
       join(process.cwd(), "src/plugins/secure-store/android/NativiteSecureStorePlugin.kt"),
