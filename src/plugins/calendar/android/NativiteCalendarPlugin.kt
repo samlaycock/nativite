@@ -1,6 +1,7 @@
 package dev.nativite.plugins.calendar
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -314,18 +315,24 @@ fun registerNativiteCalendarPlugin(bridge: Any) {
 
     register(bridge, "openEvent") { args, completion ->
         val context = applicationContextOrNull(bridge)
-        if (context == null || args !is JSONObject || !args.has("id")) {
-            completion(Result.failure(calendarError("invalid-arguments", "openEvent requires an id.", "openEvent")))
-        } else {
-            val rawId = eventIdOrNull(args)
-            if (rawId == null) {
-                completion(Result.failure(calendarError("invalid-arguments", "Event id must be a numeric string.", "openEvent")))
-                return@register
+        when {
+            context == null -> completion(Result.failure(calendarError("native-unavailable", "Android context is unavailable.", "openEvent")))
+            args !is JSONObject || !args.has("id") -> completion(Result.failure(calendarError("invalid-arguments", "openEvent requires an id.", "openEvent")))
+            else -> {
+                val rawId = eventIdOrNull(args)
+                if (rawId == null) {
+                    completion(Result.failure(calendarError("invalid-arguments", "Event id must be a numeric string.", "openEvent")))
+                    return@register
+                }
+                val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, rawId)
+                val intent = Intent(Intent.ACTION_VIEW).setData(uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                try {
+                    context.startActivity(intent)
+                    completion(Result.success(mapOf("opened" to true)))
+                } catch (_: ActivityNotFoundException) {
+                    completion(Result.failure(calendarError("native-unavailable", "No Android calendar app is available.", "openEvent")))
+                }
             }
-            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, rawId)
-            val intent = Intent(Intent.ACTION_VIEW).setData(uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-            completion(Result.success(mapOf("opened" to true)))
         }
     }
 
