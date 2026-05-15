@@ -48,6 +48,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Notifications Plugin](./shared/notifications-plugin.md) — First-party native local notifications plugin API and platform behavior
 - [Secure Store Plugin](./shared/secure-store-plugin.md) — First-party Keychain and Keystore-backed secure string storage
 - [Local Auth Plugin](./shared/local-auth-plugin.md) — First-party native biometric and device-credential user-presence prompts
+- [System Controls Plugin](./shared/system-controls-plugin.md) — First-party keep-awake, orientation, brightness, and power status controls
 - [Native Test Scripts](./shared/native-test-scripts.md) — Bun commands for running Swift and Kotlin runtime tests
 - [CLI Init Command](./shared/cli-init.md) — One-command setup for existing Vite projects
 - [CLI Dev Command](./shared/cli-dev.md) — Optional native development status dashboard

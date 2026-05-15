@@ -81,6 +81,10 @@
       "types": "./dist/plugins/local-auth/index.d.ts",
       "import": "./dist/plugins/local-auth/index.mjs"
     },
+    "./plugins/system-controls": {
+      "types": "./dist/plugins/system-controls/index.d.ts",
+      "import": "./dist/plugins/system-controls/index.mjs"
+    },
     "./globals": {
       "types": "./dist/globals.d.ts"
     }
