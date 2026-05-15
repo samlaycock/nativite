@@ -92,6 +92,14 @@ export default defineConfig([
         from: "./src/plugins/app-integrity/android/*.kt",
         to: "./dist/plugins/app-integrity/android",
       },
+      {
+        from: "./src/plugins/capture-protection/ios/*.swift",
+        to: "./dist/plugins/capture-protection/ios",
+      },
+      {
+        from: "./src/plugins/capture-protection/android/*.kt",
+        to: "./dist/plugins/capture-protection/android",
+      },
     ],
   },
   {
@@ -117,6 +125,7 @@ export default defineConfig([
       "plugins/local-auth/index": "./src/plugins/local-auth/index.ts",
       "plugins/system-controls/index": "./src/plugins/system-controls/index.ts",
       "plugins/app-integrity/index": "./src/plugins/app-integrity/index.ts",
+      "plugins/capture-protection/index": "./src/plugins/capture-protection/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],

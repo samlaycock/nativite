@@ -89,6 +89,10 @@
       "types": "./dist/plugins/app-integrity/index.d.ts",
       "import": "./dist/plugins/app-integrity/index.mjs"
     },
+    "./plugins/capture-protection": {
+      "types": "./dist/plugins/capture-protection/index.d.ts",
+      "import": "./dist/plugins/capture-protection/index.mjs"
+    },
     "./globals": {
       "types": "./dist/globals.d.ts"
     }
