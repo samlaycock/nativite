@@ -37,6 +37,27 @@ describe("nativeTest bridge", () => {
     });
   });
 
+  it("fails loudly when no handler is registered for a stubbed bridge call", async () => {
+    nativeTest.ready();
+
+    await bridge.call("contacts", "pick").catch((error: unknown) => {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        "No nativeTest bridge handler registered for contacts.pick",
+      );
+    });
+  });
+
+  it("does not let stale cleanups remove replacement handlers", async () => {
+    const cleanupFirst = nativeTest.bridge.handle("contacts", "pick", () => ({ name: "Ada" }));
+    nativeTest.bridge.handle("contacts", "pick", () => ({ name: "Grace" }));
+
+    cleanupFirst();
+
+    const result = await bridge.call("contacts", "pick");
+    expect(result).toEqual({ name: "Grace" });
+  });
+
   it("emits legacy native events to bridge subscriptions", async () => {
     const events: unknown[] = [];
     const unsubscribe = bridge.subscribe("contacts.changed", (event) => {
