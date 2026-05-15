@@ -86,4 +86,29 @@ describe("secure store plugin", () => {
     expect(androidSource).toContain("MAX_VALUE_BYTES = 4096");
     expect(androidSource).toContain('"value-too-large"');
   });
+
+  it("uses non-deprecated Apple authentication prompts", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/secure-store/ios/NativiteSecureStorePlugin.swift"),
+      "utf-8",
+    );
+
+    expect(source).toContain("kSecUseAuthenticationContext");
+    expect(source).toContain("context.localizedReason = prompt");
+    expect(source).not.toContain("kSecUseOperationPrompt");
+  });
+
+  it("guards Android bridge registration and caches encrypted preferences", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/secure-store/android/NativiteSecureStorePlugin.kt"),
+      "utf-8",
+    );
+
+    expect(source).toContain("firstOrNull");
+    expect(source).toContain(
+      '"Nativite bridge does not expose the expected plugin registration method."',
+    );
+    expect(source).toContain("private val preferencesCache");
+    expect(source).toContain("preferencesCache.getOrPut(cacheKey)");
+  });
 });

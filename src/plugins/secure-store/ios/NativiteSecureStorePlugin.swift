@@ -143,7 +143,9 @@ func registerNativiteSecureStorePlugin(_ bridge: NativiteBridge) {
       query[kSecReturnData as String] = true
       query[kSecMatchLimit as String] = kSecMatchLimitOne
       if let prompt = optionString(args, "authenticationPrompt") {
-        query[kSecUseOperationPrompt as String] = prompt
+        let context = LAContext()
+        context.localizedReason = prompt
+        query[kSecUseAuthenticationContext as String] = context
       }
 
       var result: CFTypeRef?

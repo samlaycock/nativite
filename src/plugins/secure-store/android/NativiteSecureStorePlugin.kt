@@ -1,6 +1,7 @@
 package dev.nativite.plugins.securestore
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import org.json.JSONObject
@@ -9,6 +10,7 @@ private typealias SecureStoreHandler = (args: Any?, completion: (Result<Any?>) -
 
 private const val DEFAULT_SERVICE = "dev.nativite.secure-store"
 private const val MAX_VALUE_BYTES = 4096
+private val preferencesCache = mutableMapOf<String, SharedPreferences>()
 
 private fun secureStoreError(code: String, message: String, operation: String): IllegalStateException =
     IllegalStateException(
@@ -23,9 +25,13 @@ private fun secureStoreError(code: String, message: String, operation: String): 
     )
 
 private fun register(bridge: Any, method: String, handler: SecureStoreHandler) {
-    val registerMethod = bridge.javaClass.methods.first {
+    val registerMethod = bridge.javaClass.methods.firstOrNull {
         it.name == "register" && it.parameterTypes.size == 3
-    }
+    } ?: throw secureStoreError(
+        "native-unavailable",
+        "Nativite bridge does not expose the expected plugin registration method.",
+        "register",
+    )
     registerMethod.invoke(bridge, "secureStore", method, handler)
 }
 
@@ -47,16 +53,22 @@ private fun service(args: JSONObject?): String {
     return if (value.isNullOrBlank()) DEFAULT_SERVICE else value
 }
 
-private fun preferences(context: Context, service: String) =
-    EncryptedSharedPreferences.create(
-        context,
-        "nativite_secure_store_$service",
-        MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build(),
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+private fun preferences(context: Context, service: String): SharedPreferences =
+    synchronized(preferencesCache) {
+        val appContext = context.applicationContext
+        val cacheKey = "${System.identityHashCode(appContext)}:$service"
+        preferencesCache.getOrPut(cacheKey) {
+            EncryptedSharedPreferences.create(
+                appContext,
+                "nativite_secure_store_$service",
+                MasterKey.Builder(appContext)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build(),
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+        }
+    }
 
 fun registerNativiteSecureStorePlugin(bridge: Any) {
     register(bridge, "isAvailable") { _, completion ->
