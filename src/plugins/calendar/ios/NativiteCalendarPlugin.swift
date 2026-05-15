@@ -4,6 +4,8 @@ import Foundation
 import UIKit
 
 private let nativiteCalendarErrorDomain = "NativiteCalendar"
+private var activeEventEditDelegate: CalendarEventEditDelegate?
+private var activeEventViewDismissTarget: CalendarEventViewDismissTarget?
 
 private func calendarError(_ code: String, _ message: String, operation: String) -> NSError {
   let payload = [
@@ -183,6 +185,28 @@ private func topViewController() -> UIViewController? {
   return controller
 }
 
+private final class CalendarEventEditDelegate: NSObject, EKEventEditViewDelegate {
+  func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+    controller.dismiss(animated: true) {
+      activeEventEditDelegate = nil
+    }
+  }
+}
+
+private final class CalendarEventViewDismissTarget: NSObject {
+  weak var controller: UIViewController?
+
+  init(controller: UIViewController) {
+    self.controller = controller
+  }
+
+  @objc func dismiss() {
+    controller?.dismiss(animated: true) {
+      activeEventViewDismissTarget = nil
+    }
+  }
+}
+
 func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   let store = EKEventStore()
 
@@ -222,8 +246,12 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "calendar", method: "queryEvents") { args, completion in
-    guard hasAccess(.event), let options = args as? [String: Any] else {
+    guard hasAccess(.event) else {
       completion(.failure(calendarError("permission-denied", "Calendar event permission has not been granted.", operation: "queryEvents")))
+      return
+    }
+    guard let options = args as? [String: Any] else {
+      completion(.failure(calendarError("invalid-arguments", "queryEvents requires options.", operation: "queryEvents")))
       return
     }
     do {
@@ -241,8 +269,12 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "calendar", method: "createEvent") { args, completion in
-    guard hasAccess(.event), let input = args as? [String: Any] else {
+    guard hasAccess(.event) else {
       completion(.failure(calendarError("permission-denied", "Calendar event permission has not been granted.", operation: "createEvent")))
+      return
+    }
+    guard let input = args as? [String: Any] else {
+      completion(.failure(calendarError("invalid-arguments", "createEvent requires an event.", operation: "createEvent")))
       return
     }
     do {
@@ -256,7 +288,11 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "calendar", method: "updateEvent") { args, completion in
-    guard hasAccess(.event), let input = args as? [String: Any], let id = input["id"] as? String else {
+    guard hasAccess(.event) else {
+      completion(.failure(calendarError("permission-denied", "Calendar event permission has not been granted.", operation: "updateEvent")))
+      return
+    }
+    guard let input = args as? [String: Any], let id = input["id"] as? String else {
       completion(.failure(calendarError("invalid-arguments", "updateEvent requires an id.", operation: "updateEvent")))
       return
     }
@@ -274,7 +310,11 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
   }
 
   bridge.register(namespace: "calendar", method: "deleteEvent") { args, completion in
-    guard hasAccess(.event), let options = args as? [String: Any], let id = options["id"] as? String else {
+    guard hasAccess(.event) else {
+      completion(.failure(calendarError("permission-denied", "Calendar event permission has not been granted.", operation: "deleteEvent")))
+      return
+    }
+    guard let options = args as? [String: Any], let id = options["id"] as? String else {
       completion(.failure(calendarError("invalid-arguments", "deleteEvent requires an id.", operation: "deleteEvent")))
       return
     }
@@ -295,14 +335,35 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
       completion(.failure(calendarError("not-found", "Calendar event was not found.", operation: "openEvent")))
       return
     }
+    let mode = options["mode"] as? String ?? "view"
     DispatchQueue.main.async {
       guard let presenter = topViewController() else {
         completion(.failure(calendarError("native-unavailable", "No active view controller is available.", operation: "openEvent")))
         return
       }
-      let controller = EKEventEditViewController()
-      controller.eventStore = store
-      controller.event = event
+      let controller: UIViewController
+      if mode == "edit" {
+        let editController = EKEventEditViewController()
+        let delegate = CalendarEventEditDelegate()
+        activeEventEditDelegate = delegate
+        editController.editViewDelegate = delegate
+        editController.eventStore = store
+        editController.event = event
+        controller = editController
+      } else {
+        let viewController = EKEventViewController()
+        viewController.event = event
+        viewController.allowsEditing = false
+        let navigationController = UINavigationController(rootViewController: viewController)
+        let dismissTarget = CalendarEventViewDismissTarget(controller: navigationController)
+        activeEventViewDismissTarget = dismissTarget
+        viewController.navigationItem.leftBarButtonItem = UIBarButtonItem(
+          barButtonSystemItem: .done,
+          target: dismissTarget,
+          action: #selector(CalendarEventViewDismissTarget.dismiss)
+        )
+        controller = navigationController
+      }
       presenter.present(controller, animated: true) {
         completion(.success(["opened": true]))
       }
