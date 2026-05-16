@@ -75,6 +75,7 @@ function generationHashInputs(
     { name: BACKGROUND_MANIFEST_RELATIVE_PATH, content: backgroundTaskManifestJSON },
     { name: "ViewController.swift", content: readRuntimeFile("ViewController.swift") },
     { name: "NativiteBridge.swift", content: readRuntimeFile("NativiteBridge.swift") },
+    { name: "NativiteTestHarness.swift", content: readRuntimeFile("NativiteTestHarness.swift") },
     {
       name: "NativitePluginRegistrant.swift",
       content: nativitePluginRegistrantTemplate(resolvedPlugins),
@@ -147,6 +148,15 @@ enum NativiteConfig {
     static let appVersion: String = ${JSON.stringify(config.app.version)}
     static let webEngine: String = ${JSON.stringify(webEngine)}
     static let defaultChromeStateJSON: String? = ${defaultChromeStateJSON}
+    static let testHarnessEnabled: Bool = ProcessInfo.processInfo.environment["NATIVITE_TEST_HARNESS"] == "1"
+    static let testURL: String = ProcessInfo.processInfo.environment["NATIVITE_TEST_URL"] ?? ""
+    static let testCoordinatorURL: String = ProcessInfo.processInfo.environment["NATIVITE_COORDINATOR_URL"] ?? ""
+    static let testSessionToken: String = ProcessInfo.processInfo.environment["NATIVITE_TEST_SESSION_TOKEN"] ?? ""
+    static let testSessionId: String = ProcessInfo.processInfo.environment["NATIVITE_TEST_SESSION_ID"] ?? "local"
+    static let testTargetId: String = ProcessInfo.processInfo.environment["NATIVITE_TEST_TARGET_ID"] ?? ""
+    static let testLaunchTimeoutMs: Int = Int(ProcessInfo.processInfo.environment["NATIVITE_TEST_LAUNCH_TIMEOUT_MS"] ?? "") ?? 60000
+    static let testWebViewReadyTimeoutMs: Int = Int(ProcessInfo.processInfo.environment["NATIVITE_TEST_WEBVIEW_READY_TIMEOUT_MS"] ?? "") ?? 30000
+    static let testCoordinatorTimeoutMs: Int = Int(ProcessInfo.processInfo.environment["NATIVITE_COORDINATOR_TIMEOUT_MS"] ?? "") ?? 5000
 }
 `;
 }
@@ -277,6 +287,10 @@ export async function generateProject(
   );
   writeFileSync(join(appDir, "ViewController.swift"), readRuntimeFile("ViewController.swift"));
   writeFileSync(join(appDir, "NativiteBridge.swift"), readRuntimeFile("NativiteBridge.swift"));
+  writeFileSync(
+    join(appDir, "NativiteTestHarness.swift"),
+    readRuntimeFile("NativiteTestHarness.swift"),
+  );
   writeFileSync(
     join(appDir, "NativitePluginRegistrant.swift"),
     nativitePluginRegistrantTemplate(resolvedPlugins),

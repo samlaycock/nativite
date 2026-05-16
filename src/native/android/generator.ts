@@ -198,6 +198,7 @@ function generationHashInputs(
     { name: "NativiteBridge.kt", content: readRuntimeFile(pkg, "NativiteBridge.kt") },
     { name: "NativiteChrome.kt", content: readRuntimeFile(pkg, "NativiteChrome.kt") },
     { name: "NativiteWebView.kt", content: readRuntimeFile(pkg, "NativiteWebView.kt") },
+    { name: "NativiteTestHarness.kt", content: readRuntimeFile(pkg, "NativiteTestHarness.kt") },
     { name: "NativiteVars.kt", content: readRuntimeFile(pkg, "NativiteVars.kt") },
     { name: "NativiteTheme.kt", content: readRuntimeFile(pkg, "NativiteTheme.kt") },
     {
@@ -464,6 +465,10 @@ export async function generateProject(
   writeFileSync(join(javaDir, "NativiteBridge.kt"), readRuntimeFile(pkg, "NativiteBridge.kt"));
   writeFileSync(join(javaDir, "NativiteChrome.kt"), readRuntimeFile(pkg, "NativiteChrome.kt"));
   writeFileSync(join(javaDir, "NativiteWebView.kt"), readRuntimeFile(pkg, "NativiteWebView.kt"));
+  writeFileSync(
+    join(javaDir, "NativiteTestHarness.kt"),
+    readRuntimeFile(pkg, "NativiteTestHarness.kt"),
+  );
   writeFileSync(join(javaDir, "NativiteVars.kt"), readRuntimeFile(pkg, "NativiteVars.kt"));
   writeFileSync(join(javaDir, "NativiteTheme.kt"), readRuntimeFile(pkg, "NativiteTheme.kt"));
   writeFileSync(

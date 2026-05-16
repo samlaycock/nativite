@@ -190,6 +190,16 @@ class ViewController: UIViewController {
 
   private func loadContent() {
     #if DEBUG
+    if let testURL = NativiteTestHarness.activeTestURL {
+      webView.load(nativiteRequest(url: testURL))
+      #if os(iOS)
+      NativiteTestHarness.register(platform: "ios")
+      #elseif os(macOS)
+      NativiteTestHarness.register(platform: "macos")
+      #endif
+      return
+    }
+
     if let devURL = resolveDevURL() {
       webView.load(nativiteRequest(url: devURL))
       return
@@ -330,6 +340,8 @@ extension ViewController: WKNavigationDelegate {
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    NativiteTestHarness.webViewReady(url: webView.url)
+
     if NativiteConfig.otaEnabled {
       otaUpdater.markLaunchSucceeded()
     }
@@ -589,6 +601,12 @@ class ViewController: NSViewController {
 
   private func loadContent() {
     #if DEBUG
+    if let testURL = NativiteTestHarness.activeTestURL {
+      webView.load(nativiteRequest(url: testURL))
+      NativiteTestHarness.register(platform: "macos")
+      return
+    }
+
     if let devURL = resolveDevURL() {
       webView.load(nativiteRequest(url: devURL))
       return

@@ -55,6 +55,14 @@ describe("ViewController.swift", () => {
     expect(swift).toContain("private func resolveDevURL() -> URL?");
   });
 
+  it("loads native test harness URLs before debug dev URLs", () => {
+    expect(swift.indexOf("NativiteTestHarness.activeTestURL")).toBeLessThan(
+      swift.indexOf("resolveDevURL()"),
+    );
+    expect(swift).toContain("NativiteTestHarness.register(platform:");
+    expect(swift).toContain("NativiteTestHarness.webViewReady(url: webView.url)");
+  });
+
   it("enables WKWebView inspection in DEBUG builds for Safari Develop tools", () => {
     expect(swift).toContain("if #available(iOS 16.4, *)");
     expect(swift).toContain("webView.isInspectable = true");
