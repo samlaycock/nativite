@@ -103,20 +103,26 @@ timeout.
 The coordinator owns the session state. Harnesses report observed state, but
 only the coordinator decides when a session is terminal.
 
-| State             | Entered when                                                                 | Allowed next states                                               |
-| ----------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `starting`        | The coordinator has created the token and endpoint.                          | `registered`, `failed`, `timed_out`                               |
-| `registered`      | `harness.register` succeeds.                                                 | `webview_loading`, `ready`, `failed`, `timed_out`, `disconnected` |
-| `webview_loading` | The harness has launched or reloaded the test URL.                           | `ready`, `failed`, `timed_out`, `disconnected`                    |
-| `ready`           | Native readiness and `webview.ready` have both been observed.                | `complete`, `failed`, `timed_out`, `disconnected`                 |
-| `complete`        | The test runner reports completion and all required artifacts are collected. | Terminal                                                          |
-| `failed`          | A command, harness startup, or test run fails permanently.                   | Terminal                                                          |
-| `timed_out`       | A startup, command, or session deadline expires.                             | Terminal                                                          |
-| `disconnected`    | The active harness connection closes before terminal completion.             | Terminal                                                          |
+| State             | Entered when                                                                            | Allowed next states                                                             |
+| ----------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `starting`        | The coordinator has created the token and endpoint.                                     | `registered`, `failed`, `timed_out`, `superseded`                               |
+| `registered`      | `harness.register` succeeds.                                                            | `webview_loading`, `ready`, `failed`, `timed_out`, `disconnected`, `superseded` |
+| `webview_loading` | The harness has launched or reloaded the test URL.                                      | `ready`, `failed`, `timed_out`, `disconnected`, `superseded`                    |
+| `ready`           | Native readiness and `webview.ready` have both been observed.                           | `complete`, `failed`, `timed_out`, `disconnected`, `superseded`                 |
+| `complete`        | The test runner reports completion and all required artifacts are collected.            | Terminal                                                                        |
+| `failed`          | A command, harness startup, or test run fails permanently.                              | Terminal                                                                        |
+| `timed_out`       | A startup, command, or session deadline expires.                                        | Terminal                                                                        |
+| `disconnected`    | The active harness connection closes before terminal completion.                        | Terminal                                                                        |
+| `superseded`      | A new coordinator session for the same harness identity replaces this non-terminal one. | Terminal                                                                        |
 
 Commands that require the WebView runtime must fail with `WEBVIEW_NOT_READY`
 before `ready`. Coordinator-only inspection commands may run in `registered` or
 `webview_loading` if they do not require WebView state.
+
+A session is superseded only by coordinator action. Starting a newer session for
+the same app id, device id, and test URL invalidates older non-terminal sessions
+so stale helper calls fail with `STALE_SESSION` instead of reaching a harness
+owned by a newer test run.
 
 ## Harness Registration
 
@@ -223,6 +229,31 @@ interface TestCommandOptions {
 allows the JavaScript helper to map an `AbortSignal` to a later
 `command.cancel` message without exposing platform-specific cancellation
 handles.
+
+Commands with helper-level options use these payload extensions:
+
+```ts
+interface LogsGetPayload extends TestCommandOptions {
+  readonly since?: string;
+  readonly level?: "debug" | "info" | "warn" | "error";
+  readonly limit?: number;
+}
+
+interface ViewTreeGetPayload extends TestCommandOptions {
+  readonly includeInvisible?: boolean;
+  readonly maxDepth?: number;
+}
+
+interface ScreenshotCapturePayload extends TestCommandOptions {
+  readonly format?: "png";
+  readonly target?: "app" | "webview";
+}
+```
+
+`since` is an ISO 8601 UTC timestamp. `limit` is a coordinator-enforced maximum
+entry count. `includeInvisible` asks native to include hidden or offscreen views
+when the platform API exposes them. `target` defaults to `app`, which captures
+the full native app surface rather than only the primary WebView.
 
 Command responses must be stable enough for tests to assert on. Native
 diagnostics that are useful for failures but unstable across OS versions should
