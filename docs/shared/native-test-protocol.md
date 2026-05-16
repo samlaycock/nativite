@@ -189,7 +189,6 @@ before requiring optional platform operations.
 | Capability                 | Description                                                                   |
 | -------------------------- | ----------------------------------------------------------------------------- |
 | `runtime.ready`            | Report native readiness and platform metadata.                                |
-| `webview.ready`            | Report WebView test runtime readiness.                                        |
 | `chrome.snapshot.read`     | Return the latest NCLP `chrome.snapshot` received by native.                  |
 | `chrome.areas.read`        | Return chrome areas negotiated by NCLP `shell.ready`.                         |
 | `bridge.event.emit`        | Emit legacy native-to-JavaScript bridge events.                               |
@@ -204,6 +203,10 @@ Capabilities are additive within protocol version `1`. A future minor package
 release may add new optional capability strings without changing the protocol
 version. Removing, renaming, or changing required fields requires a new protocol
 version.
+
+`webview.ready` is a mandatory lifecycle event, not a negotiated capability.
+Harnesses must emit it when the WebView test runtime is ready whenever they
+successfully register for protocol version `1`.
 
 ## Commands
 
