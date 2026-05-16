@@ -383,6 +383,35 @@ after a top-level navigation or reload. Native platform navigation identifiers
 must not be exposed directly; harnesses should forward the runtime-generated
 id so iOS, macOS, and Android correlate WebView-scoped diagnostics consistently.
 
+`runtime.state` payloads must use this shape:
+
+```json
+{
+  "runtimeReady": true,
+  "webviewReady": true,
+  "loadedUrl": "http://127.0.0.1:5173/__nativite_test__",
+  "webviewCount": 1,
+  "activeDocumentId": "doc-01JVVH92B7R9Y7M5GSPY4CK4ZX",
+  "nativeState": {
+    "foreground": true,
+    "orientation": "portrait",
+    "appearance": "light"
+  }
+}
+```
+
+`runtimeReady` reports whether the mandatory `runtime.ready` event has been
+emitted for the active session. `webviewReady` reports whether the current
+top-level document has emitted `webview.ready`. `loadedUrl` is the current
+top-level WebView URL or `null` before any top-level URL is known.
+`webviewCount` is the number of live WebViews owned by the active app session,
+including child WebViews. `activeDocumentId` is the current top-level
+`documentId` or `null` before `webview.ready`. `nativeState` is an object with
+stable cross-platform keys only; unsupported keys must be omitted rather than
+sent as platform-specific aliases. The defined keys are `foreground` as a
+boolean, `orientation` as `portrait`, `landscape`, or `unknown`, and
+`appearance` as `light`, `dark`, or `unknown`.
+
 ## Timeouts And Cancellation
 
 The coordinator owns command deadlines. Each command may include
@@ -413,6 +442,15 @@ observe cancellation when the platform API supports it. If the platform cannot
 cancel the underlying operation, the harness must stop sending the result to the
 coordinator and should emit a `log.entry` explaining that platform cancellation
 is best-effort.
+
+`command.cancel` is a control message and never receives its own
+`command.cancel.result` response. The coordinator must settle the original
+command by sending `<original command>.error` on the original `requestId` with
+code `CANCELLED` as soon as cancellation is accepted. The JavaScript helper must
+reject the original command promise from that `CANCELLED` error and must not wait
+for a later harness acknowledgement. If the original command has already reached
+a terminal result or error, the coordinator must ignore the late
+`command.cancel` message.
 
 Timed-out commands are cancelled by the coordinator after the timeout response
 is recorded. If the harness later finishes the underlying operation, the
