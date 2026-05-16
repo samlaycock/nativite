@@ -298,15 +298,15 @@ integration dependencies explicit in app test code.
 Harness events stream from native to the coordinator and may be exposed to the
 test runner as diagnostics.
 
-| Event              | Payload                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------- |
-| `runtime.ready`    | Platform metadata, app id, runtime version, protocol version, and device identifier.    |
-| `webview.ready`    | Loaded test URL, document id, and timestamp from the WebView test runtime.              |
-| `runtime.state`    | Latest known readiness, loaded URL, WebView count, and selected native state summaries. |
-| `log.entry`        | Native log level, subsystem/category when available, message, and timestamp.            |
-| `artifact.created` | Artifact kind, path or URL, MIME type, byte size, and optional test id.                 |
-| `protocol.error`   | Non-command-scoped protocol error with stable error code and redacted details.          |
-| `session.state`    | `starting`, `ready`, `complete`, `failed`, `timed_out`, or `disconnected`.              |
+| Event              | Payload                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `runtime.ready`    | Platform metadata, app id, runtime version, protocol version, and device identifier.      |
+| `webview.ready`    | Loaded test URL, document id, and timestamp from the WebView test runtime.                |
+| `runtime.state`    | Latest known readiness, loaded URL, WebView count, and selected native state summaries.   |
+| `log.entry`        | Native log level, subsystem/category when available, message, and timestamp.              |
+| `artifact.created` | Artifact kind, path or URL, MIME type, byte size, and optional test id.                   |
+| `protocol.error`   | Non-command-scoped protocol error with stable error code and redacted details.            |
+| `session.state`    | One of the coordinator-owned states from [Session State Machine](#session-state-machine). |
 
 Events must include `sessionId`, protocol version, timestamp, and type. Events
 that are caused by a specific command should also include that command's
