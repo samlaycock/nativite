@@ -161,9 +161,8 @@ of reaching a harness owned by a newer test run.
 ```
 
 The successful coordinator response includes the negotiated capability set,
-default command timeout, maximum payload size, and optional artifact upload
-policy. Rejected registrations use `harness.register.error`, not
-`harness.register.result`.
+default command timeout, and maximum payload size. Rejected registrations use
+`harness.register.error`, not `harness.register.result`.
 
 ```json
 {
@@ -336,18 +335,18 @@ integration dependencies explicit in app test code.
 
 ## Events
 
-Harness events stream from native to the coordinator and may be exposed to the
-test runner as diagnostics.
+Protocol events may be emitted by the native harness or the coordinator and may
+be exposed to the test runner as diagnostics.
 
-| Event              | Payload                                                                                   |
-| ------------------ | ----------------------------------------------------------------------------------------- |
-| `runtime.ready`    | Platform metadata, app id, runtime version, protocol version, and device identifier.      |
-| `webview.ready`    | Loaded test URL, document id, and timestamp from the WebView test runtime.                |
-| `runtime.state`    | Latest known readiness, loaded URL, WebView count, and selected native state summaries.   |
-| `log.entry`        | Native log level, subsystem/category when available, message, and timestamp.              |
-| `artifact.created` | Artifact kind, path or URL, MIME type, byte size, and optional test id.                   |
-| `protocol.error`   | Non-command-scoped protocol error with stable error code and redacted details.            |
-| `session.state`    | One of the coordinator-owned states from [Session State Machine](#session-state-machine). |
+| Event              | Emitter             | Payload                                                                                   |
+| ------------------ | ------------------- | ----------------------------------------------------------------------------------------- |
+| `runtime.ready`    | Native harness      | Platform metadata, app id, runtime version, protocol version, and device identifier.      |
+| `webview.ready`    | Native harness      | Loaded test URL, document id, and timestamp from the WebView test runtime.                |
+| `runtime.state`    | Native harness      | Latest known readiness, loaded URL, WebView count, and selected native state summaries.   |
+| `log.entry`        | Native harness      | Native log level, subsystem/category when available, message, and timestamp.              |
+| `artifact.created` | Native harness      | Artifact kind, path or URL, MIME type, byte size, and optional test id.                   |
+| `protocol.error`   | Harness/coordinator | Non-command-scoped protocol error with stable error code and redacted details.            |
+| `session.state`    | Coordinator         | One of the coordinator-owned states from [Session State Machine](#session-state-machine). |
 
 Events must include `sessionId`, protocol version, timestamp, and type. Events
 that are caused by a specific command should also include that command's
