@@ -119,10 +119,14 @@ Commands that require the WebView runtime must fail with `WEBVIEW_NOT_READY`
 before `ready`. Coordinator-only inspection commands may run in `registered` or
 `webview_loading` if they do not require WebView state.
 
-A session is superseded only by coordinator action. Starting a newer session for
-the same app id, device id, and test URL invalidates older non-terminal sessions
-so stale helper calls fail with `STALE_SESSION` instead of reaching a harness
-owned by a newer test run.
+A session is superseded only by coordinator action. Before registration, the
+coordinator matches `starting` sessions by launch identity: the generated test
+configuration id, coordinator endpoint, requested platform, and test URL it
+gave to the native launcher. After registration, the coordinator matches
+sessions by harness identity: app id, device id, and test URL from
+`harness.register`. Starting a newer matching session invalidates older
+non-terminal sessions so stale helper calls fail with `STALE_SESSION` instead
+of reaching a harness owned by a newer test run.
 
 ## Harness Registration
 
@@ -150,8 +154,10 @@ owned by a newer test run.
 }
 ```
 
-The coordinator response includes the negotiated capability set, default command
-timeout, maximum payload size, and optional artifact upload policy.
+The successful coordinator response includes the negotiated capability set,
+default command timeout, maximum payload size, and optional artifact upload
+policy. Rejected registrations use `harness.register.error`, not
+`harness.register.result`.
 
 ```json
 {
@@ -162,7 +168,6 @@ timeout, maximum payload size, and optional artifact upload policy.
   "timestamp": "2026-05-15T09:00:00.030Z",
   "type": "harness.register.result",
   "payload": {
-    "accepted": true,
     "capabilities": ["chrome.snapshot.read", "screenshot.capture"],
     "defaultTimeoutMs": 5000,
     "maxPayloadBytes": 1048576
