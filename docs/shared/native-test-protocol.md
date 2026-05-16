@@ -76,24 +76,28 @@ characters.
    `harness.register` with token-authenticated metadata.
 4. The coordinator validates the token, protocol version, and active session,
    then replies with accepted capabilities and coordinator limits.
-5. The native harness loads the WebView test URL and streams startup events,
-   logs, native readiness, protocol errors, and runtime state changes.
-6. After the test bundle loads, the WebView runtime signals readiness through
+5. After `harness.register.result`, the native harness emits a `runtime.ready`
+   event once native runtime metadata and the debug/test harness are ready to
+   service coordinator commands. This event is mandatory for protocol version
+   `1` and is not gated by the `runtime.ready` capability.
+6. The native harness loads the WebView test URL and streams startup events,
+   logs, protocol errors, and runtime state changes.
+7. After the test bundle loads, the WebView runtime signals readiness through
    the existing Nativite runtime path and the harness sends a `webview.ready`
    event. If the WebView runtime was already ready when registration succeeded,
    the harness sends `webview.ready` immediately after
    `harness.register.result`; readiness is never embedded in
    `harness.register`.
-7. Tests call `nativeHarness` helpers from `nativite/test`. The helper posts a
+8. Tests call `nativeHarness` helpers from `nativite/test`. The helper posts a
    coordinator command to `NATIVITE_COORDINATOR_URL` or the explicit endpoint
    passed for that command.
-8. The coordinator validates the JavaScript request, applies timeout and
+9. The coordinator validates the JavaScript request, applies timeout and
    cancellation policy, routes the command to the active harness, and returns a
    structured response.
-9. The harness streams readiness changes, logs, screenshots, artifacts,
-   protocol errors, and runtime state updates until the coordinator marks the
-   session `complete`, `failed`, `timed_out`, or `disconnected`.
-10. The coordinator tears down owned sockets, temporary artifacts, and native
+10. The harness streams readiness changes, logs, screenshots, artifacts,
+    protocol errors, and runtime state updates until the coordinator marks the
+    session `complete`, `failed`, `timed_out`, or `disconnected`.
+11. The coordinator tears down owned sockets, temporary artifacts, and native
     process handles after the terminal session state is recorded.
 
 Startup ordering is intentionally tolerant: the coordinator may accept
@@ -111,7 +115,7 @@ only the coordinator decides when a session is terminal.
 | `starting`        | The coordinator has created the token and endpoint.                                     | `registered`, `failed`, `timed_out`, `superseded`                               |
 | `registered`      | `harness.register` succeeds.                                                            | `webview_loading`, `ready`, `failed`, `timed_out`, `disconnected`, `superseded` |
 | `webview_loading` | The harness has launched or reloaded the test URL.                                      | `ready`, `failed`, `timed_out`, `disconnected`, `superseded`                    |
-| `ready`           | Native readiness and `webview.ready` have both been observed.                           | `complete`, `failed`, `timed_out`, `disconnected`, `superseded`                 |
+| `ready`           | Mandatory `runtime.ready` and `webview.ready` events have both been observed.           | `complete`, `failed`, `timed_out`, `disconnected`, `superseded`                 |
 | `complete`        | The test runner reports completion and all required artifacts are collected.            | Terminal                                                                        |
 | `failed`          | A command, harness startup, or test run fails permanently.                              | Terminal                                                                        |
 | `timed_out`       | A startup, command, or session deadline expires.                                        | Terminal                                                                        |
@@ -208,9 +212,12 @@ release may add new optional capability strings without changing the protocol
 version. Removing, renaming, or changing required fields requires a new protocol
 version.
 
-`webview.ready` is a mandatory lifecycle event, not a negotiated capability.
-Harnesses must emit it when the WebView test runtime is ready whenever they
-successfully register for protocol version `1`.
+`runtime.ready` and `webview.ready` are mandatory lifecycle events, not
+negotiated capabilities. Harnesses must emit both after successful registration
+for protocol version `1`. The `runtime.ready` capability only gates
+`runtime.metadata.get` and `runtime.capabilities.get`; it does not control
+whether the event is emitted or whether the coordinator can observe native
+readiness for the session state machine.
 
 ## Commands
 
