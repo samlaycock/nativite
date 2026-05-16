@@ -366,6 +366,32 @@ Events must include `sessionId`, protocol version, timestamp, and type. Events
 that are caused by a specific command should also include that command's
 `requestId`.
 
+`runtime.ready` payloads must use this shape:
+
+```json
+{
+  "appId": "com.example.app",
+  "runtimeVersion": "0.1.0",
+  "protocolVersion": 1,
+  "platform": "ios",
+  "deviceId": "booted-simulator-uuid",
+  "deviceName": "iPhone 17",
+  "nativeRuntime": {
+    "osVersion": "26.0",
+    "appBuild": "42",
+    "debugHarness": true
+  }
+}
+```
+
+`appId`, `runtimeVersion`, `protocolVersion`, `platform`, `deviceId`, and
+`deviceName` must match the accepted `harness.register` payload for the active
+session. `platform` uses the same stable platform id values as configuration
+and registration, such as `ios`, `macos`, and `android`. `nativeRuntime` is a
+JSON object for optional diagnostics; implementations may omit unknown keys, but
+when present `osVersion`, `appBuild`, and `debugHarness` must use the field
+names and types shown above.
+
 `webview.ready` payloads must use this shape:
 
 ```json
