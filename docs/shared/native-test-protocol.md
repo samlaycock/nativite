@@ -438,6 +438,50 @@ sent as platform-specific aliases. The defined keys are `foreground` as a
 boolean, `orientation` as `portrait`, `landscape`, or `unknown`, and
 `appearance` as `light`, `dark`, or `unknown`.
 
+`log.entry` payloads must use this shape:
+
+```json
+{
+  "level": "info",
+  "message": "Chrome snapshot accepted",
+  "timestamp": "2026-05-15T09:00:01.300Z",
+  "subsystem": "com.example.app",
+  "category": "nativite",
+  "source": "native"
+}
+```
+
+`level` must be one of `debug`, `info`, `warn`, `error`, or `fatal`. `message`
+is the redacted human-readable log text. `timestamp` is when the native log was
+observed, not when the coordinator forwarded it. `subsystem` and `category` are
+optional strings; iOS and macOS should map `os_log` subsystem and category
+directly, while Android should set `subsystem` to the package or app id and
+`category` to the Android log tag. `source` identifies the producer and must be
+one of `native`, `webview`, `coordinator`, or `test-runner`.
+
+`artifact.created` payloads must use this shape:
+
+```json
+{
+  "artifactId": "artifact-01JVVH9C2V8T4P0A6A1R2Q9M4N",
+  "kind": "screenshot",
+  "path": "/tmp/nativite/session-7a83/screenshot.png",
+  "url": null,
+  "mimeType": "image/png",
+  "byteSize": 184233,
+  "testId": "renders-home-screen"
+}
+```
+
+`artifactId` is unique within the active session. `kind` must be one of
+`screenshot`, `view-tree`, `log`, `video`, or `diagnostic`. Exactly one of
+`path` or `url` must be a string and the other must be `null`; `path` is a
+coordinator-readable local path and `url` is a coordinator-readable remote URL.
+`mimeType` uses standard MIME type strings. `byteSize` is the artifact byte
+length when known, or `null` if the backing store cannot report it cheaply.
+`testId` is the test runner id associated with the artifact, or `null` when the
+artifact is session-scoped rather than test-scoped.
+
 ## Timeouts And Cancellation
 
 The coordinator owns command deadlines. Each command may include
