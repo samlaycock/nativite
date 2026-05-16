@@ -119,6 +119,12 @@ Commands that require the WebView runtime must fail with `WEBVIEW_NOT_READY`
 before `ready`. Coordinator-only inspection commands may run in `registered` or
 `webview_loading` if they do not require WebView state.
 
+The `registered -> ready` transition is allowed only when the harness registers
+after the WebView test runtime has already loaded and can include or immediately
+stream `webview.ready`. Otherwise the coordinator must enter
+`webview_loading` after registration and wait for the explicit `webview.ready`
+event before marking the session `ready`.
+
 A session is superseded only by coordinator action. Before registration, the
 coordinator matches `starting` sessions by launch identity: the generated test
 configuration id, coordinator endpoint, requested platform, and test URL it
@@ -226,14 +232,13 @@ Each command payload may include these coordinator-handled fields:
 ```ts
 interface TestCommandOptions {
   readonly timeoutMs?: number;
-  readonly signalId?: string;
 }
 ```
 
-`timeoutMs` overrides the coordinator default for that command. `signalId`
-allows the JavaScript helper to map an `AbortSignal` to a later
-`command.cancel` message without exposing platform-specific cancellation
-handles.
+`timeoutMs` overrides the coordinator default for that command. Cancellation is
+wire-identified only by the command `requestId`; any JavaScript `AbortSignal`
+bookkeeping is helper-local and must not introduce a separate protocol
+identifier.
 
 Commands with helper-level options use these payload extensions:
 
@@ -355,7 +360,9 @@ The coordinator owns command deadlines. Each command may include
 coordinator must reject timeouts with `TIMEOUT` and mark whether the native side
 may still finish later.
 
-Cancellation uses a separate command-scoped message:
+Cancellation uses a separate command-scoped message. The `requestId` on
+`command.cancel` is the `requestId` of the command being cancelled, not a new
+request id and not a helper-local signal id.
 
 ```json
 {
