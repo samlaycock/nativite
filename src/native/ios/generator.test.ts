@@ -117,4 +117,27 @@ export default defineBackgroundTask({
     );
     expect(swift).toContain('static let webEngine: String = "system"');
   });
+
+  it("writes native test harness configuration inputs", async () => {
+    const cwd = makeTempDir();
+
+    await generateProject(baseConfig, cwd);
+
+    const swift = readFileSync(
+      join(cwd, ".nativite", "ios", "TestApp", "NativiteConfig.swift"),
+      "utf-8",
+    );
+    expect(swift).toContain(
+      'static let testHarnessEnabled: Bool = ProcessInfo.processInfo.environment["NATIVITE_TEST_HARNESS"] == "1"',
+    );
+    expect(swift).toContain(
+      'static let testURL: String = ProcessInfo.processInfo.environment["NATIVITE_TEST_URL"] ?? ""',
+    );
+    expect(swift).toContain(
+      'static let testCoordinatorURL: String = ProcessInfo.processInfo.environment["NATIVITE_COORDINATOR_URL"] ?? ""',
+    );
+    expect(swift).toContain(
+      'static let testSessionToken: String = ProcessInfo.processInfo.environment["NATIVITE_TEST_SESSION_TOKEN"] ?? ""',
+    );
+  });
 });

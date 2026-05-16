@@ -45,6 +45,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Background Tasks](./shared/background-tasks.md) — JavaScript task authoring API and manifest model
 - [JavaScript Test Utilities](./shared/test-utilities.md) — `nativite/test` local stub host and native harness helpers
 - [Native Test Protocol](./shared/native-test-protocol.md) — Debug-only coordinator/harness protocol for native-aware tests
+- [Native Test Harness](./shared/native-test-harness.md) — Generated iOS, macOS, and Android debug harness configuration
 - [Contacts Plugin](./shared/contacts-plugin.md) — First-party native address-book plugin API and platform behavior
 - [Calendar Plugin](./shared/calendar-plugin.md) — First-party native calendar, event, and reminder plugin API
 - [Notifications Plugin](./shared/notifications-plugin.md) — First-party native local notifications plugin API and platform behavior

@@ -114,6 +114,7 @@ fun createNativiteWebView(
             // Attach the bridge port after page load
             bridge.attachWebView(view, instanceName)
             if (instanceName == "main") {
+                NativiteTestHarness.webViewReady(url)
                 val shellReady = org.json.JSONObject().apply {
                     put("nativite", 2)
                     put("type", "shell.ready")
@@ -245,6 +246,10 @@ fun NativiteWebView(
             val (loadUrl, spaRoute) = resolveChildUrl(context, url)
             webView.tag = spaRoute
             webView.loadUrl(loadUrl, NATIVITE_REQUEST_HEADERS)
+        } else if (NativiteTestHarness.testUrl != null) {
+            webView.tag = null
+            webView.loadUrl(NativiteTestHarness.testUrl!!, NATIVITE_REQUEST_HEADERS)
+            NativiteTestHarness.register(context)
         } else {
             webView.tag = null
             webView.loadUrl(resolveContentUrl(context), NATIVITE_REQUEST_HEADERS)
@@ -290,7 +295,7 @@ private fun normalizeAndroidDevUrl(devUrl: String): String {
 }
 
 private fun resolveContentUrl(context: Context): String {
-    return getDevUrl(context) ?: PRODUCTION_BASE_URL
+    return NativiteTestHarness.testUrl ?: getDevUrl(context) ?: PRODUCTION_BASE_URL
 }
 
 private fun resolveChildUrl(context: Context, rawUrl: String): Pair<String, String?> {

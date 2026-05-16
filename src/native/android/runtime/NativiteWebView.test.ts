@@ -73,6 +73,14 @@ describe("NativiteWebView.kt", () => {
     expect(kt).toContain("normalizeAndroidDevUrl(devUrl)");
   });
 
+  it("loads the native test harness URL before dev or production content", () => {
+    expect(kt.indexOf("NativiteTestHarness.testUrl")).toBeLessThan(
+      kt.indexOf("getDevUrl(context)"),
+    );
+    expect(kt).toContain("NativiteTestHarness.register(context)");
+    expect(kt).toContain("NativiteTestHarness.webViewReady(url)");
+  });
+
   it("sends an explicit native platform header on WebView URL loads", () => {
     expect(kt).toContain(
       'private val NATIVITE_REQUEST_HEADERS = mapOf("x-nativite-platform" to "android")',

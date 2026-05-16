@@ -120,7 +120,17 @@ function writeGeneratedConfig(packageDir: string): void {
     static let otaSigningPublicKey: String = ""
     static let otaAllowInsecureHTTP: Bool = false
     static let appVersion: String = "1.0.0"
+    static let webEngine: String = "system"
     static let defaultChromeStateJSON: String? = nil
+    static let testHarnessEnabled: Bool = false
+    static let testURL: String = ""
+    static let testCoordinatorURL: String = ""
+    static let testSessionToken: String = ""
+    static let testSessionId: String = "local"
+    static let testTargetId: String = ""
+    static let testLaunchTimeoutMs: Int = 60000
+    static let testWebViewReadyTimeoutMs: Int = 30000
+    static let testCoordinatorTimeoutMs: Int = 5000
 }
 `,
   );

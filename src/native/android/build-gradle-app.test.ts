@@ -120,6 +120,26 @@ describe("buildGradleAppTemplate", () => {
     expect(output).toContain("dependsOn(deleteNativiteDevMetadata)");
   });
 
+  it("gates native test harness settings to debug builds", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
+
+    expect(output).toContain('buildConfigField("Boolean", "NATIVITE_TEST_HARNESS", "true")');
+    expect(output).toContain(
+      'buildConfigField("String", "NATIVITE_TEST_URL", nativiteBuildConfigString("nativiteTestUrl"))',
+    );
+    expect(output).toContain(
+      'buildConfigField("String", "NATIVITE_COORDINATOR_URL", nativiteBuildConfigString("nativiteCoordinatorUrl"))',
+    );
+    expect(output).toContain(
+      'buildConfigField("String", "NATIVITE_TEST_SESSION_TOKEN", nativiteBuildConfigString("nativiteTestSessionToken"))',
+    );
+    expect(output).toContain(
+      'buildConfigField("int", "NATIVITE_TEST_LAUNCH_TIMEOUT_MS", nativiteBuildConfigInt("nativiteTestLaunchTimeoutMs", "60000"))',
+    );
+    expect(output).toContain('buildConfigField("Boolean", "NATIVITE_TEST_HARNESS", "false")');
+    expect(output).toContain('buildConfigField("String", "NATIVITE_TEST_URL", "\\"\\"")');
+  });
+
   it("includes Android plugin source dirs, resource dirs, and Gradle dependencies", () => {
     const output = buildGradleAppTemplate(androidConfig, 26, 36, {
       sourceDirs: ["/tmp/plugin/java"],

@@ -61,6 +61,15 @@ android {
 
     defaultConfig {
         minSdk = 26
+        buildConfigField("Boolean", "NATIVITE_TEST_HARNESS", "false")
+        buildConfigField("String", "NATIVITE_TEST_URL", "\\"\\"")
+        buildConfigField("String", "NATIVITE_COORDINATOR_URL", "\\"\\"")
+        buildConfigField("String", "NATIVITE_TEST_SESSION_TOKEN", "\\"\\"")
+        buildConfigField("String", "NATIVITE_TEST_SESSION_ID", "\\"local\\"")
+        buildConfigField("String", "NATIVITE_TEST_TARGET_ID", "\\"\\"")
+        buildConfigField("int", "NATIVITE_TEST_LAUNCH_TIMEOUT_MS", "60000")
+        buildConfigField("int", "NATIVITE_TEST_WEBVIEW_READY_TIMEOUT_MS", "30000")
+        buildConfigField("int", "NATIVITE_COORDINATOR_TIMEOUT_MS", "5000")
     }
 
     compileOptions {
