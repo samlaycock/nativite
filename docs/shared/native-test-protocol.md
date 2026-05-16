@@ -54,6 +54,10 @@ interface TestProtocolError {
 required for commands, responses, cancellations, and command-scoped progress
 events. Event-only messages may omit it.
 
+Command responses use the same `requestId` as the command and change only the
+`type` suffix. A successful response uses `<command>.result`. A failed response
+uses `<command>.error` and includes `error`.
+
 The session token is required during harness registration and for every
 privileged command that reaches the native harness. Coordinators and harnesses
 must redact token values in normal logs and failure output. A useful redaction
@@ -93,6 +97,26 @@ Startup ordering is intentionally tolerant: the coordinator may accept
 `nativeHarness` helper calls before the harness finishes connecting, but it must
 fail clearly if the harness does not register before the configured startup
 timeout.
+
+## Session State Machine
+
+The coordinator owns the session state. Harnesses report observed state, but
+only the coordinator decides when a session is terminal.
+
+| State             | Entered when                                                                 | Allowed next states                                               |
+| ----------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `starting`        | The coordinator has created the token and endpoint.                          | `registered`, `failed`, `timed_out`                               |
+| `registered`      | `harness.register` succeeds.                                                 | `webview_loading`, `ready`, `failed`, `timed_out`, `disconnected` |
+| `webview_loading` | The harness has launched or reloaded the test URL.                           | `ready`, `failed`, `timed_out`, `disconnected`                    |
+| `ready`           | Native readiness and `webview.ready` have both been observed.                | `complete`, `failed`, `timed_out`, `disconnected`                 |
+| `complete`        | The test runner reports completion and all required artifacts are collected. | Terminal                                                          |
+| `failed`          | A command, harness startup, or test run fails permanently.                   | Terminal                                                          |
+| `timed_out`       | A startup, command, or session deadline expires.                             | Terminal                                                          |
+| `disconnected`    | The active harness connection closes before terminal completion.             | Terminal                                                          |
+
+Commands that require the WebView runtime must fail with `WEBVIEW_NOT_READY`
+before `ready`. Coordinator-only inspection commands may run in `registered` or
+`webview_loading` if they do not require WebView state.
 
 ## Harness Registration
 
@@ -186,6 +210,38 @@ rather than inline base64 when possible.
 | `nativeHarness.viewTree(options)`      | `viewTree.get`             | `viewTree.read`            |
 | `nativeHarness.screenshot(options)`    | `screenshot.capture`       | `screenshot.capture`       |
 
+Each command payload may include these coordinator-handled fields:
+
+```ts
+interface TestCommandOptions {
+  readonly timeoutMs?: number;
+  readonly signalId?: string;
+}
+```
+
+`timeoutMs` overrides the coordinator default for that command. `signalId`
+allows the JavaScript helper to map an `AbortSignal` to a later
+`command.cancel` message without exposing platform-specific cancellation
+handles.
+
+Command responses must be stable enough for tests to assert on. Native
+diagnostics that are useful for failures but unstable across OS versions should
+be returned under `diagnostics` rather than mixed into primary result fields.
+
+| Native command             | Result payload                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| `runtime.metadata.get`     | Harness metadata from registration plus current session state.                       |
+| `runtime.capabilities.get` | Negotiated capability strings and protocol version.                                  |
+| `chrome.snapshot.get`      | Latest validated NCLP `chrome.snapshot`, or `null` when native has not accepted one. |
+| `chrome.areas.get`         | Chrome capability areas from the latest accepted `shell.ready`.                      |
+| `bridge.event.emit`        | `{ "delivered": true }` after the event is injected into the WebView runtime.        |
+| `chrome.event.emit`        | `{ "delivered": true }` after the NCLP event is injected into the WebView runtime.   |
+| `geometry.get`             | Safe area, keyboard, viewport, and rendered chrome geometry values in CSS pixels.    |
+| `geometry.setSynthetic`    | Applied synthetic geometry values and the previous synthetic override state.         |
+| `logs.get`                 | Ordered log entries scoped to the active session.                                    |
+| `viewTree.get`             | Platform, capture timestamp, and a best-effort native view tree.                     |
+| `screenshot.capture`       | Artifact metadata for the captured image.                                            |
+
 `bridge.event.emit` reuses the existing native-to-JavaScript event delivery
 shape accepted by `bridge.subscribe()` and `chrome.on()`.
 
@@ -220,6 +276,22 @@ full NCLP node ids when they refer to chrome nodes.
 `chrome.snapshot.get` returns the latest validated snapshot accepted by native,
 not the JavaScript runtime's last attempted send. This distinction matters when
 native rejects malformed, oversized, stale, or unsupported-area snapshots.
+
+## JavaScript Helper Contract
+
+Coordinator-backed helpers in `nativite/test` must remain grouped under
+`nativeHarness`. The helper implementation should:
+
+- Read `NATIVITE_COORDINATOR_URL` by default and allow an explicit per-command
+  `endpoint` override.
+- Generate a unique `requestId` for each command.
+- Forward `timeoutMs` and `AbortSignal` cancellation intent to the coordinator.
+- Reject with structured errors that preserve the protocol `code`.
+- Never fall back to the local stub host when a coordinator-backed command
+  fails.
+
+This separation keeps fast browser-mode tests deterministic while making native
+integration dependencies explicit in app test code.
 
 ## Events
 
@@ -268,6 +340,11 @@ observe cancellation when the platform API supports it. If the platform cannot
 cancel the underlying operation, the harness must stop sending the result to the
 coordinator and should emit a `log.entry` explaining that platform cancellation
 is best-effort.
+
+Timed-out commands are cancelled by the coordinator after the timeout response
+is recorded. If the harness later finishes the underlying operation, the
+coordinator must ignore the stale result and may retain it only as a diagnostic
+artifact linked to the original `requestId`.
 
 ## Error Codes
 
@@ -334,6 +411,10 @@ The WebView-facing JavaScript namespace, if injected, should be named
 privileged operations still route through the coordinator-backed
 `nativeHarness` surface rather than arbitrary page scripts.
 
+Harnesses must reject commands when the supplied test URL does not match the
+URL registered for the active session. This prevents a stale or navigated
+WebView from reusing a valid harness connection for a different page.
+
 ## Platform Implementation Requirements
 
 iOS and macOS harnesses should be generated behind Swift debug/test build flags.
@@ -342,12 +423,20 @@ The harness can observe the existing `NativiteBridge`, the latest accepted NCLP
 geometry, chrome geometry, and WebView lifecycle. Screenshot capture should use
 platform view rendering APIs and return artifacts through the coordinator.
 
+The iOS/macOS harness should be owned outside production bridge namespaces. It
+may subscribe to bridge and chrome state internally, but it should not register
+production-callable plugin handlers to expose test commands.
+
 Android harnesses should be generated behind debug/test source sets or build
 flags. The harness can observe the existing `NativiteBridge`, the latest
 accepted NCLP `chrome.snapshot`, `shell.ready` capability areas, Compose chrome
 geometry, safe area and keyboard variables, WebView lifecycle, and logs scoped
 to the test session. Emulator coordinator URLs must account for `10.0.2.2`
 where needed.
+
+The Android harness should live outside release source sets and should avoid
+adding test commands to the production `WebMessagePort` handler registry. It may
+observe the registry and Compose state to answer protocol commands.
 
 All platforms should keep the protocol implementation separate from production
 plugin handlers. Existing bridge and NCLP concepts are reused for state and
