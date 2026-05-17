@@ -128,7 +128,8 @@ bunx nativite test --platform ios --device "iPhone 16"
 bunx nativite test --platform android --device emulator-5554
 ```
 
-Native-aware tests can use coordinator-backed commands from `nativite/test`:
+Native-aware tests can use authenticated coordinator-backed commands from
+`nativite/test`:
 
 ```ts
 import { expect, it } from "vitest";
@@ -143,13 +144,21 @@ it("reads native geometry and captures failure artifacts", async () => {
   await expect(nativeHarness.latestSnapshot()).resolves.toMatchObject({
     type: "chrome.snapshot",
   });
+
+  const safeArea = await nativeHarness.geometry("safeArea");
+  const screenshot = await nativeHarness.screenshot("after-save");
+
+  expect(safeArea).toBeDefined();
+  expect(screenshot.path).toContain(".nativite");
 });
 ```
 
-When running through the provider commands context, tests can also read safe
-area or keyboard geometry with `geometry("safeArea")` and `geometry("keyboard")`,
-capture screenshots with `screenshot("after-keyboard-open")`, and inspect native
-logs with `nativeLogs()`. Configure `--artifacts-dir <path>` or
+`nativeHarness` reads `NATIVITE_COORDINATOR_URL`, `NATIVITE_TEST_SESSION_ID`, and
+`NATIVITE_TEST_SESSION_TOKEN` from the provider environment. Tests can read safe
+area or keyboard geometry with `nativeHarness.geometry("safeArea")` and
+`nativeHarness.geometry("keyboard")`, capture screenshots with
+`nativeHarness.screenshot("after-keyboard-open")`, and inspect native logs with
+`nativeHarness.nativeLogs()`. Configure `--artifacts-dir <path>` or
 `NATIVITE_TEST_ARTIFACTS_DIR` when CI needs predictable screenshot and log
 locations.
 

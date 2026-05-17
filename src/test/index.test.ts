@@ -8,6 +8,11 @@ const { bridge } = await import("../client/index.ts");
 const { chrome, titleBar } = await import("../chrome/public.ts");
 const { chromeHarness, nativeHarness, nativeTest } = await import("./index.ts");
 
+function parseRequestBody(body: BodyInit | null | undefined): unknown {
+  if (typeof body !== "string") throw new Error("Expected JSON string request body");
+  return JSON.parse(body);
+}
+
 afterEach(() => {
   nativeTest.reset();
 });
@@ -133,11 +138,75 @@ describe("nativeHarness", () => {
 
     await nativeHarness.latestSnapshot({
       endpoint: "http://127.0.0.1:17321",
+      sessionId: "session-1",
+      sessionToken: "secret-token",
       fetch: fetchImpl,
     });
 
     expect(requests).toHaveLength(1);
     expect((requests[0]![0] as URL).href).toBe("http://127.0.0.1:17321/commands/latest-snapshot");
+    expect(parseRequestBody(requests[0]![1]?.body)).toMatchObject({
+      protocol: "nativite.test",
+      version: 1,
+      sessionId: "session-1",
+      type: "latest-snapshot",
+      token: "secret-token",
+      payload: null,
+    });
     expect(nativeTest.bridge.calls()).toEqual([]);
+  });
+
+  it("routes geometry, screenshot, and native log commands through the authenticated coordinator path", async () => {
+    const commands: unknown[] = [];
+    const fetchImpl = Object.assign(
+      async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        commands.push(parseRequestBody(init?.body));
+        return Response.json({ path: ".nativite/test-artifacts/safe-area.png" });
+      },
+      { preconnect(): void {} },
+    );
+    const options = {
+      endpoint: "http://127.0.0.1:17321",
+      sessionId: "session-1",
+      sessionToken: "secret-token",
+      fetch: fetchImpl,
+    };
+
+    await nativeHarness.geometry("safeArea", options);
+    await nativeHarness.screenshot("safe-area", options);
+    await nativeHarness.nativeLogs(options);
+
+    expect(commands).toEqual([
+      expect.objectContaining({
+        type: "geometry",
+        token: "secret-token",
+        payload: { target: "safeArea" },
+      }),
+      expect.objectContaining({
+        type: "screenshot",
+        token: "secret-token",
+        payload: { name: "safe-area" },
+      }),
+      expect.objectContaining({
+        type: "native-logs",
+        token: "secret-token",
+        payload: null,
+      }),
+    ]);
+  });
+
+  it("requires a session token for coordinator-backed commands", async () => {
+    try {
+      await nativeHarness.latestSnapshot({
+        endpoint: "http://127.0.0.1:17321",
+        fetch: Object.assign(async (): Promise<Response> => Response.json({}), {
+          preconnect(): void {},
+        }),
+      });
+      throw new Error("Expected nativeHarness.latestSnapshot to fail without a session token");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain("Configure NATIVITE_TEST_SESSION_TOKEN");
+    }
   });
 });

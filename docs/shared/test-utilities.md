@@ -62,7 +62,8 @@ sessions.
 Use `nativeHarness` only for tests that intentionally run against a real native
 harness and local coordinator. These helpers do not use the local stub host.
 They post command requests to `NATIVITE_COORDINATOR_URL`, or to the `endpoint`
-passed per command.
+passed per command. Privileged commands include the per-run
+`NATIVITE_TEST_SESSION_TOKEN`, or the `sessionToken` passed per command.
 
 ```ts
 import { nativeHarness } from "nativite/test";
@@ -75,6 +76,11 @@ await nativeHarness.emitChromeEvent({
 expect(await nativeHarness.latestSnapshot()).toMatchObject({
   type: "chrome.snapshot",
 });
+
+const safeArea = await nativeHarness.geometry("safeArea");
+const keyboard = await nativeHarness.geometry("keyboard");
+const screenshot = await nativeHarness.screenshot("after-keyboard-open");
+const logs = await nativeHarness.nativeLogs();
 ```
 
 The coordinator-backed surface is intentionally grouped under `nativeHarness`
