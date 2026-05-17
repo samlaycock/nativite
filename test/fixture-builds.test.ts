@@ -298,6 +298,9 @@ describe("fixture app native builds", () => {
         'buildConfigField("Boolean", "NATIVITE_TEST_HARNESS", "false")',
       );
       expect(buildGradle).toContain('buildConfigField("String", "NATIVITE_TEST_URL", "\\"\\"")');
+      expect(buildGradle).toContain(
+        'buildConfigField("String", "NATIVITE_TEST_SESSION_TOKEN", "\\"\\"")',
+      );
       expect(harness).toContain("BuildConfig.DEBUG &&");
       expect(harness).toContain("BuildConfig.NATIVITE_TEST_SESSION_TOKEN.isNotBlank()");
     },

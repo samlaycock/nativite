@@ -222,9 +222,9 @@ simulator or emulator instability does not block the fast feedback loop. Upload
 This repository's default PR test workflow runs `bun test`, which includes fast
 fixture coverage for the `examples/testing-strategy` stub-host and native
 provider examples plus generated native harness configuration checks. The
-simulator/emulator runtime suites remain in the separate native workflow and can
-also be run manually with `bun run test:native:ios` or
-`bun run test:native:android`.
+simulator/emulator runtime suites remain in the separate path-filtered native
+workflow for PRs that touch native runtime code, and can also be run manually
+with `bun run test:native:ios` or `bun run test:native:android`.
 
 ## Troubleshooting
 
