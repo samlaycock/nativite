@@ -43,7 +43,7 @@ object NativiteTestHarness {
                 type = "harness.register",
                 payload = JSONObject().apply {
                     put("appId", context.packageName)
-                    put("runtimeVersion", "1.0.0")
+                    put("runtimeVersion", BuildConfig.VERSION_NAME)
                     put("protocolVersion", NATIVITE_TEST_PROTOCOL_VERSION)
                     put("platform", "android")
                     put("deviceId", Build.FINGERPRINT)

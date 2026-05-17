@@ -9,6 +9,7 @@ class ViewController: UIViewController {
   private let vars     = NativiteVars()
   private let keyboard = NativiteKeyboard()
   private let otaUpdater = OTAUpdater()
+  private var didReportTestWebViewReady = false
 
   // SwiftUI @Observable model — injected by NativiteViewControllerRepresentable.
   // NativiteChrome writes to this model; SwiftUI views observe it for sheets,
@@ -315,6 +316,12 @@ class ViewController: UIViewController {
     bridge
   }
 
+  private func reportTestWebViewReadyOnce() {
+    guard NativiteTestHarness.isEnabled, !didReportTestWebViewReady else { return }
+    didReportTestWebViewReady = true
+    NativiteTestHarness.webViewReady(url: webView.url)
+  }
+
 }
 
 // ─── UISearchResultsUpdating + UISearchBarDelegate ───────────────────────────
@@ -340,7 +347,7 @@ extension ViewController: WKNavigationDelegate {
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-    NativiteTestHarness.webViewReady(url: webView.url)
+    reportTestWebViewReadyOnce()
 
     if NativiteConfig.otaEnabled {
       otaUpdater.markLaunchSucceeded()
@@ -477,6 +484,7 @@ class ViewController: NSViewController {
   private let bridge = NativiteBridge()
   private let vars   = NativiteVars()
   private let otaUpdater = OTAUpdater()
+  private var didReportTestWebViewReady = false
 
   // SwiftUI @Observable model — injected by NativiteViewControllerRepresentable.
   var chromeState: NativiteChromeState?
@@ -721,6 +729,12 @@ class ViewController: NSViewController {
   func nativiteBridgeHandler() -> NativiteBridge {
     bridge
   }
+
+  private func reportTestWebViewReadyOnce() {
+    guard NativiteTestHarness.isEnabled, !didReportTestWebViewReady else { return }
+    didReportTestWebViewReady = true
+    NativiteTestHarness.webViewReady(url: webView.url)
+  }
 }
 
 extension ViewController: WKNavigationDelegate {
@@ -743,6 +757,8 @@ extension ViewController: WKNavigationDelegate {
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    reportTestWebViewReadyOnce()
+
     if NativiteConfig.otaEnabled {
       otaUpdater.markLaunchSucceeded()
     }

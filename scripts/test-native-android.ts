@@ -62,6 +62,7 @@ android {
     defaultConfig {
         minSdk = 26
         buildConfigField("Boolean", "NATIVITE_TEST_HARNESS", "false")
+        buildConfigField("String", "VERSION_NAME", "\\"1.0.0\\"")
         buildConfigField("String", "NATIVITE_TEST_URL", "\\"\\"")
         buildConfigField("String", "NATIVITE_COORDINATOR_URL", "\\"\\"")
         buildConfigField("String", "NATIVITE_TEST_SESSION_TOKEN", "\\"\\"")

@@ -63,6 +63,16 @@ describe("ViewController.swift", () => {
     expect(swift).toContain("NativiteTestHarness.webViewReady(url: webView.url)");
   });
 
+  it("reports native test WebView readiness only once per harness run", () => {
+    expect(swift).toContain("private var didReportTestWebViewReady = false");
+    expect(swift).toContain("private func reportTestWebViewReadyOnce()");
+    expect(swift).toContain(
+      "guard NativiteTestHarness.isEnabled, !didReportTestWebViewReady else { return }",
+    );
+    expect(swift).toContain("didReportTestWebViewReady = true");
+    expect(swift.match(/reportTestWebViewReadyOnce\(\)/g)?.length).toBe(4);
+  });
+
   it("enables WKWebView inspection in DEBUG builds for Safari Develop tools", () => {
     expect(swift).toContain("if #available(iOS 16.4, *)");
     expect(swift).toContain("webView.isInspectable = true");

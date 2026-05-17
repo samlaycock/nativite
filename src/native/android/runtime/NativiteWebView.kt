@@ -59,6 +59,7 @@ fun createNativiteWebView(
 
     webView.webViewClient = object : WebViewClient() {
         var didReportLoadFailure = false
+        var didReportTestWebViewReady = false
 
         fun reportLoadFailure(message: String, code: Int) {
             if (didReportLoadFailure) return
@@ -114,7 +115,10 @@ fun createNativiteWebView(
             // Attach the bridge port after page load
             bridge.attachWebView(view, instanceName)
             if (instanceName == "main") {
-                NativiteTestHarness.webViewReady(url)
+                if (NativiteTestHarness.isEnabled && !didReportTestWebViewReady) {
+                    didReportTestWebViewReady = true
+                    NativiteTestHarness.webViewReady(url)
+                }
                 val shellReady = org.json.JSONObject().apply {
                     put("nativite", 2)
                     put("type", "shell.ready")
