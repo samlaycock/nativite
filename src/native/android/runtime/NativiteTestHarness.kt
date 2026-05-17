@@ -72,7 +72,7 @@ object NativiteTestHarness {
             postEvent(
                 type = "webview.ready",
                 payload = JSONObject().apply {
-                    put("url", url)
+                    put("url", url ?: "")
                 },
             )
         }

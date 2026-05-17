@@ -18,4 +18,9 @@ describe("NativiteTestHarness.kt", () => {
     expect(kt).toContain("finally {\n            connection.disconnect()");
     expect(kt).not.toContain("connection.inputStream.close()\n        connection.disconnect()");
   });
+
+  it("always includes a string url in webview ready payloads", () => {
+    expect(kt).toContain('put("url", url ?: "")');
+    expect(kt).not.toContain('put("url", url)\n');
+  });
 });
