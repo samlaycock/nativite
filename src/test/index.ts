@@ -66,7 +66,23 @@ export interface NativeTestChromeEventInput {
 
 export interface NativeHarnessOptions {
   readonly endpoint?: string;
+  readonly sessionId?: string;
+  readonly sessionToken?: string;
   readonly fetch?: typeof fetch;
+}
+
+export interface NativeTestArtifact {
+  readonly path: string;
+  readonly mimeType?: string;
+  readonly description?: string;
+}
+
+export interface NativeTestLogEntry {
+  readonly level: "debug" | "info" | "warn" | "error";
+  readonly message: string;
+  readonly timestamp?: string;
+  readonly subsystem?: string;
+  readonly category?: string;
 }
 
 const DEFAULT_AREAS: readonly ChromeCapabilityArea[] = [
@@ -324,9 +340,14 @@ async function postCoordinatorCommand<T>(
     readonly process?: { readonly env?: Record<string, string | undefined> };
   };
   const endpoint = options.endpoint ?? env.process?.env?.["NATIVITE_COORDINATOR_URL"];
+  const sessionId = options.sessionId ?? env.process?.env?.["NATIVITE_TEST_SESSION_ID"] ?? "local";
+  const sessionToken = options.sessionToken ?? env.process?.env?.["NATIVITE_TEST_SESSION_TOKEN"];
   const fetchImpl = options.fetch ?? globalThis.fetch;
   if (!endpoint) {
     throw new Error("Configure NATIVITE_COORDINATOR_URL or pass nativeHarness command options");
+  }
+  if (!sessionToken) {
+    throw new Error("Configure NATIVITE_TEST_SESSION_TOKEN or pass nativeHarness command options");
   }
   if (typeof fetchImpl !== "function") {
     throw new Error("nativeHarness requires a fetch implementation");
@@ -335,7 +356,16 @@ async function postCoordinatorCommand<T>(
   const response = await fetchImpl(new URL(`/commands/${command}`, endpoint), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload ?? null),
+    body: JSON.stringify({
+      protocol: "nativite.test",
+      version: 1,
+      sessionId,
+      requestId: `nativeHarness:${command}`,
+      timestamp: new Date().toISOString(),
+      type: command,
+      token: sessionToken,
+      payload: payload ?? null,
+    }),
   });
   if (!response.ok) {
     throw new Error(`nativeHarness command ${command} failed with HTTP ${response.status}`);
@@ -355,5 +385,14 @@ export const nativeHarness = {
   },
   latestSnapshot(options?: NativeHarnessOptions): Promise<NativeTestChromeSnapshot | undefined> {
     return postCoordinatorCommand("latest-snapshot", null, options);
+  },
+  geometry(target: string, options?: NativeHarnessOptions): Promise<unknown> {
+    return postCoordinatorCommand("geometry", { target }, options);
+  },
+  screenshot(name?: string, options?: NativeHarnessOptions): Promise<NativeTestArtifact> {
+    return postCoordinatorCommand("screenshot", { name }, options);
+  },
+  nativeLogs(options?: NativeHarnessOptions): Promise<readonly NativeTestLogEntry[]> {
+    return postCoordinatorCommand("native-logs", null, options);
   },
 } as const;
