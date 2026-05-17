@@ -98,11 +98,23 @@ object NativiteTestHarness {
             put("payload", payload)
         }
 
-        OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
-            writer.write(envelope.toString())
+        try {
+            OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
+                writer.write(envelope.toString())
+            }
+
+            val responseCode = connection.responseCode
+            if (responseCode in 200..299) {
+                connection.inputStream.close()
+            } else {
+                connection.errorStream?.close()
+                println("[NativiteTestHarness] Coordinator rejected $type with HTTP $responseCode.")
+            }
+        } catch (error: Exception) {
+            println("[NativiteTestHarness] Failed to send $type: ${error.message ?: error.javaClass.simpleName}.")
+        } finally {
+            connection.disconnect()
         }
-        connection.inputStream.close()
-        connection.disconnect()
     }
 
     private fun timeoutPayload(): JSONObject {
