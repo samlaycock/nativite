@@ -38,25 +38,16 @@ checks the minimum native tooling before invoking Vitest. iOS tests require
 macOS with `xcodebuild` and `xcrun`; Android tests require `adb` on `PATH`.
 
 Before launching Vitest, the command writes
-`.nativite/test/vitest.nativite.generated.mts`. This generated config merges the
-project's `vitest.config` with Browser Mode settings for the Nativite provider:
+`.nativite/test/vitest.nativite.generated.mts`. This generated config imports
+`nativite/vitest-browser-provider` and merges the project's `vitest.config` with
+Browser Mode settings for the Nativite provider:
 
 ```ts
 test: {
   browser: {
     enabled: true,
-    provider: "nativite",
-    providerOptions: {
-      nativite: {
-        platform: "ios",
-        testUrl: "http://127.0.0.1:5173/__nativite_test__",
-        coordinator: {
-          host: "127.0.0.1",
-          port: 17321,
-          endpoint: "http://127.0.0.1:17321/harness",
-        },
-      },
-    },
+    provider: nativite(nativiteProviderOptions),
+    instances: [{ browser: nativiteProviderOptions.device ?? nativiteProviderOptions.platform }],
   },
 }
 ```
@@ -112,4 +103,6 @@ assertion failures. The coordinator must redact session tokens in logs.
 
 See [Native Test Harness](./native-test-harness.md) and
 [Native Test Protocol](./native-test-protocol.md) for the generated native
-configuration and wire protocol details.
+configuration and wire protocol details. See
+[Vitest Browser Provider](./vitest-browser-provider.md) for the provider
+contract and commands context exposed to Browser Mode tests.
