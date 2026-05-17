@@ -11,6 +11,8 @@ private let nativiteTestCapabilities = [
 ]
 
 enum NativiteTestHarness {
+  private static let postQueue = DispatchQueue(label: "dev.nativite.test-harness")
+
   static var isEnabled: Bool {
     #if DEBUG
     return
@@ -36,45 +38,77 @@ enum NativiteTestHarness {
       return
     }
 
-    post(
-      type: "harness.register",
-      payload: [
-        "appId": Bundle.main.bundleIdentifier ?? "",
-        "runtimeVersion": NativiteConfig.appVersion,
-        "protocolVersion": nativiteTestProtocolVersion,
-        "platform": platform,
-        "deviceId": ProcessInfo.processInfo.hostName,
-        "deviceName": ProcessInfo.processInfo.hostName,
-        "targetId": NativiteConfig.testTargetId,
-        "testUrl": NativiteConfig.testURL,
-        "capabilities": nativiteTestCapabilities,
-        "timeouts": [
-          "launchMs": NativiteConfig.testLaunchTimeoutMs,
-          "webViewReadyMs": NativiteConfig.testWebViewReadyTimeoutMs,
-          "coordinatorMs": NativiteConfig.testCoordinatorTimeoutMs,
-        ],
-      ]
-    )
-    post(
-      type: "runtime.ready",
-      payload: [
-        "platform": platform,
-        "debug": true,
-        "appVersion": NativiteConfig.appVersion,
-      ]
-    )
+    postQueue.async {
+      postSynchronously(
+        type: "harness.register",
+        payload: [
+          "appId": Bundle.main.bundleIdentifier ?? "",
+          "runtimeVersion": NativiteConfig.appVersion,
+          "protocolVersion": nativiteTestProtocolVersion,
+          "platform": platform,
+          "deviceId": ProcessInfo.processInfo.hostName,
+          "deviceName": ProcessInfo.processInfo.hostName,
+          "targetId": NativiteConfig.testTargetId,
+          "testUrl": NativiteConfig.testURL,
+          "capabilities": nativiteTestCapabilities,
+          "timeouts": [
+            "launchMs": NativiteConfig.testLaunchTimeoutMs,
+            "webViewReadyMs": NativiteConfig.testWebViewReadyTimeoutMs,
+            "coordinatorMs": NativiteConfig.testCoordinatorTimeoutMs,
+          ],
+        ]
+      )
+      postSynchronously(
+        type: "runtime.ready",
+        payload: [
+          "platform": platform,
+          "debug": true,
+          "appVersion": NativiteConfig.appVersion,
+        ]
+      )
+    }
     #endif
   }
 
   static func webViewReady(url: URL?) {
     #if DEBUG
     guard isEnabled else { return }
-    post(type: "webview.ready", payload: ["url": url?.absoluteString ?? ""])
+    postQueue.async {
+      postSynchronously(type: "webview.ready", payload: ["url": url?.absoluteString ?? ""])
+    }
     #endif
   }
 
-  private static func post(type: String, payload: [String: Any]) {
-    guard let url = URL(string: NativiteConfig.testCoordinatorURL) else { return }
+  private static func postSynchronously(type: String, payload: [String: Any]) {
+    guard let request = makeRequest(type: type, payload: payload) else { return }
+    let semaphore = DispatchSemaphore(value: 0)
+    var statusCode: Int?
+    var requestError: Error?
+
+    URLSession.shared.dataTask(with: request) { _, response, error in
+      statusCode = (response as? HTTPURLResponse)?.statusCode
+      requestError = error
+      semaphore.signal()
+    }.resume()
+
+    let timeout = DispatchTime.now() + .milliseconds(NativiteConfig.testCoordinatorTimeoutMs + 1000)
+    if semaphore.wait(timeout: timeout) == .timedOut {
+      print("[NativiteTestHarness] Failed to send \(type): coordinator request timed out.")
+      return
+    }
+
+    if let requestError {
+      print("[NativiteTestHarness] Failed to send \(type): \(requestError.localizedDescription).")
+      return
+    }
+
+    if let statusCode, !(200...299).contains(statusCode) {
+      print("[NativiteTestHarness] Coordinator rejected \(type) with HTTP \(statusCode).")
+    }
+  }
+
+  private static func makeRequest(type: String, payload: [String: Any]) -> URLRequest? {
+    guard let url = URL(string: NativiteConfig.testCoordinatorURL) else { return nil }
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.timeoutInterval = TimeInterval(NativiteConfig.testCoordinatorTimeoutMs) / 1000
@@ -89,7 +123,6 @@ enum NativiteTestHarness {
       "token": NativiteConfig.testSessionToken,
       "payload": payload,
     ])
-
-    URLSession.shared.dataTask(with: request).resume()
+    return request
   }
 }
