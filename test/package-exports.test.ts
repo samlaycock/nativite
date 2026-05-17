@@ -15,6 +15,7 @@ describe("package exports", () => {
       "./css",
       "./background",
       "./test",
+      "./vitest-browser-provider",
       "./plugins/contacts",
       "./plugins/calendar",
       "./plugins/notifications",
@@ -34,6 +35,10 @@ describe("package exports", () => {
 
   it("exports the test subpath", () => {
     expect(pkg.exports?.["./test"]).toBeDefined();
+  });
+
+  it("exports the Vitest browser provider subpath", () => {
+    expect(pkg.exports?.["./vitest-browser-provider"]).toBeDefined();
   });
 
   it("does not export the css-vars subpath", () => {

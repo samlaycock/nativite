@@ -164,8 +164,11 @@ describe("createGeneratedVitestConfig", () => {
       createTestProviderConfig({ platform: "ios", watch: false }),
     );
 
-    expect(contents).toContain('provider: "nativite"');
-    expect(contents).toContain("providerOptions");
+    expect(contents).toContain('import { nativite } from "nativite/vitest-browser-provider";');
+    expect(contents).toContain("provider: nativite(nativiteProviderOptions)");
+    expect(contents).toContain(
+      "instances: [{ browser: nativiteProviderOptions.device ?? nativiteProviderOptions.platform }]",
+    );
     expect(contents).toContain('"platform": "ios"');
     expect(contents).toContain('"endpoint": "http://127.0.0.1:17321/harness"');
   });

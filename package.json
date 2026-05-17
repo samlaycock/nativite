@@ -65,6 +65,10 @@
       "types": "./dist/test/index.d.ts",
       "import": "./dist/test/index.mjs"
     },
+    "./vitest-browser-provider": {
+      "types": "./dist/vitest-browser-provider/index.d.ts",
+      "import": "./dist/vitest-browser-provider/index.mjs"
+    },
     "./plugins/contacts": {
       "types": "./dist/plugins/contacts/index.d.ts",
       "import": "./dist/plugins/contacts/index.mjs"

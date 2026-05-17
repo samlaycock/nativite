@@ -136,6 +136,7 @@ export default defineConfig([
       "plugins/app-integrity/index": "./src/plugins/app-integrity/index.ts",
       "plugins/capture-protection/index": "./src/plugins/capture-protection/index.ts",
       "test/index": "./src/test/index.ts",
+      "vitest-browser-provider/index": "./src/vitest-browser-provider/index.ts",
       utils: "./src/utils.ts",
     },
     format: ["cjs", "esm"],

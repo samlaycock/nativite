@@ -222,10 +222,12 @@ function toImportSpecifier(fromDir: string, targetPath: string): string {
 export function createGeneratedVitestConfig(
   config: TestProviderConfig,
   userConfigSpecifier = "../../vitest.config",
+  providerSpecifier = "nativite/vitest-browser-provider",
 ): string {
   const serializedConfig = serializeProviderConfig(config);
 
   return `import { mergeConfig } from "vitest/config";
+import { nativite } from "${providerSpecifier}";
 import userConfig from "${userConfigSpecifier}";
 
 const nativiteProviderOptions = ${serializedConfig} as const;
@@ -234,10 +236,8 @@ export default mergeConfig(userConfig, {
   test: {
     browser: {
       enabled: true,
-      provider: "nativite",
-      providerOptions: {
-        nativite: nativiteProviderOptions,
-      },
+      provider: nativite(nativiteProviderOptions),
+      instances: [{ browser: nativiteProviderOptions.device ?? nativiteProviderOptions.platform }],
     },
   },
 });

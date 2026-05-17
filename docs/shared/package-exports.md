@@ -13,6 +13,7 @@ Deep imports outside the listed exports are unsupported implementation details.
 - `nativite/css`
 - `nativite/background`
 - `nativite/test`
+- `nativite/vitest-browser-provider`
 - `nativite/plugins/contacts`
 - `nativite/plugins/calendar`
 - `nativite/plugins/notifications`
@@ -32,6 +33,9 @@ exposes compile-time platform helpers. `nativite/background` exposes background
 task definitions and WebView runtime scheduling controls.
 `nativite/test` exposes test-only JavaScript helpers for local stub-host app
 tests and explicitly named coordinator-backed native harness commands.
+`nativite/vitest-browser-provider` exposes the Vitest Browser Mode provider
+factory used by `nativite test` and direct Vitest Browser Mode configuration for
+real native harness tests.
 `nativite/plugins/contacts`, `nativite/plugins/calendar`,
 `nativite/plugins/notifications`, `nativite/plugins/secure-store`,
 `nativite/plugins/local-auth`, `nativite/plugins/system-controls`,
