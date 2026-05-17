@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import type { NativiteConfig } from "../index.ts";
 import type { ResolvedNativitePlatformRuntime } from "../platforms/registry.ts";
@@ -56,7 +56,7 @@ const DEFAULT_COORDINATOR_PORT = 17321;
 const DEFAULT_LAUNCH_TIMEOUT_MS = 60_000;
 
 function commandExists(command: string): boolean {
-  const result = spawnSync("sh", ["-c", `command -v ${command}`], {
+  const result = spawnSync("which", [command], {
     stdio: "ignore",
   });
   return result.status === 0;
@@ -213,11 +213,20 @@ function serializeProviderConfig(config: TestProviderConfig): string {
   return JSON.stringify(config, null, 2);
 }
 
-export function createGeneratedVitestConfig(config: TestProviderConfig): string {
+function toImportSpecifier(fromDir: string, targetPath: string): string {
+  const specifier = relative(fromDir, targetPath).replaceAll("\\", "/");
+  if (specifier.startsWith(".")) return specifier;
+  return `./${specifier}`;
+}
+
+export function createGeneratedVitestConfig(
+  config: TestProviderConfig,
+  userConfigSpecifier = "../../vitest.config",
+): string {
   const serializedConfig = serializeProviderConfig(config);
 
   return `import { mergeConfig } from "vitest/config";
-import userConfig from "../../vitest.config";
+import userConfig from "${userConfigSpecifier}";
 
 const nativiteProviderOptions = ${serializedConfig} as const;
 
@@ -238,13 +247,15 @@ export default mergeConfig(userConfig, {
 function writeGeneratedVitestConfig(
   cwd: string,
   config: TestProviderConfig,
+  userConfigPath: string,
   deps: TestCommandDependencies,
 ): string {
   const outputDir = join(cwd, ".nativite", "test");
   mkdirSync(outputDir, { recursive: true });
 
   const outputPath = join(outputDir, "vitest.nativite.generated.mts");
-  deps.writeFile(outputPath, createGeneratedVitestConfig(config));
+  const userConfigSpecifier = toImportSpecifier(outputDir, userConfigPath);
+  deps.writeFile(outputPath, createGeneratedVitestConfig(config, userConfigSpecifier));
   return outputPath;
 }
 
@@ -252,6 +263,16 @@ function createVitestArgs(configPath: string, watch: boolean): readonly string[]
   const args = ["vitest", "--config", configPath, "--browser.enabled"] as string[];
   if (!watch) args.push("--run");
   return args;
+}
+
+function resolveVitestConfigPath(cwd: string): string | undefined {
+  const configPath = join(cwd, "vitest.config.ts");
+  if (existsSync(configPath)) return configPath;
+
+  const mtsConfigPath = join(cwd, "vitest.config.mts");
+  if (existsSync(mtsConfigPath)) return mtsConfigPath;
+
+  return undefined;
 }
 
 export async function runTestCommand(
@@ -281,7 +302,8 @@ export async function runTestCommand(
   if (!runtime) return 1;
   if (!validateNativeTooling(runtime, deps, logger)) return 1;
 
-  if (!existsSync(join(cwd, "vitest.config.ts")) && !existsSync(join(cwd, "vitest.config.mts"))) {
+  const userVitestConfigPath = resolveVitestConfigPath(cwd);
+  if (!userVitestConfigPath) {
     logger.error(
       "Could not find vitest.config.ts or vitest.config.mts. Create one before running native tests.",
     );
@@ -304,24 +326,37 @@ export async function runTestCommand(
     return 1;
   }
 
-  const generatedConfigPath = writeGeneratedVitestConfig(cwd, providerConfig, deps);
+  let generatedConfigPath: string;
+  try {
+    generatedConfigPath = writeGeneratedVitestConfig(
+      cwd,
+      providerConfig,
+      userVitestConfigPath,
+      deps,
+    );
+  } catch (err) {
+    logger.error(`Could not write generated Vitest config: ${toErrorMessage(err)}`);
+    return 1;
+  }
   const args = createVitestArgs(generatedConfigPath, providerConfig.watch);
   const coordinatorEnv = serializeProviderConfig(providerConfig);
+  const testEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    NATIVITE_TEST_PLATFORM: runtime.id,
+    NATIVITE_TEST_URL: providerConfig.testUrl,
+    NATIVITE_COORDINATOR_URL: providerConfig.coordinator.endpoint,
+    NATIVITE_TEST_ARTIFACTS_DIR: providerConfig.artifactsDir,
+    NATIVITE_TEST_PROVIDER_OPTIONS: coordinatorEnv,
+  };
+
+  if (options.device) testEnv["NATIVITE_TEST_DEVICE"] = options.device;
 
   logger.info(`Native test platform: ${runtime.id}`);
   logger.info(`Native project: ${nativeProjectPath(config, runtime)}`);
   logger.info(`Coordinator endpoint: ${providerConfig.coordinator.endpoint}`);
   logger.info(`Vitest config: ${generatedConfigPath}`);
 
-  const exitCode = await deps.spawnVitest(cwd, args, {
-    ...process.env,
-    NATIVITE_TEST_PLATFORM: runtime.id,
-    NATIVITE_TEST_DEVICE: options.device ?? "",
-    NATIVITE_TEST_URL: providerConfig.testUrl,
-    NATIVITE_COORDINATOR_URL: providerConfig.coordinator.endpoint,
-    NATIVITE_TEST_ARTIFACTS_DIR: providerConfig.artifactsDir,
-    NATIVITE_TEST_PROVIDER_OPTIONS: coordinatorEnv,
-  });
+  const exitCode = await deps.spawnVitest(cwd, args, testEnv);
 
   if (exitCode !== 0) logger.error(`Vitest exited with code ${exitCode}.`);
   return exitCode;

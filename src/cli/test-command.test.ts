@@ -30,6 +30,14 @@ function createTempProject(): string {
   return dir;
 }
 
+function createTempProjectWithMtsConfig(): string {
+  const dir = mkdtempSync(join(tmpdir(), "nativite-test-command-"));
+  tempDirs.push(dir);
+  mkdirSync(join(dir, ".nativite"), { recursive: true });
+  writeFileSync(join(dir, "vitest.config.mts"), "export default {};\n");
+  return dir;
+}
+
 function createMockConfig(): NativiteConfig {
   return {
     app: {
@@ -90,6 +98,7 @@ function createDependencies(options?: {
   readonly platform?: NodeJS.Platform;
   readonly runtimes?: ResolvedNativitePlatformRuntime[];
   readonly commandExists?: TestCommandDependencies["commandExists"];
+  readonly writeFile?: TestCommandDependencies["writeFile"];
   readonly spawnVitest?: TestCommandDependencies["spawnVitest"];
   readonly logger?: NativiteLogger;
 }): TestCommandDependencies {
@@ -100,7 +109,7 @@ function createDependencies(options?: {
     resolveConfiguredPlatformRuntimes: () =>
       options?.runtimes ?? [createRuntime("ios"), createRuntime("android")],
     commandExists: options?.commandExists ?? (() => true),
-    writeFile: writeFileSync,
+    writeFile: options?.writeFile ?? writeFileSync,
     spawnVitest: options?.spawnVitest ?? createSpawnVitestMock(),
     createLogger: () => options?.logger ?? createMockLogger(),
   };
@@ -153,6 +162,15 @@ describe("createGeneratedVitestConfig", () => {
     expect(contents).toContain('"platform": "ios"');
     expect(contents).toContain('"endpoint": "http://127.0.0.1:17321/harness"');
   });
+
+  it("uses the provided user config import specifier", () => {
+    const contents = createGeneratedVitestConfig(
+      createTestProviderConfig({ platform: "ios", watch: false }),
+      "../../vitest.config.mts",
+    );
+
+    expect(contents).toContain('import userConfig from "../../vitest.config.mts";');
+  });
 });
 
 describe("runTestCommand", () => {
@@ -176,6 +194,63 @@ describe("runTestCommand", () => {
     expect(env["NATIVITE_TEST_PLATFORM"]).toBe("android");
     expect(env["NATIVITE_TEST_DEVICE"]).toBe("emulator-5554");
     expect(env["NATIVITE_COORDINATOR_URL"]).toBe("http://127.0.0.1:17321/harness");
+  });
+
+  it("omits the device environment variable when no device is specified", async () => {
+    const cwd = createTempProject();
+    const spawnVitest = createSpawnVitestMock();
+
+    const exitCode = await runTestCommand(
+      { platform: "android" },
+      createDependencies({ cwd, spawnVitest }),
+    );
+
+    expect(exitCode).toBe(0);
+    const env = spawnVitest.mock.calls[0]![2];
+    expect(env["NATIVITE_TEST_DEVICE"]).toBeUndefined();
+  });
+
+  it("imports vitest.config.mts when that is the project config", async () => {
+    const cwd = createTempProjectWithMtsConfig();
+    const writtenFiles: Record<string, string> = {};
+    const deps = createDependencies({
+      cwd,
+      writeFile: (path, contents) => {
+        writtenFiles[path] = contents;
+      },
+    });
+
+    const exitCode = await runTestCommand({ platform: "ios" }, deps);
+
+    expect(exitCode).toBe(0);
+    const generatedConfig = Object.values(writtenFiles)[0];
+    expect(generatedConfig).toContain('import userConfig from "../../vitest.config.mts";');
+  });
+
+  it("returns 1 with a clean error when generated config writing fails", async () => {
+    const cwd = createTempProject();
+    const error = mock(() => {});
+    const spawnVitest = createSpawnVitestMock();
+    const logger: NativiteLogger = {
+      ...createMockLogger(),
+      error,
+    };
+
+    const exitCode = await runTestCommand(
+      { platform: "ios" },
+      createDependencies({
+        cwd,
+        logger,
+        spawnVitest,
+        writeFile: () => {
+          throw new Error("disk full");
+        },
+      }),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(error).toHaveBeenCalledWith("Could not write generated Vitest config: disk full");
+    expect(spawnVitest).not.toHaveBeenCalled();
   });
 
   it("keeps Vitest in watch mode when --watch is passed", async () => {
