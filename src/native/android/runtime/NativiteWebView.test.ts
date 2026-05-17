@@ -81,6 +81,12 @@ describe("NativiteWebView.kt", () => {
     expect(kt).toContain("NativiteTestHarness.webViewReady(url)");
   });
 
+  it("reports native test WebView readiness only once", () => {
+    expect(kt).toContain("var didReportTestWebViewReady = false");
+    expect(kt).toContain("NativiteTestHarness.isEnabled && !didReportTestWebViewReady");
+    expect(kt).toContain("didReportTestWebViewReady = true");
+  });
+
   it("does not re-check the native test harness URL in normal content resolution", () => {
     const resolveContentUrl = kt.slice(
       kt.indexOf("private fun resolveContentUrl"),
