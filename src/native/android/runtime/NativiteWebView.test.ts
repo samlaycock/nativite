@@ -81,6 +81,16 @@ describe("NativiteWebView.kt", () => {
     expect(kt).toContain("NativiteTestHarness.webViewReady(url)");
   });
 
+  it("does not re-check the native test harness URL in normal content resolution", () => {
+    const resolveContentUrl = kt.slice(
+      kt.indexOf("private fun resolveContentUrl"),
+      kt.indexOf("private fun resolveChildUrl"),
+    );
+
+    expect(resolveContentUrl).toContain("return getDevUrl(context) ?: PRODUCTION_BASE_URL");
+    expect(resolveContentUrl).not.toContain("NativiteTestHarness.testUrl");
+  });
+
   it("sends an explicit native platform header on WebView URL loads", () => {
     expect(kt).toContain(
       'private val NATIVITE_REQUEST_HEADERS = mapOf("x-nativite-platform" to "android")',

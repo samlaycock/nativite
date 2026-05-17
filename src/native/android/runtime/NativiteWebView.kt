@@ -295,7 +295,7 @@ private fun normalizeAndroidDevUrl(devUrl: String): String {
 }
 
 private fun resolveContentUrl(context: Context): String {
-    return NativiteTestHarness.testUrl ?: getDevUrl(context) ?: PRODUCTION_BASE_URL
+    return getDevUrl(context) ?: PRODUCTION_BASE_URL
 }
 
 private fun resolveChildUrl(context: Context, rawUrl: String): Pair<String, String?> {

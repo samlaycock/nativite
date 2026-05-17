@@ -39,7 +39,7 @@ enum NativiteTestHarness {
     post(
       type: "harness.register",
       payload: [
-        "appId": Bundle.main.bundleIdentifier ?? NativiteConfig.appVersion,
+        "appId": Bundle.main.bundleIdentifier ?? "",
         "runtimeVersion": NativiteConfig.appVersion,
         "protocolVersion": nativiteTestProtocolVersion,
         "platform": platform,
