@@ -46,7 +46,7 @@ function writeFixtureApp(projectRoot: string): void {
   );
   writeFileSync(
     join(projectRoot, "nativite.config.ts"),
-    `import { defineConfig, ios, macos } from ${JSON.stringify(nativiteEntry)};
+    `import { android, defineConfig, ios, macos } from ${JSON.stringify(nativiteEntry)};
 
 export default defineConfig({
   app: {
@@ -55,7 +55,7 @@ export default defineConfig({
     version: "2.3.4",
     buildNumber: 42,
   },
-  platforms: [ios(), macos()],
+  platforms: [ios(), macos(), android()],
 });
 `,
   );
@@ -254,6 +254,52 @@ describe("fixture app native builds", () => {
       expect(existsSync(join(projectRoot, ".nativite", "macos", "FixtureApp.xcodeproj"))).toBe(
         true,
       );
+    },
+    { timeout: 60_000 },
+  );
+
+  it(
+    "generates Android fixture projects with debug-only native test harness configuration",
+    async () => {
+      const projectRoot = makeTempProject();
+      process.chdir(projectRoot);
+
+      const exitCode = await runBuildCommand(
+        { platform: "android" },
+        {
+          cwd: () => projectRoot,
+          loadConfig,
+          resolveConfiguredPlatformRuntimes,
+          serializePlatformRuntimeMetadata,
+          loadViteApi: async () => import("vite"),
+          createLogger: createNativiteLogger,
+        },
+      );
+
+      expect(exitCode).toBe(0);
+
+      const appDir = join(projectRoot, ".nativite", "android", "app");
+      const buildGradle = readFileSync(join(appDir, "build.gradle.kts"), "utf-8");
+      const harness = readFileSync(
+        join(appDir, "src", "main", "java", "com", "example", "fixture", "NativiteTestHarness.kt"),
+        "utf-8",
+      );
+
+      expect(buildGradle).toContain("debug {");
+      expect(buildGradle).toContain('buildConfigField("Boolean", "NATIVITE_TEST_HARNESS", "true")');
+      expect(buildGradle).toContain(
+        'buildConfigField("String", "NATIVITE_TEST_URL", nativiteBuildConfigString("nativiteTestUrl"))',
+      );
+      expect(buildGradle).toContain(
+        'buildConfigField("String", "NATIVITE_TEST_SESSION_TOKEN", nativiteBuildConfigString("nativiteTestSessionToken"))',
+      );
+      expect(buildGradle).toContain("release {");
+      expect(buildGradle).toContain(
+        'buildConfigField("Boolean", "NATIVITE_TEST_HARNESS", "false")',
+      );
+      expect(buildGradle).toContain('buildConfigField("String", "NATIVITE_TEST_URL", "\\"\\"")');
+      expect(harness).toContain("BuildConfig.DEBUG &&");
+      expect(harness).toContain("BuildConfig.NATIVITE_TEST_SESSION_TOKEN.isNotBlank()");
     },
     { timeout: 60_000 },
   );

@@ -219,6 +219,13 @@ Run native provider jobs separately from fast unit and browser-mode jobs so
 simulator or emulator instability does not block the fast feedback loop. Upload
 `.nativite/test-artifacts/**` when provider jobs fail.
 
+This repository's default PR test workflow runs `bun test`, which includes fast
+fixture coverage for the `examples/testing-strategy` stub-host and native
+provider examples plus generated native harness configuration checks. The
+simulator/emulator runtime suites remain in the separate native workflow and can
+also be run manually with `bun run test:native:ios` or
+`bun run test:native:android`.
+
 ## Troubleshooting
 
 | Failure                                       | What to check                                                                                                                                                                                                |
