@@ -115,6 +115,7 @@ const handlers = new Map<string, (args: unknown, call: NativeTestBridgeCall) => 
 const callHistory: NativeTestBridgeCall[] = [];
 const snapshotHistory: NativeTestChromeSnapshot[] = [];
 const previousGlobals = new WeakMap<Window, Pick<WebKitWindow, "webkit" | "nativiteReceive">>();
+let coordinatorRequestSequence = 0;
 
 function currentWindow(): WebKitWindow | undefined {
   return typeof window === "undefined" ? undefined : (window as WebKitWindow);
@@ -241,6 +242,11 @@ function normalizeError(error: unknown): { readonly code: string; readonly messa
   return { code: "NATIVE_ERROR", message: "Native test bridge handler failed" };
 }
 
+function nextCoordinatorRequestId(command: string): string {
+  coordinatorRequestSequence += 1;
+  return `nativeHarness:${command}:${Date.now().toString(36)}:${coordinatorRequestSequence.toString(36)}`;
+}
+
 function restoreHost(): void {
   const w = currentWindow();
   if (!w) return;
@@ -360,7 +366,7 @@ async function postCoordinatorCommand<T>(
       protocol: "nativite.test",
       version: 1,
       sessionId,
-      requestId: `nativeHarness:${command}`,
+      requestId: nextCoordinatorRequestId(command),
       timestamp: new Date().toISOString(),
       type: command,
       token: sessionToken,
