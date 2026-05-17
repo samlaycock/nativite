@@ -226,6 +226,26 @@ simulator/emulator runtime suites remain in the separate path-filtered native
 workflow for PRs that touch native runtime code, and can also be run manually
 with `bun run test:native:ios` or `bun run test:native:android`.
 
+## Roadmap Coverage
+
+The native-aware testing stack is intentionally split across independently
+owned layers:
+
+| Layer                        | Owner                              | Covered by                                                                                       |
+| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Fast JavaScript stubs        | `nativite/test`                    | Local bridge handlers, chrome event emission, NCLP snapshot capture, and resettable test state   |
+| Browser Mode stubs           | `nativite/test`                    | DOM-capable tests that use the same JavaScript stub host inside Vitest Browser Mode              |
+| Native test protocol         | Coordinator and native harnesses   | Debug-only session tokens, harness registration, command routing, artifacts, logs, and timeouts  |
+| Native harness generation    | iOS/macOS and Android runtimes     | Test-only environment variables and debug guards for generated native harness entrypoints        |
+| Vitest Browser Mode provider | `nativite/vitest-browser-provider` | Native page launch, coordinator-backed command contexts, cleanup, and Vitest-visible failures    |
+| Stable native test CLI       | `nativite test`                    | Platform validation, generated provider config, artifacts directory wiring, and Vitest execution |
+| Repository docs and examples | `docs/` and `examples/`            | Decision guidance, protocol contracts, provider usage, CLI usage, and testing-strategy fixtures  |
+
+This mapping is the acceptance boundary for the first native-aware testing
+pass: fast app behavior stays in regular Vitest or stub-host Browser Mode,
+while real WebView, native bridge, native chrome, geometry, screenshots, logs,
+and platform launch failures use the Nativite provider path.
+
 ## Troubleshooting
 
 | Failure                                       | What to check                                                                                                                                                                                                |
