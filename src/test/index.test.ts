@@ -195,6 +195,38 @@ describe("nativeHarness", () => {
     ]);
   });
 
+  it("generates unique request ids for repeated coordinator commands", async () => {
+    const commands: unknown[] = [];
+    const fetchImpl = Object.assign(
+      async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        commands.push(parseRequestBody(init?.body));
+        return Response.json({ path: ".nativite/test-artifacts/safe-area.png" });
+      },
+      { preconnect(): void {} },
+    );
+    const options = {
+      endpoint: "http://127.0.0.1:17321",
+      sessionId: "session-1",
+      sessionToken: "secret-token",
+      fetch: fetchImpl,
+    };
+
+    await Promise.all([
+      nativeHarness.screenshot("first", options),
+      nativeHarness.screenshot("second", options),
+    ]);
+
+    const requestIds = commands.map((command) => {
+      if (typeof command !== "object" || command === null) {
+        throw new Error("Expected command envelope");
+      }
+      return (command as { readonly requestId?: unknown }).requestId;
+    });
+    expect(requestIds).toHaveLength(2);
+    expect(requestIds[0]).not.toBe(requestIds[1]);
+    expect(requestIds.every((requestId) => typeof requestId === "string")).toBe(true);
+  });
+
   it("requires a session token for coordinator-backed commands", async () => {
     try {
       await nativeHarness.latestSnapshot({
