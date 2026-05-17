@@ -43,6 +43,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Client Bridge](./shared/client-bridge.md) — Low-level RPC and event subscription API
 - [CSS Variables Module](./shared/css-vars-module.md) — Observable access to `--nv-*` variables
 - [Background Tasks](./shared/background-tasks.md) — JavaScript task authoring API and manifest model
+- [App Testing Strategy](./shared/app-testing-strategy.md) — Choosing between regular Vitest, stub-host Browser Mode, and native provider tests
 - [JavaScript Test Utilities](./shared/test-utilities.md) — `nativite/test` local stub host and native harness helpers
 - [Native Test Protocol](./shared/native-test-protocol.md) — Debug-only coordinator/harness protocol for native-aware tests
 - [Native Test Harness](./shared/native-test-harness.md) — Generated iOS, macOS, and Android debug harness configuration
