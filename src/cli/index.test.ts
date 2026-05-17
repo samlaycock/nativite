@@ -10,6 +10,7 @@ describe("nativite CLI", () => {
     expect(help).toContain("build");
     expect(help).toContain("dev");
     expect(help).toContain("init");
+    expect(help).toContain("test");
   });
 
   it("documents dev URL selection in help output", () => {
@@ -31,5 +32,17 @@ describe("nativite CLI", () => {
     expect(help).toContain("--platform <platform>");
     expect(help).toContain("ios,");
     expect(help).toContain("macos, or android");
+  });
+
+  it("documents native test orchestration options in help output", () => {
+    const program = createCliProgram();
+    const testCommand = program.commands.find((command) => command.name() === "test");
+
+    expect(testCommand).toBeDefined();
+    const help = stripAnsi(testCommand!.helpInformation());
+    expect(help).toContain("--platform <platform>");
+    expect(help).toContain("--device <id>");
+    expect(help).toContain("--watch");
+    expect(help).toContain("--coordinator-port <port>");
   });
 });
