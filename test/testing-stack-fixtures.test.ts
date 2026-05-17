@@ -46,9 +46,11 @@ describe("testing stack CI coverage", () => {
     expect(workflow).not.toContain("emulator");
   });
 
-  it("keeps simulator and emulator runtime tests in the optional native workflow", () => {
+  it("keeps simulator and emulator runtime tests in the path-filtered native workflow", () => {
     const workflow = readRepoFile(".github/workflows/native-tests.yml");
 
+    expect(workflow).toContain("pull_request:");
+    expect(workflow).toContain("paths:");
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain("run: bun run test:native:ios");
     expect(workflow).toContain("run: bun run test:native:android");
