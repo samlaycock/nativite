@@ -82,11 +82,9 @@ export function nativite(options: NativiteVitestProviderOptions): NativiteBrowse
     getCommandsContext(sessionId: string): NativiteCommandsContext {
       return createCommandsContext(coordinator, sessionId);
     },
-    async openPage(sessionId: string, url: string, openOptions?: unknown): Promise<void> {
-      activeSessions.add(sessionId);
+    async openPage(sessionId: string, url: string, _openOptions?: unknown): Promise<void> {
       await coordinator.command(sessionId, "open-page", {
         url,
-        options: openOptions,
         platform: options.platform,
         device: options.device,
         testUrl: options.testUrl ?? url,
@@ -94,14 +92,14 @@ export function nativite(options: NativiteVitestProviderOptions): NativiteBrowse
         launchTimeoutMs: options.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS,
         watch: options.watch ?? false,
       });
+      activeSessions.add(sessionId);
     },
     async close(): Promise<void> {
-      await Promise.all(
-        [...activeSessions].map(async (sessionId) => {
-          await coordinator.command(sessionId, "close", null);
-        }),
-      );
+      const sessionIds = [...activeSessions];
       activeSessions.clear();
+      await Promise.allSettled(
+        sessionIds.map((sessionId) => coordinator.command(sessionId, "close", null)),
+      );
     },
   };
 }
@@ -176,7 +174,7 @@ class NativiteCoordinatorClient {
 function assertSupportedVitestVersion(version: string | undefined): void {
   if (!version) return;
 
-  const major = Number(version.split(".")[0]);
+  const major = Number.parseInt(version.replace(/^v/, ""), 10);
   if (major !== SUPPORTED_VITEST_MAJOR) {
     throw new Error(
       `Nativite Vitest provider supports Vitest ${SUPPORTED_VITEST_MAJOR}.x. ` +
