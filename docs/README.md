@@ -58,6 +58,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Native Test Scripts](./shared/native-test-scripts.md) — Bun commands for running Swift and Kotlin runtime tests
 - [CLI Init Command](./shared/cli-init.md) — One-command setup for existing Vite projects
 - [CLI Dev Command](./shared/cli-dev.md) — Optional native development status dashboard
+- [CLI Test Command](./shared/cli-test.md) — Vitest Browser Mode orchestration for native-aware app tests
 - [CLI Build Command](./shared/cli-build.md) — Production native build output and next steps
 - [Vite Plugin](./shared/vite-plugin.md) — Build pipeline, dev server routing, HMR
 - [Desktop Web Engines](./shared/desktop-web-engines.md) — Desktop-only system and Chromium web engine selection

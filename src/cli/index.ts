@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { runBuildCommand } from "./build-command.ts";
 import { runDevCommand } from "./dev-command.ts";
 import { runInitCommand } from "./init-command.ts";
+import { runTestCommand } from "./test-command.ts";
 
 // Read the version from package.json at runtime so the CLI always reports the
 // version that was actually published, with no manual sync required.
@@ -43,6 +44,33 @@ export function createCliProgram(): Command {
       const exitCode = await runDevCommand(options);
       if (exitCode !== 0) process.exit(exitCode);
     });
+
+  // ─── nativite test ─────────────────────────────────────────────────────────
+
+  program
+    .command("test")
+    .description("Run native-aware app tests through Vitest Browser Mode")
+    .requiredOption("--platform <platform>", "Native platform to test (ios or android)")
+    .option("--device <id>", "Simulator, emulator, or physical device id")
+    .option("--watch", "Run Vitest in watch mode")
+    .option("--test-url <url>", "WebView test URL loaded by the native harness")
+    .option("--coordinator-port <port>", "Local coordinator port")
+    .option("--artifacts-dir <path>", "Directory for native test artifacts")
+    .option("--timeout <ms>", "Native harness launch timeout in milliseconds")
+    .action(
+      async (options: {
+        platform?: string;
+        device?: string;
+        watch?: boolean;
+        testUrl?: string;
+        coordinatorPort?: string;
+        artifactsDir?: string;
+        timeout?: string;
+      }) => {
+        const exitCode = await runTestCommand(options);
+        if (exitCode !== 0) process.exit(exitCode);
+      },
+    );
 
   // ─── nativite init ─────────────────────────────────────────────────────────
 
