@@ -15,10 +15,17 @@ import {
 } from "./test-command.ts";
 
 const tempDirs: string[] = [];
+const ORIGINAL_NATIVITE_TEST_DEVICE = process.env["NATIVITE_TEST_DEVICE"];
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
+  }
+
+  if (ORIGINAL_NATIVITE_TEST_DEVICE === undefined) {
+    delete process.env["NATIVITE_TEST_DEVICE"];
+  } else {
+    process.env["NATIVITE_TEST_DEVICE"] = ORIGINAL_NATIVITE_TEST_DEVICE;
   }
 });
 
@@ -199,6 +206,7 @@ describe("runTestCommand", () => {
   it("omits the device environment variable when no device is specified", async () => {
     const cwd = createTempProject();
     const spawnVitest = createSpawnVitestMock();
+    process.env["NATIVITE_TEST_DEVICE"] = "stale-device-id";
 
     const exitCode = await runTestCommand(
       { platform: "android" },

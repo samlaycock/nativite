@@ -347,9 +347,8 @@ export async function runTestCommand(
     NATIVITE_COORDINATOR_URL: providerConfig.coordinator.endpoint,
     NATIVITE_TEST_ARTIFACTS_DIR: providerConfig.artifactsDir,
     NATIVITE_TEST_PROVIDER_OPTIONS: coordinatorEnv,
+    NATIVITE_TEST_DEVICE: options.device,
   };
-
-  if (options.device) testEnv["NATIVITE_TEST_DEVICE"] = options.device;
 
   logger.info(`Native test platform: ${runtime.id}`);
   logger.info(`Native project: ${nativeProjectPath(config, runtime)}`);
