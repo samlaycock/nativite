@@ -145,9 +145,86 @@ describe("nativite Vitest browser provider", () => {
     ]);
   });
 
+  it("does not track sessions when opening a native harness page fails", async () => {
+    const requests: RecordedRequest[] = [];
+    const fetchImplementation = (async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : url.toString();
+      const body = typeof init?.body === "string" ? init.body : "{}";
+      requests.push({
+        url: requestUrl,
+        body: JSON.parse(body) as Record<string, unknown>,
+      });
+
+      return new Response(JSON.stringify({ error: "open failed" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const provider = nativite({
+      platform: "ios",
+      coordinator: { endpoint: "http://127.0.0.1:17321/harness" },
+      fetch: fetchImplementation,
+    });
+
+    try {
+      await provider.openPage("failed-session", "http://127.0.0.1:5173/fail");
+      throw new Error("Expected openPage to reject.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("open failed");
+    }
+
+    await provider.close();
+
+    expect(requests.map((request) => request.body["command"])).toEqual(["open-page"]);
+  });
+
+  it("clears tracked sessions even when coordinator close commands fail", async () => {
+    const requests: RecordedRequest[] = [];
+    const fetchImplementation = (async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = url instanceof Request ? url.url : url.toString();
+      const body = typeof init?.body === "string" ? init.body : "{}";
+      const parsedBody = JSON.parse(body) as Record<string, unknown>;
+      requests.push({ url: requestUrl, body: parsedBody });
+
+      if (parsedBody["command"] === "close") {
+        return new Response(JSON.stringify({ error: "close failed" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ result: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+    const provider = nativite({
+      platform: "android",
+      coordinator: { endpoint: "http://127.0.0.1:17321/harness" },
+      fetch: fetchImplementation,
+    });
+
+    await provider.openPage("session-a", "http://127.0.0.1:5173/a");
+    await provider.openPage("session-b", "http://127.0.0.1:5173/b");
+    await provider.close();
+    await provider.close();
+
+    expect(requests.map((request) => request.body["command"])).toEqual([
+      "open-page",
+      "open-page",
+      "close",
+      "close",
+    ]);
+  });
+
   it("rejects unsupported Vitest major versions with an actionable error", () => {
     expect(() => nativite({ platform: "ios", vitestVersion: "5.0.0" })).toThrow(
       "Nativite Vitest provider supports Vitest 4.x. Installed Vitest version 5.0.0 is not supported.",
     );
+  });
+
+  it("accepts supported Vitest versions with a v prefix", () => {
+    expect(() => nativite({ platform: "ios", vitestVersion: "v4.1.0" })).not.toThrow();
   });
 });
