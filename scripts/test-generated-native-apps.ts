@@ -24,6 +24,12 @@ interface Command {
   readonly cwd: string;
 }
 
+interface SmokeContext {
+  readonly cwd: string;
+  readonly projectPath: string;
+  readonly platform: SmokePlatform;
+}
+
 const ALL_PLUGINS = [
   appIntegrity,
   calendar,
@@ -64,6 +70,35 @@ function run(command: Command): void {
   if (result.status !== 0) {
     throw new Error(`${display} failed with exit code ${result.status ?? "unknown"}.`);
   }
+}
+
+function tryRun(command: Command): boolean {
+  const display = [command.command, ...command.args].join(" ");
+  console.log(`$ ${display}`);
+
+  const result = spawnSync(command.command, command.args as string[], {
+    cwd: command.cwd,
+    stdio: "inherit",
+    env: process.env,
+  });
+
+  if (result.error) {
+    console.log(`Skipping launch smoke command: ${result.error.message}`);
+    return false;
+  }
+
+  return result.status === 0;
+}
+
+function commandOutput(command: Command): string | undefined {
+  const result = spawnSync(command.command, command.args as string[], {
+    cwd: command.cwd,
+    encoding: "utf-8",
+    env: process.env,
+  });
+
+  if (result.error || result.status !== 0) return undefined;
+  return result.stdout;
 }
 
 function writeWebBundle(cwd: string, platform: SmokePlatform): void {
@@ -161,6 +196,96 @@ function androidBuildCommands(projectPath: string): readonly Command[] {
   ];
 }
 
+function launchSmoke(context: SmokeContext): void {
+  if (process.env["NATIVITE_GENERATED_SMOKE_LAUNCH"] !== "1") {
+    console.log("Skipping launch smoke; set NATIVITE_GENERATED_SMOKE_LAUNCH=1 to enable it.");
+    return;
+  }
+
+  if (context.platform === "macos") {
+    const appPath = join(
+      context.cwd,
+      ".nativite",
+      "macos",
+      "DerivedData",
+      "Build",
+      "Products",
+      "Debug",
+      "SmokeApp.app",
+    );
+    run({ command: "open", args: ["-n", appPath], cwd: context.cwd });
+    return;
+  }
+
+  if (context.platform === "ios") {
+    const bootedDevices = commandOutput({
+      command: "xcrun",
+      args: ["simctl", "list", "devices", "booted"],
+      cwd: context.cwd,
+    });
+    const bootedDevice = bootedDevices?.match(/\(([0-9A-F-]{36})\) \(Booted\)/)?.[1];
+    if (!bootedDevice) {
+      console.log("Skipping iOS launch smoke; no booted simulator is available.");
+      return;
+    }
+
+    const appPath = join(
+      context.cwd,
+      ".nativite",
+      "ios",
+      "DerivedData",
+      "Build",
+      "Products",
+      "Debug-iphonesimulator",
+      "SmokeApp.app",
+    );
+    run({ command: "xcrun", args: ["simctl", "install", bootedDevice, appPath], cwd: context.cwd });
+    run({
+      command: "xcrun",
+      args: ["simctl", "launch", bootedDevice, "dev.nativite.smoke"],
+      cwd: context.cwd,
+    });
+    return;
+  }
+
+  const devices = commandOutput({
+    command: "adb",
+    args: ["devices"],
+    cwd: context.projectPath,
+  });
+  const hasDevice = devices
+    ?.split("\n")
+    .slice(1)
+    .some((line) => line.endsWith("\tdevice"));
+  if (!hasDevice) {
+    console.log("Skipping Android launch smoke; no emulator or device is available.");
+    return;
+  }
+
+  run({
+    command: join(context.projectPath, "gradlew"),
+    args: ["installDebug", "--no-daemon"],
+    cwd: context.projectPath,
+  });
+  if (
+    !tryRun({
+      command: "adb",
+      args: [
+        "shell",
+        "monkey",
+        "-p",
+        "dev.nativite.smoke",
+        "-c",
+        "android.intent.category.LAUNCHER",
+        "1",
+      ],
+      cwd: context.projectPath,
+    })
+  ) {
+    throw new Error("Android launch smoke failed.");
+  }
+}
+
 async function main(): Promise<void> {
   const platforms = parsePlatforms();
   const keepFixture = process.env["NATIVITE_KEEP_GENERATED_SMOKE_FIXTURE"] === "1";
@@ -178,6 +303,7 @@ async function main(): Promise<void> {
           : appleBuildCommands(cwd, platform);
 
       for (const command of commands) run(command);
+      launchSmoke({ cwd, projectPath, platform });
     }
   } finally {
     if (keepFixture) {

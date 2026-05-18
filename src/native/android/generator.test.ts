@@ -180,7 +180,7 @@ describe("generateProject", () => {
     });
   });
 
-  it.skip(
+  it(
     "generates gradlew with execute permissions",
     async () => {
       const cwd = makeTempDir();
@@ -268,7 +268,7 @@ export default defineBackgroundTask({
     }
   });
 
-  it.skip(
+  it(
     "generates gradlew.bat",
     async () => {
       const cwd = makeTempDir();
@@ -280,7 +280,7 @@ export default defineBackgroundTask({
     { timeout: 60_000 },
   );
 
-  it.skip(
+  it(
     "generates gradle-wrapper.jar",
     async () => {
       const cwd = makeTempDir();
@@ -296,7 +296,7 @@ export default defineBackgroundTask({
     { timeout: 60_000 },
   );
 
-  it.skip(
+  it(
     "removes stale assets/dev.json in build mode (including skipped regeneration)",
     async () => {
       const cwd = makeTempDir();
