@@ -136,7 +136,6 @@ export function pbxprojTemplate(
     (platform) => platform.platform === targetPlatform,
   ) as { minimumVersion?: string; webEngine?: "system" | "chromium" } | undefined;
   const appId = platformConfig.app.bundleId;
-  const hasOta = Boolean(config.updates);
   const hasSplash = Boolean(config.splash) && targetPlatform === "ios";
   const marketingVersion = platformConfig.app.version;
   const buildNumber = platformConfig.app.buildNumber;
@@ -230,11 +229,7 @@ export function pbxprojTemplate(
     `\t\t${UUID.backgroundTasksBuildFile} /* NativiteBackgroundTasks.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.backgroundTasksFile} /* NativiteBackgroundTasks.swift */; };`,
     `\t\t${UUID.varsBuildFile} /* NativiteVars.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.varsFile} /* NativiteVars.swift */; };`,
     `\t\t${UUID.keyboardBuildFile} /* NativiteKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.keyboardFile} /* NativiteKeyboard.swift */; };`,
-    ...(hasOta
-      ? [
-          `\t\t${UUID.otaUpdaterBuildFile} /* OTAUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.otaUpdaterFile} /* OTAUpdater.swift */; };`,
-        ]
-      : []),
+    `\t\t${UUID.otaUpdaterBuildFile} /* OTAUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.otaUpdaterFile} /* OTAUpdater.swift */; };`,
     ...pluginSources.map((file, index) => {
       const fileRef = ensurePluginFileRef(file, "source");
       const buildId = pluginSourceBuildIds[index];
@@ -256,11 +251,7 @@ export function pbxprojTemplate(
     `\t\t${UUID.backgroundTasksFile} /* NativiteBackgroundTasks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteBackgroundTasks.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.varsFile} /* NativiteVars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteVars.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.keyboardFile} /* NativiteKeyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteKeyboard.swift; sourceTree = "<group>"; };`,
-    ...(hasOta
-      ? [
-          `\t\t${UUID.otaUpdaterFile} /* OTAUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OTAUpdater.swift; sourceTree = "<group>"; };`,
-        ]
-      : []),
+    `\t\t${UUID.otaUpdaterFile} /* OTAUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OTAUpdater.swift; sourceTree = "<group>"; };`,
     ...[...pluginFileRefsByPath.values()].map((ref) => {
       return `\t\t${ref.id} /* ${ref.displayName} */ = {isa = PBXFileReference; lastKnownFileType = ${ref.fileType}; path = ${quotedPbx(ref.path)}; sourceTree = SOURCE_ROOT; };`;
     }),
@@ -280,7 +271,7 @@ export function pbxprojTemplate(
     UUID.backgroundTasksFile,
     UUID.varsFile,
     UUID.keyboardFile,
-    ...(hasOta ? [UUID.otaUpdaterFile] : []),
+    UUID.otaUpdaterFile,
     ...(hasSplash ? [UUID.launchScreenFile] : []),
     UUID.infoPlistFile,
     UUID.assetsFile,
@@ -304,7 +295,7 @@ export function pbxprojTemplate(
     UUID.backgroundTasksBuildFile,
     UUID.varsBuildFile,
     UUID.keyboardBuildFile,
-    ...(hasOta ? [UUID.otaUpdaterBuildFile] : []),
+    UUID.otaUpdaterBuildFile,
     ...pluginSourceBuildIds,
   ]
     .map((id) => `\t\t\t\t${id} /* .swift in Sources */,`)
