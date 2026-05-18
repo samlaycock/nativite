@@ -72,6 +72,7 @@ describe("native test coordinator", () => {
       const openResponse = await post(coordinator.endpoint, {
         sessionId: "vitest-session",
         command: "open-page",
+        token: config.sessionToken,
         payload: { url: config.testUrl },
       });
       expect(openResponse.status).toBe(200);
@@ -97,6 +98,24 @@ describe("native test coordinator", () => {
       expect(await registerResponse.json()).toMatchObject({
         result: { accepted: true, state: "registered" },
       });
+    } finally {
+      await coordinator.stop();
+    }
+  });
+
+  it("rejects coordinator commands when the session token is missing", async () => {
+    const config = createCoordinatorConfig();
+    const coordinator = createNativeTestCoordinator(config, createLogger());
+
+    await coordinator.start();
+    try {
+      const response = await post(`${coordinator.endpoint}/../commands/native-logs`, {
+        sessionId: config.sessionId,
+        payload: null,
+      });
+
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({ error: "INVALID_TOKEN" });
     } finally {
       await coordinator.stop();
     }
@@ -138,5 +157,28 @@ describe("native test coordinator", () => {
         expect(error).toBeInstanceOf(Error);
       },
     );
+  });
+
+  it("sanitizes caller-controlled session ids before writing artifacts", async () => {
+    const config = createCoordinatorConfig();
+    const coordinator = createNativeTestCoordinator(config, createLogger());
+
+    await coordinator.start();
+    try {
+      const response = await post(`${coordinator.endpoint}/../commands/screenshot`, {
+        sessionId: "../../escape",
+        token: config.sessionToken,
+        payload: { name: "../safe area" },
+      });
+
+      expect(response.status).toBe(200);
+      const artifact = (await response.json()) as {
+        readonly result: { readonly path: string };
+      };
+      expect(artifact.result.path).toStartWith(config.artifactsDir);
+      expect(artifact.result.path).toEndWith("..-..-escape-..-safe-area.json");
+    } finally {
+      await coordinator.stop();
+    }
   });
 });

@@ -65,6 +65,7 @@ export interface NativiteLogEntry {
 interface CoordinatorCommandBody {
   readonly sessionId: string;
   readonly command: string;
+  readonly token?: string;
   readonly payload: unknown;
 }
 
@@ -137,6 +138,7 @@ function createCommandsContext(
 class NativiteCoordinatorClient {
   readonly #endpoint: string;
   readonly #fetch: typeof fetch;
+  readonly #sessionToken: string | undefined;
 
   constructor(options: NativiteVitestProviderOptions) {
     this.#endpoint =
@@ -144,6 +146,7 @@ class NativiteCoordinatorClient {
       getProcessEnv("NATIVITE_COORDINATOR_URL") ??
       DEFAULT_COORDINATOR_ENDPOINT;
     this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#sessionToken = options.sessionToken ?? getProcessEnv("NATIVITE_TEST_SESSION_TOKEN");
 
     if (!this.#fetch) {
       throw new Error("Nativite Vitest provider requires a fetch implementation.");
@@ -151,7 +154,12 @@ class NativiteCoordinatorClient {
   }
 
   async command<T>(sessionId: string, command: string, payload: unknown): Promise<T> {
-    const body: CoordinatorCommandBody = { sessionId, command, payload };
+    const body: CoordinatorCommandBody = {
+      sessionId,
+      command,
+      token: this.#sessionToken,
+      payload,
+    };
     const response = await this.#fetch(this.#endpoint, {
       method: "POST",
       headers: {

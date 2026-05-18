@@ -153,7 +153,7 @@ async function handleCommand(
     return;
   }
 
-  if (body.token !== undefined && body.token !== config.sessionToken) {
+  if (body.token !== config.sessionToken) {
     writeJson(response, 401, { error: "INVALID_TOKEN" });
     return;
   }
@@ -195,7 +195,8 @@ async function handleCommand(
     }
     case "screenshot": {
       const name = sanitizeArtifactName(readPayloadString(body.payload, "name") ?? "screenshot");
-      const artifactPath = join(config.artifactsDir, `${session.id}-${name}.json`);
+      const safeSessionId = sanitizeArtifactName(session.id);
+      const artifactPath = join(config.artifactsDir, `${safeSessionId}-${name}.json`);
       writeFileSync(
         artifactPath,
         JSON.stringify({ sessionId: session.id, capturedAt: new Date().toISOString() }, null, 2),
