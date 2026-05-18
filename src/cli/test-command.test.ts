@@ -186,6 +186,8 @@ describe("createGeneratedVitestConfig", () => {
     );
     expect(contents).toContain('"platform": "ios"');
     expect(contents).toContain('"endpoint": "http://127.0.0.1:17321/harness"');
+    expect(contents).toContain('"sessionId":');
+    expect(contents).not.toContain("sessionToken");
   });
 
   it("uses the provided user config import specifier", () => {
@@ -220,6 +222,8 @@ describe("runTestCommand", () => {
     expect(env["NATIVITE_TEST_DEVICE"]).toBe("emulator-5554");
     expect(env["NATIVITE_COORDINATOR_URL"]).toBe("http://127.0.0.1:17321/harness");
     expect(env["NATIVITE_TEST_SESSION_TOKEN"]).toBe("test-session-token");
+    expect(env["NATIVITE_TEST_PROVIDER_OPTIONS"]).not.toContain("test-session-token");
+    expect(env["NATIVITE_TEST_PROVIDER_OPTIONS"]).not.toContain("sessionToken");
   });
 
   it("omits the device environment variable when no device is specified", async () => {
