@@ -77,7 +77,9 @@ bundle resources, and release web-bundle copy phases.
 The Android smoke test runs `assembleDebug` and `assembleRelease` through the
 generated Gradle wrapper. This verifies generated Kotlin sources, plugin
 registrants, manifest entries, generated resources, Gradle dependencies, and
-release web-bundle packaging.
+release web-bundle packaging. The release smoke build passes
+`-PnativiteSmokeDisableReleaseLint=true` so generated apps keep release lint
+enabled by default while the smoke fixture focuses on native packaging coverage.
 
 The fixture is deleted after the run. Set
 `NATIVITE_KEEP_GENERATED_SMOKE_FIXTURE=1` to keep it for local debugging.

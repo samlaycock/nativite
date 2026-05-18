@@ -12,6 +12,7 @@ private const val AUTH_SUCCESS = 0
 private const val AUTH_HW_UNAVAILABLE = 1
 private const val AUTH_NO_HARDWARE = 12
 private const val AUTH_NONE_ENROLLED = 11
+private const val AUTH_NEGATIVE_BUTTON = 13
 
 private fun register(bridge: Any, method: String, handler: LocalAuthHandler) {
     val registerMethod = bridge.javaClass.methods.first {
@@ -76,6 +77,7 @@ private fun reasonFor(code: Int): String = when (code) {
 private fun statusFor(errorCode: Int): String = when (errorCode) {
     BiometricPrompt.BIOMETRIC_ERROR_CANCELED,
     BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED,
+    AUTH_NEGATIVE_BUTTON,
     -> "cancelled"
     BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT,
     BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT_PERMANENT,
