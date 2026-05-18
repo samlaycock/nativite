@@ -187,4 +187,20 @@ describe("local auth plugin", () => {
     expect(authenticateSource).not.toContain("Build.VERSION.SDK_INT < Build.VERSION_CODES.P");
     expect(authenticateSource).not.toContain("Local authentication requires Android 9+");
   });
+
+  it("maps the Android biometric negative button to cancelled without using unavailable SDK constants", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/plugins/local-auth/android/NativiteLocalAuthPlugin.kt"),
+      "utf-8",
+    );
+    const statusSource = source.slice(
+      source.indexOf("private fun statusFor"),
+      source.indexOf("fun registerNativiteLocalAuthPlugin"),
+    );
+
+    expect(source).toContain("private const val AUTH_NEGATIVE_BUTTON = 13");
+    expect(statusSource).toContain("AUTH_NEGATIVE_BUTTON");
+    expect(statusSource).toContain('-> "cancelled"');
+    expect(statusSource).not.toContain("BIOMETRIC_ERROR_NEGATIVE_BUTTON");
+  });
 });

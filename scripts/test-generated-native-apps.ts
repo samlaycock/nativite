@@ -155,7 +155,7 @@ function androidBuildCommands(projectPath: string): readonly Command[] {
     },
     {
       command: gradlew,
-      args: ["assembleRelease", "--no-daemon"],
+      args: ["assembleRelease", "-PnativiteSmokeDisableReleaseLint=true", "--no-daemon"],
       cwd: projectPath,
     },
   ];

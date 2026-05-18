@@ -88,6 +88,11 @@ the pinned Gradle distribution. The generated-app smoke suite covers those
 outputs instead by generating a full Android project and running the generated
 wrapper through `assembleDebug` and `assembleRelease`.
 
+Generated Android projects keep release lint enabled by default. The smoke
+runner passes `-PnativiteSmokeDisableReleaseLint=true` only for its temporary
+release build fixture so smoke packaging can validate compilation and assets
+without changing the lint policy of user-generated projects.
+
 Run that coverage locally with:
 
 ```bash

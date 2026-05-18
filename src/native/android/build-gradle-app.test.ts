@@ -84,11 +84,14 @@ describe("buildGradleAppTemplate", () => {
     expect(output).toContain("buildConfig = true");
   });
 
-  it("does not run Android release lint as part of packaging", () => {
+  it("keeps Android release lint enabled unless smoke tests disable it", () => {
     const output = buildGradleAppTemplate(androidConfig, 26, 36);
 
     expect(output).toContain("lint {");
-    expect(output).toContain("checkReleaseBuilds = false");
+    expect(output).toContain('providers.gradleProperty("nativiteSmokeDisableReleaseLint")');
+    expect(output).toContain(".map(String::toBoolean)");
+    expect(output).toContain(".getOrElse(false)");
+    expect(output).not.toContain("checkReleaseBuilds = false");
   });
 
   it("uses the Kotlin compilerOptions DSL instead of deprecated kotlinOptions", () => {

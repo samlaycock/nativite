@@ -155,7 +155,9 @@ android {
     }
 
     lint {
-        checkReleaseBuilds = false
+        checkReleaseBuilds = !providers.gradleProperty("nativiteSmokeDisableReleaseLint")
+            .map(String::toBoolean)
+            .getOrElse(false)
     }
 
     sourceSets {
