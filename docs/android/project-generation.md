@@ -34,6 +34,7 @@ The generator creates a complete Android Gradle project from the user's configur
 │   │   │   └── dev.json                (dev URL, debug/dev only)
 │   │   └── AndroidManifest.xml
 │   └── build.gradle.kts
+│   └── proguard-rules.pro
 │   └── build/generated/nativite/assets/
 │       └── dist/                       (web bundle, copied for release)
 ├── gradle/
@@ -53,7 +54,8 @@ The generator creates a complete Android Gradle project from the user's configur
 1. Creates all necessary directories with `mkdirSync(dir, { recursive: true })`.
 2. Writes `settings.gradle.kts` first (required by Gradle).
 3. Runs `gradle wrapper --gradle-version 8.13 --no-daemon` to generate wrapper files (`gradlew`, `gradlew.bat`, `gradle-wrapper.jar`).
-4. Writes root and app `build.gradle.kts` files.
+4. Writes root and app `build.gradle.kts` files plus the app
+   `proguard-rules.pro` file referenced by release builds.
 5. Writes `AndroidManifest.xml`.
 6. Generates Kotlin source files.
 7. Writes resource XML files (strings, colours, themes).
@@ -77,6 +79,20 @@ If project generation fails because `gradle` is missing, install/configure Gradl
 and rerun `bunx nativite build --platform android`. The generated wrapper then
 uses the pinned Gradle distribution URL in `gradle-wrapper.properties` for normal
 Gradle wrapper operation.
+
+## Smoke Coverage
+
+Android wrapper-file assertions are intentionally excluded from the default Bun
+unit suite because they require invoking the host `gradle` tool and can download
+the pinned Gradle distribution. The generated-app smoke suite covers those
+outputs instead by generating a full Android project and running the generated
+wrapper through `assembleDebug` and `assembleRelease`.
+
+Run that coverage locally with:
+
+```bash
+bun run test:generated:native:android
+```
 
 ## Dirty-Check Optimization
 

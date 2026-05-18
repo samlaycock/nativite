@@ -186,6 +186,7 @@ function generationHashInputs(
         dependencies: pluginDependencies,
       }),
     },
+    { name: "app/proguard-rules.pro", content: "" },
     { name: "AndroidManifest.xml", content: androidManifestTemplate(androidConfig) },
     { name: "MainActivity.kt", content: mainActivityTemplate(androidConfig) },
     { name: "NativiteConfig.kt", content: nativiteConfigTemplate(pkg, config) },
@@ -436,6 +437,7 @@ export async function generateProject(
       dependencies: pluginDependencies,
     }),
   );
+  writeFileSync(join(appDir, "proguard-rules.pro"), "");
 
   // Android manifest
   writeFileSync(join(srcMainDir, "AndroidManifest.xml"), androidManifestTemplate(androidConfig));

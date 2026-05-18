@@ -20,7 +20,6 @@ export function colorsXmlTemplate(): string {
 
 export function themesXmlTemplate(config: NativiteConfig): string {
   const themeName = sanitizeName(config.app.name);
-  const hasSplash = config.splash !== undefined;
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <resources>
@@ -29,21 +28,7 @@ export function themesXmlTemplate(config: NativiteConfig): string {
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-    </style>${
-      hasSplash
-        ? `
-
-    <style name="Theme.${themeName}.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">${config.splash!.backgroundColor}</item>${
-          config.splash!.image
-            ? `
-        <item name="windowSplashScreenAnimatedIcon">@drawable/nativite_splash</item>`
-            : ""
-        }
-        <item name="postSplashScreenTheme">@style/Theme.${themeName}</item>
-    </style>`
-        : ""
-    }
+    </style>
 
 </resources>
 `;

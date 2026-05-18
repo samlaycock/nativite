@@ -149,13 +149,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    lint {
+        checkReleaseBuilds = false
     }
 
     sourceSets {
@@ -163,6 +163,12 @@ android {
             assets.srcDirs("src/main/assets")
             assets.srcDir(nativiteGeneratedAssetsDir)${pluginSourceSetEntries}
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

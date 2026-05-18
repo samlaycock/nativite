@@ -84,6 +84,21 @@ describe("buildGradleAppTemplate", () => {
     expect(output).toContain("buildConfig = true");
   });
 
+  it("does not run Android release lint as part of packaging", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
+
+    expect(output).toContain("lint {");
+    expect(output).toContain("checkReleaseBuilds = false");
+  });
+
+  it("uses the Kotlin compilerOptions DSL instead of deprecated kotlinOptions", () => {
+    const output = buildGradleAppTemplate(androidConfig, 26, 36);
+
+    expect(output).toContain("compilerOptions {");
+    expect(output).toContain("jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)");
+    expect(output).not.toContain("kotlinOptions");
+  });
+
   it("copies the Android production web bundle into generated assets for release builds", () => {
     const output = buildGradleAppTemplate(androidConfig, 26, 36);
 
