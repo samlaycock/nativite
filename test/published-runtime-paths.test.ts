@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -74,8 +74,9 @@ describe("published runtime template paths", () => {
           const gradleWrapperDir = join(cwd, "gradle", "wrapper");
           mkdirSync(gradleWrapperDir, { recursive: true });
           writeFileSync(join(cwd, "gradlew"), "#!/usr/bin/env sh\n");
+          chmodSync(join(cwd, "gradlew"), 0o755);
           writeFileSync(join(cwd, "gradlew.bat"), "");
-          writeFileSync(join(gradleWrapperDir, "gradle-wrapper.jar"), "fake jar");
+          writeFileSync(join(gradleWrapperDir, "gradle-wrapper.jar"), "fake jar".repeat(200));
           return "";
         },
       }));
