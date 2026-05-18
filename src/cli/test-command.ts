@@ -115,12 +115,16 @@ function resolveTestRuntime(
   logger: NativiteLogger,
 ): ResolvedNativitePlatformRuntime | undefined {
   if (!requestedPlatform) {
-    logger.error("Missing required --platform option. Use --platform ios or --platform android.");
+    logger.error("Missing required --platform option. Use --platform ios, macos, or android.");
     return undefined;
   }
 
-  if (requestedPlatform !== "ios" && requestedPlatform !== "android") {
-    logger.error('`nativite test` currently supports only "ios" and "android".');
+  if (
+    requestedPlatform !== "ios" &&
+    requestedPlatform !== "macos" &&
+    requestedPlatform !== "android"
+  ) {
+    logger.error('`nativite test` currently supports only "ios", "macos", and "android".');
     return undefined;
   }
 
@@ -139,19 +143,22 @@ function validateNativeTooling(
   deps: TestCommandDependencies,
   logger: NativiteLogger,
 ): boolean {
-  if (runtime.id === "ios") {
+  if (runtime.id === "ios" || runtime.id === "macos") {
+    const platformLabel = runtime.id === "ios" ? "iOS" : "macOS";
     if (deps.platform() !== "darwin") {
-      logger.error("iOS native tests require macOS with Xcode installed.");
+      logger.error(`${platformLabel} native tests require macOS with Xcode installed.`);
       return false;
     }
     if (!deps.commandExists("xcodebuild")) {
       logger.error(
-        "iOS native tests require xcodebuild. Install Xcode or Xcode Command Line Tools.",
+        `${platformLabel} native tests require xcodebuild. Install Xcode or Xcode Command Line Tools.`,
       );
       return false;
     }
     if (!deps.commandExists("xcrun")) {
-      logger.error("iOS native tests require xcrun. Install Xcode or Xcode Command Line Tools.");
+      logger.error(
+        `${platformLabel} native tests require xcrun. Install Xcode or Xcode Command Line Tools.`,
+      );
       return false;
     }
   }
@@ -170,7 +177,9 @@ function nativeProjectPath(
   config: NativiteConfig,
   runtime: ResolvedNativitePlatformRuntime,
 ): string {
-  if (runtime.id === "ios") return join(".nativite", "ios", `${config.app.name}.xcodeproj`);
+  if (runtime.id === "ios" || runtime.id === "macos") {
+    return join(".nativite", runtime.id, `${config.app.name}.xcodeproj`);
+  }
   return join(".nativite", "android");
 }
 

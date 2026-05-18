@@ -50,7 +50,7 @@ export function createCliProgram(): Command {
   program
     .command("test")
     .description("Run native-aware app tests through Vitest Browser Mode")
-    .requiredOption("--platform <platform>", "Native platform to test (ios or android)")
+    .requiredOption("--platform <platform>", "Native platform to test (ios, macos, or android)")
     .option("--device <id>", "Simulator, emulator, or physical device id")
     .option("--watch", "Run Vitest in watch mode")
     .option("--test-url <url>", "WebView test URL loaded by the native harness")

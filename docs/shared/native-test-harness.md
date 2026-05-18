@@ -33,6 +33,11 @@ server or coordinator running on the host Mac. Physical device support should
 use an explicit host-network URL on the same network or a future coordinator
 tunnel.
 
+The generated macOS app is a first-class 1.0 test target. Its project includes
+the same debug-only harness, bridge, chrome readiness, and WebView readiness
+runtime files as iOS, but launches as a host macOS process instead of through a
+simulator.
+
 ## Android
 
 Android debug builds expose harness configuration through Gradle project

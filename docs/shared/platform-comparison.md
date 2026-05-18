@@ -88,6 +88,16 @@ no production Android OTA update flow yet.
 | Launch             | `simctl launch`                     | `adb shell am start`        | Process launch         |
 | Host Loopback      | Direct (simulator shares host)      | `10.0.2.2` (emulator alias) | Direct (native app)    |
 
+## Native App Testing
+
+| Capability                 | iOS                         | Android                     | macOS                       |
+| -------------------------- | --------------------------- | --------------------------- | --------------------------- |
+| `nativite test` target     | `--platform ios`            | `--platform android`        | `--platform macos`          |
+| Native tooling preflight   | `xcodebuild`, `xcrun`       | `adb`                       | `xcodebuild`, `xcrun`       |
+| Harness launch model       | Simulator/device app launch | Emulator/device app launch  | Direct host app launch      |
+| Harness readiness coverage | Runtime + WebView readiness | Runtime + WebView readiness | Runtime + WebView readiness |
+| Bridge/chrome coverage     | Shared Swift runtime        | Kotlin runtime              | Shared Swift runtime        |
+
 ## User-Agent Identification
 
 | Platform | User-Agent Suffix      |

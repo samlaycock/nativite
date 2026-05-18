@@ -20,8 +20,8 @@ export default defineConfig({
   test: {
     browser: {
       enabled: true,
-      provider: nativite({ platform: "ios" }),
-      instances: [{ browser: "ios" }],
+      provider: nativite({ platform: "macos" }),
+      instances: [{ browser: "macos" }],
     },
   },
 });
@@ -29,7 +29,7 @@ export default defineConfig({
 
 The provider accepts:
 
-- `platform`: `ios` or `android`.
+- `platform`: `ios`, `macos`, or `android`.
 - `device`: optional simulator, emulator, or physical device id.
 - `testUrl`: optional URL passed to the generated native harness.
 - `coordinator.endpoint`: local coordinator endpoint, defaulting to

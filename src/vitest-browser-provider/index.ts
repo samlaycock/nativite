@@ -1,5 +1,5 @@
 export interface NativiteVitestProviderOptions {
-  readonly platform: "ios" | "android";
+  readonly platform: "ios" | "macos" | "android";
   readonly device?: string;
   readonly testUrl?: string;
   readonly coordinator?: {

@@ -12,14 +12,16 @@ opt into real native execution.
 
 ```bash
 bunx nativite test --platform ios
+bunx nativite test --platform macos
 bunx nativite test --platform android
 bunx nativite test --platform ios --watch
 bunx nativite test --platform android --device emulator-5554
 ```
 
-`--platform` is required and currently accepts `ios` or `android`. `--device`
-passes a simulator, emulator, or physical device id to the provider. `--watch`
-keeps Vitest in watch mode; otherwise the command appends `--run` for
+`--platform` is required and currently accepts `ios`, `macos`, or `android`.
+`--device` passes a simulator, emulator, or physical device id to the provider.
+macOS launches target the host app directly, so `--device` is usually omitted.
+`--watch` keeps Vitest in watch mode; otherwise the command appends `--run` for
 CI-friendly non-watch execution.
 
 Optional lower-level flags are available when a test environment needs explicit
@@ -34,8 +36,9 @@ networking or artifact paths:
 ## Vitest Provider Invocation
 
 The command validates `nativite.config.ts`, resolves the selected platform, and
-checks the minimum native tooling before invoking Vitest. iOS tests require
-macOS with `xcodebuild` and `xcrun`; Android tests require `adb` on `PATH`.
+checks the minimum native tooling before invoking Vitest. iOS and macOS tests
+require macOS with `xcodebuild` and `xcrun`; Android tests require `adb` on
+`PATH`.
 
 Before launching Vitest, the command writes
 `.nativite/test/vitest.nativite.generated.mts`. This generated config imports

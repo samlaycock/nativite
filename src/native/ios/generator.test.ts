@@ -118,6 +118,41 @@ export default defineBackgroundTask({
     expect(swift).toContain('static let webEngine: String = "system"');
   });
 
+  it("generates macOS smoke-test runtime files for launch and readiness coverage", async () => {
+    const cwd = makeTempDir();
+    const config: NativiteConfig = {
+      ...baseConfig,
+      platforms: [macos()],
+    };
+
+    await generateProject(config, cwd, false, "generate", "macos");
+
+    const appDir = join(cwd, ".nativite", "macos", "TestApp");
+    const pbxproj = readFileSync(
+      join(cwd, ".nativite", "macos", "TestApp.xcodeproj", "project.pbxproj"),
+      "utf-8",
+    );
+    const viewController = readFileSync(join(appDir, "ViewController.swift"), "utf-8");
+    const bridge = readFileSync(join(appDir, "NativiteBridge.swift"), "utf-8");
+    const chrome = readFileSync(join(appDir, "NativiteChrome.swift"), "utf-8");
+    const harness = readFileSync(join(appDir, "NativiteTestHarness.swift"), "utf-8");
+
+    expect(pbxproj).toContain("SDKROOT = macosx;");
+    expect(pbxproj).toContain("SUPPORTED_PLATFORMS = macosx;");
+    expect(pbxproj).toContain("ViewController.swift in Sources");
+    expect(pbxproj).toContain("NativiteBridge.swift in Sources");
+    expect(pbxproj).toContain("NativiteChrome.swift in Sources");
+    expect(pbxproj).toContain("NativiteTestHarness.swift in Sources");
+    expect(viewController).toContain("NativiteTestHarness.register(platform:");
+    expect(viewController).toContain('"macos"');
+    expect(viewController).toContain("NativiteTestHarness.webViewReady(url: webView.url)");
+    expect(bridge).toContain("register(namespace:");
+    expect(chrome).toContain("func replayPendingState()");
+    expect(harness).toContain('type: "harness.register"');
+    expect(harness).toContain('type: "runtime.ready"');
+    expect(harness).toContain('type: "webview.ready"');
+  });
+
   it("writes native test harness configuration inputs", async () => {
     const cwd = makeTempDir();
 
