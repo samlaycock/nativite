@@ -20,6 +20,8 @@ describe("NativiteBridge.swift", () => {
     expect(swift).toContain(
       'register(namespace: "__background__", method: "schedule") { [weak self] args, completion in',
     );
+    expect(swift).toContain("self.backgroundTaskScheduler.status(id: taskId) { result in");
+    expect(swift).toContain("completion(.success(status))");
   });
 
   it("scopes chrome mutations to the primary webview", () => {
