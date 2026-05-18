@@ -65,6 +65,9 @@ provider implementations and native harness launch code:
 - `NATIVITE_TEST_DEVICE`
 - `NATIVITE_TEST_URL`
 - `NATIVITE_COORDINATOR_URL`
+- `NATIVITE_TEST_SESSION_ID`
+- `NATIVITE_TEST_SESSION_TOKEN`
+- `NATIVITE_TEST_TARGET_ID`
 - `NATIVITE_TEST_ARTIFACTS_DIR`
 - `NATIVITE_TEST_PROVIDER_OPTIONS`
 
@@ -72,26 +75,26 @@ provider implementations and native harness launch code:
 
 The coordinator is a local debug/test-only control plane for the Nativite
 Vitest provider and generated native harness. It must bind to loopback by
-default and create a per-run session token before launching or guiding launch of
-the native harness.
+default and creates a per-run session token before launching or guiding launch
+of the native harness. The CLI logs only a redacted token value.
 
 The expected lifecycle is:
 
 1. `nativite test` creates provider options, writes the generated Vitest config,
    and starts Vitest Browser Mode with the Nativite provider.
-2. The provider starts or connects to the local coordinator using the generated
-   endpoint and creates a random session token with at least 128 bits of
-   entropy.
-3. The provider launches the selected simulator, emulator, or device when
-   supported. If automatic launch is unavailable, it prints exact Xcode or
-   Android Studio fallback steps with the required harness inputs.
+2. `nativite test` starts the local HTTP coordinator on the generated loopback
+   endpoint and creates a random session token with 256 bits of entropy.
+3. The coordinator prints exact Xcode or Android Studio fallback steps with the
+   required harness inputs. Automatic simulator/emulator build launch remains a
+   platform-specific follow-up; the current coordinator owns the protocol
+   session, validation, routing, artifacts, and teardown.
 4. The native harness registers with `harness.register`, including its session
    token, platform, app id, runtime version, device id, and test URL.
 5. The coordinator validates the token, protocol version, platform, app id, and
    active session before accepting the harness.
-6. Browser-side helpers from `nativite/test` send native commands through the
-   provider/coordinator path. The coordinator routes commands to the active
-   harness and applies timeout, cancellation, and stale-session policy.
+6. Browser-side helpers from `nativite/test` send native commands through
+   `/commands/<command>` using the session token. Vitest provider lifecycle
+   commands use `/harness`.
 7. The harness streams readiness, native logs, screenshots, artifacts, protocol
    errors, and runtime state updates back to the coordinator.
 8. Vitest remains responsible for test assertions, reporters, snapshots, watch

@@ -6,6 +6,8 @@ export interface NativiteVitestProviderOptions {
     readonly endpoint?: string;
   };
   readonly artifactsDir?: string;
+  readonly sessionId?: string;
+  readonly sessionToken?: string;
   readonly launchTimeoutMs?: number;
   readonly watch?: boolean;
   readonly vitestVersion?: string;
@@ -88,6 +90,8 @@ export function nativite(options: NativiteVitestProviderOptions): NativiteBrowse
         platform: options.platform,
         device: options.device,
         testUrl: options.testUrl ?? url,
+        sessionId: options.sessionId ?? sessionId,
+        sessionToken: options.sessionToken,
         artifactsDir: options.artifactsDir,
         launchTimeoutMs: options.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS,
         watch: options.watch ?? false,

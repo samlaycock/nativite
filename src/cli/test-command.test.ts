@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { NativiteConfig } from "../index.ts";
 import type { ResolvedNativitePlatformRuntime } from "../platforms/registry.ts";
 import type { NativiteLogger } from "./logger.ts";
+import type { NativeTestCoordinator } from "./native-test-coordinator.ts";
 
 import {
   createGeneratedVitestConfig,
@@ -108,6 +109,7 @@ function createDependencies(options?: {
   readonly commandExists?: TestCommandDependencies["commandExists"];
   readonly writeFile?: TestCommandDependencies["writeFile"];
   readonly spawnVitest?: TestCommandDependencies["spawnVitest"];
+  readonly coordinator?: NativeTestCoordinator;
   readonly logger?: NativiteLogger;
 }): TestCommandDependencies {
   return {
@@ -119,6 +121,14 @@ function createDependencies(options?: {
     commandExists: options?.commandExists ?? (() => true),
     writeFile: options?.writeFile ?? writeFileSync,
     spawnVitest: options?.spawnVitest ?? createSpawnVitestMock(),
+    createSessionToken: () => "test-session-token",
+    createCoordinator: () =>
+      options?.coordinator ?? {
+        endpoint: "http://127.0.0.1:17321/harness",
+        sessionToken: "test-session-token",
+        start: async () => {},
+        stop: async () => {},
+      },
     createLogger: () => options?.logger ?? createMockLogger(),
   };
 }
@@ -131,6 +141,8 @@ describe("createTestProviderConfig", () => {
       watch: true,
       coordinatorPort: "18444",
       timeout: "90000",
+      sessionId: "session-1",
+      sessionToken: "token-1",
     });
 
     expect(config).toEqual({
@@ -142,6 +154,8 @@ describe("createTestProviderConfig", () => {
         port: 18444,
         endpoint: "http://127.0.0.1:18444/harness",
       },
+      sessionId: "session-1",
+      sessionToken: "token-1",
       artifactsDir: ".nativite/test-artifacts",
       launchTimeoutMs: 90000,
       watch: true,
@@ -205,6 +219,7 @@ describe("runTestCommand", () => {
     expect(env["NATIVITE_TEST_PLATFORM"]).toBe("android");
     expect(env["NATIVITE_TEST_DEVICE"]).toBe("emulator-5554");
     expect(env["NATIVITE_COORDINATOR_URL"]).toBe("http://127.0.0.1:17321/harness");
+    expect(env["NATIVITE_TEST_SESSION_TOKEN"]).toBe("test-session-token");
   });
 
   it("omits the device environment variable when no device is specified", async () => {
