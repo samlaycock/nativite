@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
-import { _drainFlush, _receiveNativeMessage, _resetChromeState, button, chrome, registerWebComponents, titleBar } from "./index.ts";
+import {
+  _drainFlush,
+  _receiveNativeMessage,
+  _resetChromeState,
+  button,
+  chrome,
+  registerWebComponents,
+  titleBar,
+} from "./index.ts";
 
 type NativeMessage = Record<string, unknown>;
 
@@ -43,6 +51,10 @@ class FakeMutationObserver {
     }
   }
 
+  takeRecords(): MutationRecord[] {
+    return [];
+  }
+
   static notify(origin: FakeHTMLElement, kind: MutationKind): void {
     for (const entry of FakeMutationObserver.entries) {
       const observesKind =
@@ -51,7 +63,7 @@ class FakeMutationObserver {
       if (!observesKind) continue;
       if (!FakeMutationObserver.matchesTarget(origin, entry.target, entry.options.subtree === true))
         continue;
-      entry.observer.callback([], entry.observer);
+      entry.observer.callback([], entry.observer as unknown as MutationObserver);
     }
   }
 
@@ -144,14 +156,17 @@ class FakeHTMLElement {
     for (const child of this.children) {
       child.setConnected(connected);
     }
-    if (connected && typeof (this as { connectedCallback?: () => void }).connectedCallback === "function") {
-      (this as { connectedCallback: () => void }).connectedCallback();
+    if (
+      connected &&
+      typeof (this as { connectedCallback?: () => void }).connectedCallback === "function"
+    ) {
+      (this as unknown as { connectedCallback: () => void }).connectedCallback();
     }
     if (
       !connected &&
       typeof (this as { disconnectedCallback?: () => void }).disconnectedCallback === "function"
     ) {
-      (this as { disconnectedCallback: () => void }).disconnectedCallback();
+      (this as unknown as { disconnectedCallback: () => void }).disconnectedCallback();
     }
   }
 
@@ -162,8 +177,15 @@ class FakeHTMLElement {
   ): void {
     const ctor = this.constructor as { observedAttributes?: readonly string[] };
     if (!ctor.observedAttributes?.includes(name)) return;
-    const callback = (this as { attributeChangedCallback?: (...args: string[]) => void })
-      .attributeChangedCallback;
+    const callback = (
+      this as {
+        attributeChangedCallback?: (
+          name: string,
+          oldValue: string | null,
+          newValue: string | null,
+        ) => void;
+      }
+    ).attributeChangedCallback;
     if (typeof callback !== "function") return;
     callback.call(this, name, oldValue, newValue);
   }
@@ -224,9 +246,14 @@ class FakeWindow {
   readonly HTMLElement = FakeHTMLElement as unknown as typeof HTMLElement;
   readonly MutationObserver = FakeMutationObserver as unknown as typeof MutationObserver;
   readonly document: FakeDocument;
-  readonly webkit: { readonly messageHandlers: { readonly nativite: { postMessage: typeof postMessage } } };
+  readonly webkit: {
+    readonly messageHandlers: { readonly nativite: { postMessage: typeof postMessage } };
+  };
 
-  private readonly listeners = new Map<string, Set<(event: { readonly type: string; readonly detail?: unknown }) => void>>();
+  private readonly listeners = new Map<
+    string,
+    Set<(event: { readonly type: string; readonly detail?: unknown }) => void>
+  >();
 
   constructor(customElements: FakeCustomElementRegistry, document: FakeDocument) {
     this.customElements = customElements;
