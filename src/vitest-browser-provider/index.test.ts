@@ -61,7 +61,6 @@ describe("nativite Vitest browser provider", () => {
             device: "iPhone 17",
             testUrl: "http://127.0.0.1:5173/__vitest__/?id=1",
             sessionId: "session-1",
-            sessionToken: "secret-token",
             artifactsDir: ".nativite/artifacts",
             launchTimeoutMs: 60000,
             watch: false,

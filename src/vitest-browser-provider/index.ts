@@ -92,7 +92,6 @@ export function nativite(options: NativiteVitestProviderOptions): NativiteBrowse
         device: options.device,
         testUrl: options.testUrl ?? url,
         sessionId: options.sessionId ?? sessionId,
-        sessionToken: options.sessionToken,
         artifactsDir: options.artifactsDir,
         launchTimeoutMs: options.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS,
         watch: options.watch ?? false,

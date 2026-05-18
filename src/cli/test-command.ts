@@ -238,7 +238,8 @@ export function createTestProviderConfig(options: {
 }
 
 function serializeProviderConfig(config: TestProviderConfig): string {
-  return JSON.stringify(config, null, 2);
+  const { sessionToken: _sessionToken, ...publicConfig } = config;
+  return JSON.stringify(publicConfig, null, 2);
 }
 
 function toImportSpecifier(fromDir: string, targetPath: string): string {

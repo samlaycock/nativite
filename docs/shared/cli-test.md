@@ -71,6 +71,10 @@ provider implementations and native harness launch code:
 - `NATIVITE_TEST_ARTIFACTS_DIR`
 - `NATIVITE_TEST_PROVIDER_OPTIONS`
 
+`NATIVITE_TEST_PROVIDER_OPTIONS` intentionally excludes
+`NATIVITE_TEST_SESSION_TOKEN`; the token is passed only through the dedicated
+environment variable so CI secret masking can target one value.
+
 ## Coordinator Lifecycle
 
 The coordinator is a local debug/test-only control plane for the Nativite
