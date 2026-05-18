@@ -175,7 +175,9 @@ const CHROME_CAPABILITY_AREAS = [
   "popovers",
 ] as const satisfies readonly ChromeCapabilityArea[];
 
-const CHROME_WEB_COMPONENT_AREAS = ["titleBar"] as const satisfies readonly ChromeWebComponentArea[];
+const CHROME_WEB_COMPONENT_AREAS = [
+  "titleBar",
+] as const satisfies readonly ChromeWebComponentArea[];
 
 function capabilityAreaForElement(el: ChromeElement): ChromeCapabilityArea {
   return (NAMED_AREAS[el._area] ?? el._area) as ChromeCapabilityArea;
@@ -1084,7 +1086,16 @@ function parseItemsContainer(container: Element, role: "leading" | "trailing"): 
 }
 
 function parseTitleBarConfig(element: HTMLElement): TitleBarConfig {
-  const config: TitleBarConfig = {};
+  const config: {
+    title?: TitleBarConfig["title"];
+    subtitle?: TitleBarConfig["subtitle"];
+    largeTitleMode?: TitleBarConfig["largeTitleMode"];
+    backLabel?: TitleBarConfig["backLabel"];
+    tint?: TitleBarConfig["tint"];
+    hidden?: TitleBarConfig["hidden"];
+    leadingItems?: TitleBarConfig["leadingItems"];
+    trailingItems?: TitleBarConfig["trailingItems"];
+  } = {};
 
   const titleElements = directChildrenByTag(element, "nv-title");
   if (titleElements.length > 1) {
@@ -1093,7 +1104,7 @@ function parseTitleBarConfig(element: HTMLElement): TitleBarConfig {
   const titleElement = titleElements[0];
   const titleAttr = readAttrTrimmed(element, "title");
   const titleFromNode = titleElement
-    ? readAttrTrimmed(titleElement, "title") ?? titleElement.textContent?.trim() ?? undefined
+    ? (readAttrTrimmed(titleElement, "title") ?? titleElement.textContent?.trim() ?? undefined)
     : undefined;
   if (titleAttr ?? titleFromNode) config.title = (titleAttr ?? titleFromNode)!;
 
@@ -1125,7 +1136,8 @@ function parseTitleBarConfig(element: HTMLElement): TitleBarConfig {
       "Multiple <nv-leadingitems> elements were found under <nv-titlebar>; only the first one will be used.",
     );
   }
-  if (leadingContainers[0]) config.leadingItems = parseItemsContainer(leadingContainers[0], "leading");
+  if (leadingContainers[0])
+    config.leadingItems = parseItemsContainer(leadingContainers[0], "leading");
 
   const trailingContainers = directChildrenByTag(element, "nv-trailingitems");
   if (trailingContainers.length > 1) {
@@ -1167,80 +1179,77 @@ function registerTitleBarWebComponents(
     return constructor;
   };
 
-  defineIfMissing("nv-title", () =>
-    class NvTitleElement extends BaseHTMLElement {},
+  defineIfMissing("nv-title", () => class NvTitleElement extends BaseHTMLElement {});
+  defineIfMissing("nv-leadingitems", () => class NvLeadingItemsElement extends BaseHTMLElement {});
+  defineIfMissing(
+    "nv-trailingitems",
+    () => class NvTrailingItemsElement extends BaseHTMLElement {},
   );
-  defineIfMissing("nv-leadingitems", () =>
-    class NvLeadingItemsElement extends BaseHTMLElement {},
-  );
-  defineIfMissing("nv-trailingitems", () =>
-    class NvTrailingItemsElement extends BaseHTMLElement {},
-  );
-  defineIfMissing("nv-button", () =>
-    class NvButtonElement extends BaseHTMLElement {},
-  );
-  defineIfMissing("nv-titlebar", () =>
-    class NvTitleBarElement extends BaseHTMLElement {
-      static get observedAttributes(): readonly string[] {
-        return TITLE_BAR_ROOT_ATTRIBUTES;
-      }
-
-      private _cleanup: Unsubscribe | undefined;
-      private _observer: MutationObserver | undefined;
-      private _pendingRender = false;
-
-      connectedCallback(): void {
-        if (!this._observer) {
-          this._observer = new MutationObserverCtor(() => {
-            this.scheduleRender();
-          });
-          this._observer.observe(this, {
-            attributes: true,
-            childList: true,
-            subtree: true,
-          });
+  defineIfMissing("nv-button", () => class NvButtonElement extends BaseHTMLElement {});
+  defineIfMissing(
+    "nv-titlebar",
+    () =>
+      class NvTitleBarElement extends BaseHTMLElement {
+        static get observedAttributes(): readonly string[] {
+          return TITLE_BAR_ROOT_ATTRIBUTES;
         }
-        this.scheduleRender();
-      }
 
-      disconnectedCallback(): void {
-        if (this._observer) {
-          this._observer.disconnect();
-          this._observer = undefined;
+        private _cleanup: Unsubscribe | undefined;
+        private _observer: MutationObserver | undefined;
+        private _pendingRender = false;
+
+        connectedCallback(): void {
+          if (!this._observer) {
+            this._observer = new MutationObserverCtor(() => {
+              this.scheduleRender();
+            });
+            this._observer.observe(this, {
+              attributes: true,
+              childList: true,
+              subtree: true,
+            });
+          }
+          this.scheduleRender();
         }
-        this.teardownLayer();
-      }
 
-      attributeChangedCallback(
-        _name: string,
-        oldValue: string | null,
-        newValue: string | null,
-      ): void {
-        if (oldValue === newValue) return;
-        this.scheduleRender();
-      }
-
-      private scheduleRender(): void {
-        if (this._pendingRender) return;
-        this._pendingRender = true;
-        queueMicrotask(() => {
-          this._pendingRender = false;
-          if (!this.isConnected) {
-            this.teardownLayer();
-            return;
+        disconnectedCallback(): void {
+          if (this._observer) {
+            this._observer.disconnect();
+            this._observer = undefined;
           }
           this.teardownLayer();
-          this._cleanup = chrome(titleBar(parseTitleBarConfig(this)));
-        });
-      }
+        }
 
-      private teardownLayer(): void {
-        if (!this._cleanup) return;
-        const cleanup = this._cleanup;
-        this._cleanup = undefined;
-        cleanup();
-      }
-    },
+        attributeChangedCallback(
+          _name: string,
+          oldValue: string | null,
+          newValue: string | null,
+        ): void {
+          if (oldValue === newValue) return;
+          this.scheduleRender();
+        }
+
+        private scheduleRender(): void {
+          if (this._pendingRender) return;
+          this._pendingRender = true;
+          queueMicrotask(() => {
+            this._pendingRender = false;
+            if (!this.isConnected) {
+              this.teardownLayer();
+              return;
+            }
+            this.teardownLayer();
+            this._cleanup = chrome(titleBar(parseTitleBarConfig(this)));
+          });
+        }
+
+        private teardownLayer(): void {
+          if (!this._cleanup) return;
+          const cleanup = this._cleanup;
+          this._cleanup = undefined;
+          cleanup();
+        }
+      },
   );
 }
 
