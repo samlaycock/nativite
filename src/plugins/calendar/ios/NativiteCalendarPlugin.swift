@@ -374,7 +374,6 @@ func registerNativiteCalendarPlugin(_ bridge: NativiteBridge) {
         controller = editController
       } else {
         let viewController = EKEventViewController()
-        viewController.eventStore = store
         viewController.event = event
         viewController.allowsEditing = false
         let navigationController = UINavigationController(rootViewController: viewController)

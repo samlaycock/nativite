@@ -89,7 +89,7 @@ describe("calendar plugin", () => {
     expect(source).not.toContain("private var activeEventViewDismissTarget");
     expect(source).toContain('let mode = options["mode"] as? String ?? "view"');
     expect(source).toContain("EKEventViewController");
-    expect(source).toContain("viewController.eventStore = store");
+    expect(source).not.toContain("viewController.eventStore = store");
     expect(source).toContain("queryEvents requires options.");
     expect(source).toContain("createEvent requires an event.");
     expect(source).toContain("openEvent requires an id.");
