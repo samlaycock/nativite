@@ -49,6 +49,64 @@ Each `chrome()` call returns a cleanup function. When called, it removes that la
 
 Named areas (sheets, drawers, etc.) are grouped under plural NCLP containers (`sheets`, `drawers`, `appWindows`, `popovers`).
 
+## Declarative Web Components (v1)
+
+`nativite/chrome` also supports declarative chrome authoring through custom elements.
+
+### Registration
+
+```ts
+import { registerWebComponents } from "nativite/chrome";
+
+registerWebComponents(); // Registers all implemented areas (currently titleBar)
+// or:
+registerWebComponents(["titleBar"]);
+```
+
+Registration is idempotent, and it safely no-ops in non-DOM environments.
+
+### Supported elements (v1)
+
+- `<nv-titlebar>` — root title bar definition
+- `<nv-title>` — title/subtitle metadata
+- `<nv-leadingitems>` — leading item container
+- `<nv-trailingitems>` — trailing item container
+- `<nv-button>` — button item (`id` required)
+
+Example:
+
+```html
+<nv-titlebar>
+  <nv-title title="Inbox"></nv-title>
+  <nv-trailingitems>
+    <nv-button id="compose" label="Compose"></nv-button>
+  </nv-trailingitems>
+</nv-titlebar>
+```
+
+Equivalent imperative API:
+
+```ts
+chrome(
+  titleBar({
+    title: "Inbox",
+    trailingItems: [{ id: "compose", label: "Compose" }],
+  }),
+);
+```
+
+### Lifecycle and updates
+
+- Connecting `<nv-titlebar>` applies a chrome layer automatically.
+- Attribute/subtree changes trigger a coalesced recompute and update.
+- Disconnecting `<nv-titlebar>` automatically cleans up its layer.
+
+### v1 constraints
+
+- `<nv-leadingitems>` and `<nv-trailingitems>` currently support only `<nv-button>` children.
+- Unsupported markup is ignored with development warnings.
+- Existing imperative `chrome(...)` APIs remain fully supported and unchanged.
+
 ## NCLP v2 Wire Format
 
 The public authoring API accepts `chrome()`, `titleBar()`, `navigation()`, and the other factory descriptors. That TypeScript API is the stable developer-facing chrome API for app code.

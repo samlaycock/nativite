@@ -8,6 +8,7 @@ describe("nativite/chrome public exports", () => {
     expect(typeof chromePublic.titleBar).toBe("function");
     expect(typeof chromePublic.navigation).toBe("function");
     expect(typeof chromePublic.sheet).toBe("function");
+    expect(typeof chromePublic.registerWebComponents).toBe("function");
     expect(typeof chromePublic.chrome.supports).toBe("function");
     expect(chromePublic.chrome.capabilities).toBeInstanceOf(Set);
   });
