@@ -164,6 +164,7 @@ export default defineBackgroundTask({
       join(cwd, ".nativite", "ios", "TestApp", "NativiteConfig.swift"),
       "utf-8",
     );
+    expect(swift).toContain("import Foundation");
     expect(swift).toContain(
       'static let testHarnessEnabled: Bool = ProcessInfo.processInfo.environment["NATIVITE_TEST_HARNESS"] == "1"',
     );
