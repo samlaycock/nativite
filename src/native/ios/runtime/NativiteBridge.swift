@@ -343,7 +343,14 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
         completion(.failure(BridgeError.malformedArguments))
         return
       }
-      self.backgroundTaskScheduler.status(id: taskId, completion: completion)
+      self.backgroundTaskScheduler.status(id: taskId) { result in
+        switch result {
+        case .success(let status):
+          completion(.success(status))
+        case .failure(let error):
+          completion(.failure(error))
+        }
+      }
     }
 #endif
   }
