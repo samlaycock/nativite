@@ -120,6 +120,14 @@ describe("NativiteChrome.swift", () => {
         'request.setValue(nvPlatform, forHTTPHeaderField: "x-nativite-platform")',
       );
     });
+
+    it("compile-gates iOS 26 tab accessory APIs for older Xcode SDKs", () => {
+      expect(swift).toContain("#if compiler(>=6.2)");
+      expect(swift).toContain("tbc.tabBarMinimizeBehavior = .automatic");
+      expect(swift).toContain("searchTab.automaticallyActivatesSearch = true");
+      expect(swift).toContain("let accessory = UITabAccessory(contentView: accessoryVC.view)");
+      expect(swift).toContain("tbc.setBottomAccessory(nil, animated: false)");
+    });
   });
 
   describe("applyInitialState", () => {

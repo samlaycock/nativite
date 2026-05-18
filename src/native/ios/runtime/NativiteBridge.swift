@@ -17,6 +17,9 @@ class NativiteBridge: NSObject, WKScriptMessageHandlerWithReply {
   // Keyed as "namespace.method" for O(1) dispatch
   private var handlers: [String: NativiteHandler] = [:]
   private var lastChromeRevisionByDocId: [String: Int] = [:]
+#if os(iOS)
+  private let backgroundTaskScheduler = NativiteBackgroundTaskScheduler()
+#endif
   private static let maxChromeSnapshotNodes = 500
   private static let maxChromeSnapshotChildren = 200
   private static let nclpLeafKinds: Set<String> = ["item", "title", "search", "separator", "spacer", "statusBar", "homeIndicator"]

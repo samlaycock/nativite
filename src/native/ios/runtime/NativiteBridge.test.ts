@@ -13,6 +13,15 @@ describe("NativiteBridge.swift", () => {
     expect(swift).toContain("completion(.success(status))");
   });
 
+  it("keeps the iOS background scheduler available for built-in background handlers", () => {
+    expect(swift).toContain(
+      "private let backgroundTaskScheduler = NativiteBackgroundTaskScheduler()",
+    );
+    expect(swift).toContain(
+      'register(namespace: "__background__", method: "schedule") { [weak self] args, completion in',
+    );
+  });
+
   it("scopes chrome mutations to the primary webview", () => {
     expect(swift).toContain("weak var primaryWebView: WKWebView?");
     expect(swift).toContain(

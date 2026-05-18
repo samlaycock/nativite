@@ -126,6 +126,7 @@ describe("pbxprojTemplate (plugins)", () => {
     };
 
     const pbxproj = pbxprojTemplate(baseConfig, resolvedPlugins, "/tmp/demo/.nativite/ios", "ios");
+    expect(pbxproj).toContain('DIST_SRC=\\"$SRCROOT/../../dist-ios\\"');
     expect(pbxproj).toContain('DEV_JSON_SRC=\\"$SRCROOT/../dev.json\\"');
     expect(pbxproj).toContain('DEV_JSON_DEST=\\"$CODESIGNING_FOLDER_PATH/dev.json\\"');
     expect(pbxproj).toContain(

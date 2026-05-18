@@ -455,18 +455,20 @@ class NativiteChrome: NSObject {
     //   "onScrollDown" → .onScrollDown (minimise when scrolling down)
     //   "onScrollUp"   → .onScrollUp   (minimise when scrolling up)
     //    default       → .automatic    (UIKit decides based on context)
-    if #available(iOS 26.0, *) {
-      if let behavior = state["minimizeBehavior"] as? String {
-        switch behavior {
-        case "never":        tbc.tabBarMinimizeBehavior = .never
-        case "onScrollDown": tbc.tabBarMinimizeBehavior = .onScrollDown
-        case "onScrollUp":   tbc.tabBarMinimizeBehavior = .onScrollUp
-        default:             tbc.tabBarMinimizeBehavior = .automatic
+    #if compiler(>=6.2)
+      if #available(iOS 26.0, *) {
+        if let behavior = state["minimizeBehavior"] as? String {
+          switch behavior {
+          case "never":        tbc.tabBarMinimizeBehavior = .never
+          case "onScrollDown": tbc.tabBarMinimizeBehavior = .onScrollDown
+          case "onScrollUp":   tbc.tabBarMinimizeBehavior = .onScrollUp
+          default:             tbc.tabBarMinimizeBehavior = .automatic
+          }
+        } else {
+          tbc.tabBarMinimizeBehavior = .automatic
         }
-      } else {
-        tbc.tabBarMinimizeBehavior = .automatic
       }
-    }
+    #endif
 
     // ── Tab management ───────────────────────────────────────────────────
     // Only rebuild UITab objects when the structural identity of the tab
@@ -546,9 +548,11 @@ class NativiteChrome: NSObject {
             searchTab.title = label
             searchTab.image = searchImage
             if let subtitle { searchTab.subtitle = subtitle }
-            if #available(iOS 26.0, *), hasSearchBar {
-              searchTab.automaticallyActivatesSearch = true
-            }
+            #if compiler(>=6.2)
+              if #available(iOS 26.0, *), hasSearchBar {
+                searchTab.automaticallyActivatesSearch = true
+              }
+            #endif
             tabs.append(searchTab)
           } else {
             let tab = UITab(title: label, image: icon, identifier: id) { _ in
@@ -804,6 +808,7 @@ class NativiteChrome: NSObject {
       }
 
       if shouldInstall {
+        #if compiler(>=6.2)
         if #available(iOS 26.0, *), let tbc = tabBarController {
           // Use the native UITabAccessory API — the system provides liquid
           // glass styling, rounded capsule shape, and scroll-to-minimize.
@@ -813,6 +818,7 @@ class NativiteChrome: NSObject {
           let accessory = UITabAccessory(contentView: accessoryVC.view)
           tbc.setBottomAccessory(accessory, animated: true)
         } else {
+        #endif
           // Fallback: manually position above the tab bar.
           vc.addChild(accessoryVC)
           accessoryVC.view.translatesAutoresizingMaskIntoConstraints = false
@@ -834,20 +840,26 @@ class NativiteChrome: NSObject {
             accessoryVC.view.heightAnchor.constraint(equalToConstant: 44),
           ])
           accessoryVC.didMove(toParent: vc)
+        #if compiler(>=6.2)
         }
+        #endif
 
         tabBottomAccessoryVC = accessoryVC
         sendEvent(name: "tabBottomAccessory.presented", data: [:])
       }
     } else {
       if let accessoryVC = tabBottomAccessoryVC {
+        #if compiler(>=6.2)
         if #available(iOS 26.0, *), let tbc = tabBarController {
           tbc.setBottomAccessory(nil, animated: true)
         } else {
+        #endif
           accessoryVC.willMove(toParent: nil)
           accessoryVC.view.removeFromSuperview()
           accessoryVC.removeFromParent()
+        #if compiler(>=6.2)
         }
+        #endif
         tabBottomAccessoryVC = nil
         sendEvent(name: "tabBottomAccessory.dismissed", data: [:])
       }
@@ -857,13 +869,17 @@ class NativiteChrome: NSObject {
   /// Tears down the tab-bottom accessory (if any) without sending events.
   private func resetTabBottomAccessory() {
     if let accessoryVC = tabBottomAccessoryVC {
+      #if compiler(>=6.2)
       if #available(iOS 26.0, *), let tbc = tabBarController {
         tbc.setBottomAccessory(nil, animated: false)
       } else {
+      #endif
         accessoryVC.willMove(toParent: nil)
         accessoryVC.view.removeFromSuperview()
         accessoryVC.removeFromParent()
+      #if compiler(>=6.2)
       }
+      #endif
       tabBottomAccessoryVC = nil
     }
   }
