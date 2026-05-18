@@ -71,6 +71,7 @@ const UUID = {
   sourcesGroup: "444444444444444444444444",
   productsGroup: "555555555555555555555555",
   appProduct: "666666666666666666666666",
+  configFile: "AA0000000000000000000012",
   appDelegateFile: "AA0000000000000000000001",
   viewControllerFile: "AA0000000000000000000002",
   bridgeFile: "AA0000000000000000000003",
@@ -87,6 +88,7 @@ const UUID = {
   chromeStateFile: "AA000000000000000000000E",
   backgroundTasksFile: "AA000000000000000000000F",
   backgroundManifestFolder: "AA0000000000000000000010",
+  configBuildFile: "BB0000000000000000000017",
   appDelegateBuildFile: "BB0000000000000000000001",
   viewControllerBuildFile: "BB0000000000000000000002",
   bridgeBuildFile: "BB0000000000000000000003",
@@ -219,6 +221,7 @@ export function pbxprojTemplate(
 
   const sourcesBuildFiles = [
     `\t\t${UUID.mainEntryBuildFile} /* NativiteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.mainEntryFile} /* NativiteApp.swift */; };`,
+    `\t\t${UUID.configBuildFile} /* NativiteConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.configFile} /* NativiteConfig.swift */; };`,
     `\t\t${UUID.appDelegateBuildFile} /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.appDelegateFile} /* AppDelegate.swift */; };`,
     `\t\t${UUID.viewControllerBuildFile} /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.viewControllerFile} /* ViewController.swift */; };`,
     `\t\t${UUID.bridgeBuildFile} /* NativiteBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${UUID.bridgeFile} /* NativiteBridge.swift */; };`,
@@ -241,6 +244,7 @@ export function pbxprojTemplate(
 
   const sourceFileRefs = [
     `\t\t${UUID.mainEntryFile} /* NativiteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteApp.swift; sourceTree = "<group>"; };`,
+    `\t\t${UUID.configFile} /* NativiteConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteConfig.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.appDelegateFile} /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.viewControllerFile} /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };`,
     `\t\t${UUID.bridgeFile} /* NativiteBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativiteBridge.swift; sourceTree = "<group>"; };`,
@@ -261,6 +265,7 @@ export function pbxprojTemplate(
 
   const sourcesGroupChildren = [
     UUID.mainEntryFile,
+    UUID.configFile,
     UUID.appDelegateFile,
     UUID.viewControllerFile,
     UUID.bridgeFile,
@@ -285,6 +290,7 @@ export function pbxprojTemplate(
 
   const sourcesPhaseFiles = [
     UUID.mainEntryBuildFile,
+    UUID.configBuildFile,
     UUID.appDelegateBuildFile,
     UUID.viewControllerBuildFile,
     UUID.bridgeBuildFile,

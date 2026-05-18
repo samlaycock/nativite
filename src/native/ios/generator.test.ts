@@ -139,6 +139,7 @@ export default defineBackgroundTask({
 
     expect(pbxproj).toContain("SDKROOT = macosx;");
     expect(pbxproj).toContain("SUPPORTED_PLATFORMS = macosx;");
+    expect(pbxproj).toContain("NativiteConfig.swift in Sources");
     expect(pbxproj).toContain("ViewController.swift in Sources");
     expect(pbxproj).toContain("NativiteBridge.swift in Sources");
     expect(pbxproj).toContain("NativiteChrome.swift in Sources");

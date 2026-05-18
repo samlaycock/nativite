@@ -46,7 +46,7 @@ private func appIntegrityErrorCode(_ error: Error) -> String {
   return "native-failure"
 }
 
-private func requireAppAttestSupport(_ completion: (Result<Any?>) -> Void) -> Bool {
+private func requireAppAttestSupport(_ completion: (Result<Any?, Error>) -> Void) -> Bool {
   guard DCAppAttestService.shared.isSupported else {
     completion(.failure(appIntegrityFailure(
       "unsupported-device",
