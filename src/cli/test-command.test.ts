@@ -55,6 +55,7 @@ function createMockConfig(): NativiteConfig {
     },
     platforms: [
       { platform: "ios", minimumVersion: "17.0" },
+      { platform: "macos", minimumVersion: "14.0" },
       { platform: "android", minSdk: 26 },
     ],
   } as NativiteConfig;
@@ -114,7 +115,7 @@ function createDependencies(options?: {
     platform: () => options?.platform ?? "darwin",
     loadConfig: async () => createMockConfig(),
     resolveConfiguredPlatformRuntimes: () =>
-      options?.runtimes ?? [createRuntime("ios"), createRuntime("android")],
+      options?.runtimes ?? [createRuntime("ios"), createRuntime("macos"), createRuntime("android")],
     commandExists: options?.commandExists ?? (() => true),
     writeFile: options?.writeFile ?? writeFileSync,
     spawnVitest: options?.spawnVitest ?? createSpawnVitestMock(),
@@ -278,13 +279,28 @@ describe("runTestCommand", () => {
     expect(args).not.toContain("--run");
   });
 
-  it("fails before invoking Vitest when the platform is not supported", async () => {
+  it("invokes Vitest Browser Mode for macOS test runs", async () => {
+    const cwd = createTempProject();
     const spawnVitest = createSpawnVitestMock();
 
     const exitCode = await runTestCommand(
       { platform: "macos" },
+      createDependencies({ cwd, spawnVitest }),
+    );
+
+    expect(exitCode).toBe(0);
+    const [_cwd, _args, env] = spawnVitest.mock.calls[0]!;
+    expect(_cwd).toBe(cwd);
+    expect(env["NATIVITE_TEST_PLATFORM"]).toBe("macos");
+  });
+
+  it("fails before invoking Vitest when the platform is not supported", async () => {
+    const spawnVitest = createSpawnVitestMock();
+
+    const exitCode = await runTestCommand(
+      { platform: "windows" },
       createDependencies({
-        runtimes: [createRuntime("macos")],
+        runtimes: [createRuntime("windows")],
         spawnVitest,
       }),
     );
@@ -313,6 +329,30 @@ describe("runTestCommand", () => {
     expect(exitCode).toBe(1);
     expect(error).toHaveBeenCalledWith(
       "iOS native tests require xcodebuild. Install Xcode or Xcode Command Line Tools.",
+    );
+    expect(spawnVitest).not.toHaveBeenCalled();
+  });
+
+  it("fails with an actionable macOS tooling error before invoking Vitest", async () => {
+    const error = mock(() => {});
+    const spawnVitest = createSpawnVitestMock();
+    const logger: NativiteLogger = {
+      ...createMockLogger(),
+      error,
+    };
+
+    const exitCode = await runTestCommand(
+      { platform: "macos" },
+      createDependencies({
+        commandExists: (command) => command !== "xcrun",
+        logger,
+        spawnVitest,
+      }),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(error).toHaveBeenCalledWith(
+      "macOS native tests require xcrun. Install Xcode or Xcode Command Line Tools.",
     );
     expect(spawnVitest).not.toHaveBeenCalled();
   });

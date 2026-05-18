@@ -201,6 +201,24 @@ The `xcodebuild` step requires Xcode command line tools. Nativite does not
 install Xcode, select signing identities, or manage notarization credentials; set
 those up in Xcode or the CI image before running macOS builds.
 
+## Native App Testing
+
+macOS is a first-class 1.0 platform for `nativite test`:
+
+```bash
+bunx nativite test --platform macos
+```
+
+The command requires macOS with `xcodebuild` and `xcrun` available, writes the
+same generated Vitest Browser Mode provider config as iOS and Android, and
+passes macOS harness options through `NATIVITE_TEST_PROVIDER_OPTIONS`.
+
+Generated macOS projects include `NativiteTestHarness.swift`,
+`ViewController.swift`, `NativiteBridge.swift`, `NativiteChrome.swift`, and
+`NativiteChromeState.swift` in the app target. That gives the smoke path build
+coverage, direct app launch readiness, bridge readiness, chrome readiness, and
+basic `WKWebView` load readiness through the shared Apple runtime.
+
 ### File Extension Resolution
 
 ```

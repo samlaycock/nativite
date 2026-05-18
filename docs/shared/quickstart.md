@@ -58,6 +58,7 @@ Build one platform when iterating:
 
 ```bash
 bunx nativite build --platform ios
+bunx nativite build --platform macos
 ```
 
 The build command runs Vite for each platform, writes platform-specific web
@@ -70,6 +71,7 @@ Open the generated project in the native IDE:
 
 ```bash
 open .nativite/ios/MyApp.xcodeproj
+open .nativite/macos/MyApp.xcodeproj
 open .nativite/android
 ```
 
@@ -77,6 +79,12 @@ Use Xcode or Android Studio for simulator/device selection, signing, native
 build settings, and launch. Nativite intentionally stops at generated native
 projects and embedded web bundles; signed `.ipa`, `.aab`, `.apk`, `.app`, and
 `.dmg` artifacts come from the native toolchain or CI.
+
+For native-aware app tests, macOS is supported as a first-class platform:
+
+```bash
+bunx nativite test --platform macos
+```
 
 For native debug builds that should load the web app from Vite, run:
 
