@@ -8,6 +8,12 @@ import type { ResolvedNativitePlatformRuntime } from "../platforms/registry.ts";
 import { resolveConfiguredPlatformRuntimes } from "../platforms/registry.ts";
 import { loadConfig } from "./config.ts";
 import { createNativiteLogger, type NativiteLogger } from "./logger.ts";
+import {
+  createNativeTestCoordinator,
+  createSessionToken,
+  type NativeTestCoordinator,
+  type NativeTestCoordinatorConfig,
+} from "./native-test-coordinator.ts";
 
 export interface TestCommandOptions {
   readonly platform?: string;
@@ -34,6 +40,11 @@ export interface TestCommandDependencies {
     args: readonly string[],
     env: NodeJS.ProcessEnv,
   ) => Promise<number>;
+  readonly createSessionToken: () => string;
+  readonly createCoordinator: (
+    config: NativeTestCoordinatorConfig,
+    logger: NativiteLogger,
+  ) => NativeTestCoordinator;
   readonly createLogger: (tag: string) => NativiteLogger;
 }
 
@@ -46,6 +57,8 @@ export interface TestProviderConfig {
     readonly port: number;
     readonly endpoint: string;
   };
+  readonly sessionId: string;
+  readonly sessionToken: string;
   readonly artifactsDir: string;
   readonly launchTimeoutMs: number;
   readonly watch: boolean;
@@ -91,6 +104,8 @@ const DEFAULT_TEST_COMMAND_DEPS: TestCommandDependencies = {
   commandExists,
   writeFile: writeFileSync,
   spawnVitest,
+  createSessionToken,
+  createCoordinator: createNativeTestCoordinator,
   createLogger: createNativiteLogger,
 };
 
@@ -191,6 +206,8 @@ export function createTestProviderConfig(options: {
   readonly coordinatorPort?: string;
   readonly artifactsDir?: string;
   readonly timeout?: string;
+  readonly sessionId?: string;
+  readonly sessionToken?: string;
 }): TestProviderConfig {
   const port = parsePositiveInteger(
     options.coordinatorPort,
@@ -212,6 +229,8 @@ export function createTestProviderConfig(options: {
       port,
       endpoint: `http://127.0.0.1:${port}/harness`,
     },
+    sessionId: options.sessionId ?? `nativite-${Date.now().toString(36)}`,
+    sessionToken: options.sessionToken ?? createSessionToken(),
     artifactsDir: options.artifactsDir ?? ".nativite/test-artifacts",
     launchTimeoutMs,
     watch: options.watch,
@@ -329,6 +348,7 @@ export async function runTestCommand(
       coordinatorPort: options.coordinatorPort,
       artifactsDir: options.artifactsDir,
       timeout: options.timeout,
+      sessionToken: deps.createSessionToken(),
     });
   } catch (err) {
     logger.error(toErrorMessage(err));
@@ -349,11 +369,28 @@ export async function runTestCommand(
   }
   const args = createVitestArgs(generatedConfigPath, providerConfig.watch);
   const coordinatorEnv = serializeProviderConfig(providerConfig);
+  const coordinator = deps.createCoordinator(
+    {
+      host: providerConfig.coordinator.host,
+      port: providerConfig.coordinator.port,
+      platform: providerConfig.platform,
+      device: providerConfig.device,
+      testUrl: providerConfig.testUrl,
+      artifactsDir: join(cwd, providerConfig.artifactsDir),
+      launchTimeoutMs: providerConfig.launchTimeoutMs,
+      sessionId: providerConfig.sessionId,
+      sessionToken: providerConfig.sessionToken,
+    },
+    logger,
+  );
   const testEnv: NodeJS.ProcessEnv = {
     ...process.env,
     NATIVITE_TEST_PLATFORM: runtime.id,
     NATIVITE_TEST_URL: providerConfig.testUrl,
     NATIVITE_COORDINATOR_URL: providerConfig.coordinator.endpoint,
+    NATIVITE_TEST_SESSION_ID: providerConfig.sessionId,
+    NATIVITE_TEST_SESSION_TOKEN: providerConfig.sessionToken,
+    NATIVITE_TEST_TARGET_ID: providerConfig.device,
     NATIVITE_TEST_ARTIFACTS_DIR: providerConfig.artifactsDir,
     NATIVITE_TEST_PROVIDER_OPTIONS: coordinatorEnv,
     NATIVITE_TEST_DEVICE: options.device,
@@ -364,7 +401,16 @@ export async function runTestCommand(
   logger.info(`Coordinator endpoint: ${providerConfig.coordinator.endpoint}`);
   logger.info(`Vitest config: ${generatedConfigPath}`);
 
-  const exitCode = await deps.spawnVitest(cwd, args, testEnv);
+  let exitCode: number;
+  try {
+    await coordinator.start();
+    exitCode = await deps.spawnVitest(cwd, args, testEnv);
+  } catch (err) {
+    logger.error(`Native test coordinator failed: ${toErrorMessage(err)}`);
+    return 1;
+  } finally {
+    await coordinator.stop();
+  }
 
   if (exitCode !== 0) logger.error(`Vitest exited with code ${exitCode}.`);
   return exitCode;
