@@ -9,6 +9,7 @@ export {
   menuBar,
   navigation,
   popover,
+  registerWebComponents,
   sheet,
   sidebarPanel,
   statusBar,

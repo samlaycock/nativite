@@ -121,6 +121,8 @@ export type ChromeCapabilityArea =
   | "appWindows"
   | "popovers";
 
+export type ChromeWebComponentArea = "titleBar";
+
 export interface SearchBarConfig {
   readonly placeholder?: string;
   readonly value?: string;

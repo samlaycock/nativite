@@ -12,6 +12,7 @@ import type {
   ChromeElement,
   ChromeEvent,
   ChromeEventType,
+  ChromeWebComponentArea,
   ChromeState,
   DrawerConfig,
   HomeIndicatorConfig,
@@ -173,6 +174,8 @@ const CHROME_CAPABILITY_AREAS = [
   "appWindows",
   "popovers",
 ] as const satisfies readonly ChromeCapabilityArea[];
+
+const CHROME_WEB_COMPONENT_AREAS = ["titleBar"] as const satisfies readonly ChromeWebComponentArea[];
 
 function capabilityAreaForElement(el: ChromeElement): ChromeCapabilityArea {
   return (NAMED_AREAS[el._area] ?? el._area) as ChromeCapabilityArea;
@@ -972,6 +975,293 @@ export const chrome = Object.defineProperties(chromeImpl, {
   },
   supports: { value: supportsChromeArea, configurable: true, enumerable: true, writable: true },
 }) as ChromeFunction;
+
+// ─── Declarative Web Components ───────────────────────────────────────────────
+
+type CustomElementRegistryLike = {
+  define(name: string, constructor: CustomElementConstructor): void;
+  get(name: string): CustomElementConstructor | undefined;
+};
+
+type HtmlElementConstructor = { new (): HTMLElement };
+type MutationObserverConstructorLike = { new (callback: MutationCallback): MutationObserver };
+
+const TITLE_BAR_ROOT_ATTRIBUTES = [
+  "title",
+  "subtitle",
+  "large-title-mode",
+  "back-label",
+  "tint",
+  "hidden",
+] as const;
+
+function readAttr(element: Element, name: string): string | undefined {
+  const value = element.getAttribute(name);
+  if (value === null) return undefined;
+  return value;
+}
+
+function readAttrTrimmed(element: Element, name: string): string | undefined {
+  const value = readAttr(element, name);
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readBooleanAttr(element: Element, name: string): boolean | undefined {
+  if (!element.hasAttribute(name)) return undefined;
+  const value = (element.getAttribute(name) ?? "").trim().toLowerCase();
+  if (value === "false" || value === "0" || value === "no" || value === "off") return false;
+  return true;
+}
+
+function readTagName(element: Element): string {
+  return element.tagName.toLowerCase();
+}
+
+function directChildrenByTag(element: Element, tagName: string): readonly Element[] {
+  return Array.from(element.children).filter((child) => readTagName(child) === tagName);
+}
+
+function warnWebComponent(message: string): void {
+  if (typeof console === "undefined") return;
+  const warn = console.warn;
+  if (typeof warn !== "function") return;
+  warn(`[nativite] ${message}`);
+}
+
+function parseButtonItem(element: Element): ButtonItem | undefined {
+  const id = readAttrTrimmed(element, "id");
+  if (!id) {
+    warnWebComponent("<nv-button> requires a non-empty `id` attribute and will be ignored.");
+    return undefined;
+  }
+  const style = readAttrTrimmed(element, "style");
+  let parsedStyle: ButtonItem["style"];
+  if (style) {
+    if (style === "plain" || style === "primary" || style === "destructive") {
+      parsedStyle = style;
+    } else {
+      warnWebComponent(
+        `<nv-button id="${id}"> has unsupported style "${style}" and will fall back to default styling.`,
+      );
+    }
+  }
+  const badge = readAttr(element, "badge");
+  const parsedBadge =
+    badge === undefined
+      ? undefined
+      : badge.trim() !== "" && !Number.isNaN(Number(badge))
+        ? Number(badge)
+        : badge;
+  return {
+    id,
+    ...(readAttrTrimmed(element, "label") ? { label: readAttrTrimmed(element, "label") } : {}),
+    ...(readAttrTrimmed(element, "icon") ? { icon: readAttrTrimmed(element, "icon") } : {}),
+    ...(parsedStyle ? { style: parsedStyle } : {}),
+    ...(readBooleanAttr(element, "disabled") !== undefined
+      ? { disabled: readBooleanAttr(element, "disabled") }
+      : {}),
+    ...(readAttrTrimmed(element, "tint") ? { tint: readAttrTrimmed(element, "tint") } : {}),
+    ...(parsedBadge !== undefined ? { badge: parsedBadge } : {}),
+  };
+}
+
+function parseItemsContainer(container: Element, role: "leading" | "trailing"): readonly BarItem[] {
+  const items: BarItem[] = [];
+  for (const child of Array.from(container.children)) {
+    const childTag = readTagName(child);
+    if (childTag === "nv-button") {
+      const item = parseButtonItem(child);
+      if (item) items.push(item);
+      continue;
+    }
+    warnWebComponent(
+      `<nv-${role}items> only supports <nv-button> children in v1; received <${childTag}> and ignored it.`,
+    );
+  }
+  return items;
+}
+
+function parseTitleBarConfig(element: HTMLElement): TitleBarConfig {
+  const config: TitleBarConfig = {};
+
+  const titleElements = directChildrenByTag(element, "nv-title");
+  if (titleElements.length > 1) {
+    warnWebComponent("Multiple <nv-title> elements were found; only the first one will be used.");
+  }
+  const titleElement = titleElements[0];
+  const titleAttr = readAttrTrimmed(element, "title");
+  const titleFromNode = titleElement
+    ? readAttrTrimmed(titleElement, "title") ?? titleElement.textContent?.trim() ?? undefined
+    : undefined;
+  if (titleAttr ?? titleFromNode) config.title = (titleAttr ?? titleFromNode)!;
+
+  const subtitleAttr = readAttrTrimmed(element, "subtitle");
+  const subtitleFromNode = titleElement ? readAttrTrimmed(titleElement, "subtitle") : undefined;
+  if (subtitleAttr ?? subtitleFromNode) config.subtitle = (subtitleAttr ?? subtitleFromNode)!;
+
+  const largeTitleMode = readAttrTrimmed(element, "large-title-mode");
+  if (largeTitleMode === "large" || largeTitleMode === "inline" || largeTitleMode === "automatic") {
+    config.largeTitleMode = largeTitleMode;
+  } else if (largeTitleMode !== undefined) {
+    warnWebComponent(
+      `Unsupported large-title-mode value "${largeTitleMode}" on <nv-titlebar>; expected "large", "inline", or "automatic".`,
+    );
+  }
+
+  if (element.hasAttribute("back-label")) {
+    const backLabel = readAttr(element, "back-label");
+    config.backLabel = backLabel === "" ? null : backLabel;
+  }
+  if (readAttrTrimmed(element, "tint")) config.tint = readAttrTrimmed(element, "tint");
+  if (readBooleanAttr(element, "hidden") !== undefined) {
+    config.hidden = readBooleanAttr(element, "hidden");
+  }
+
+  const leadingContainers = directChildrenByTag(element, "nv-leadingitems");
+  if (leadingContainers.length > 1) {
+    warnWebComponent(
+      "Multiple <nv-leadingitems> elements were found under <nv-titlebar>; only the first one will be used.",
+    );
+  }
+  if (leadingContainers[0]) config.leadingItems = parseItemsContainer(leadingContainers[0], "leading");
+
+  const trailingContainers = directChildrenByTag(element, "nv-trailingitems");
+  if (trailingContainers.length > 1) {
+    warnWebComponent(
+      "Multiple <nv-trailingitems> elements were found under <nv-titlebar>; only the first one will be used.",
+    );
+  }
+  if (trailingContainers[0])
+    config.trailingItems = parseItemsContainer(trailingContainers[0], "trailing");
+
+  for (const child of Array.from(element.children)) {
+    const tagName = readTagName(child);
+    if (tagName === "nv-title" || tagName === "nv-leadingitems" || tagName === "nv-trailingitems") {
+      continue;
+    }
+    if (tagName.startsWith("nv-")) {
+      warnWebComponent(
+        `<nv-titlebar> received unsupported child <${tagName}>; only <nv-title>, <nv-leadingitems>, and <nv-trailingitems> are supported in v1.`,
+      );
+    }
+  }
+
+  return config;
+}
+
+function registerTitleBarWebComponents(
+  customElementsRegistry: CustomElementRegistryLike,
+  BaseHTMLElement: HtmlElementConstructor,
+  MutationObserverCtor: MutationObserverConstructorLike,
+): void {
+  const defineIfMissing = (
+    name: string,
+    build: () => CustomElementConstructor,
+  ): CustomElementConstructor => {
+    const existing = customElementsRegistry.get(name);
+    if (existing) return existing;
+    const constructor = build();
+    customElementsRegistry.define(name, constructor);
+    return constructor;
+  };
+
+  defineIfMissing("nv-title", () =>
+    class NvTitleElement extends BaseHTMLElement {},
+  );
+  defineIfMissing("nv-leadingitems", () =>
+    class NvLeadingItemsElement extends BaseHTMLElement {},
+  );
+  defineIfMissing("nv-trailingitems", () =>
+    class NvTrailingItemsElement extends BaseHTMLElement {},
+  );
+  defineIfMissing("nv-button", () =>
+    class NvButtonElement extends BaseHTMLElement {},
+  );
+  defineIfMissing("nv-titlebar", () =>
+    class NvTitleBarElement extends BaseHTMLElement {
+      static get observedAttributes(): readonly string[] {
+        return TITLE_BAR_ROOT_ATTRIBUTES;
+      }
+
+      private _cleanup: Unsubscribe | undefined;
+      private _observer: MutationObserver | undefined;
+      private _pendingRender = false;
+
+      connectedCallback(): void {
+        if (!this._observer) {
+          this._observer = new MutationObserverCtor(() => {
+            this.scheduleRender();
+          });
+          this._observer.observe(this, {
+            attributes: true,
+            childList: true,
+            subtree: true,
+          });
+        }
+        this.scheduleRender();
+      }
+
+      disconnectedCallback(): void {
+        if (this._observer) {
+          this._observer.disconnect();
+          this._observer = undefined;
+        }
+        this.teardownLayer();
+      }
+
+      attributeChangedCallback(
+        _name: string,
+        oldValue: string | null,
+        newValue: string | null,
+      ): void {
+        if (oldValue === newValue) return;
+        this.scheduleRender();
+      }
+
+      private scheduleRender(): void {
+        if (this._pendingRender) return;
+        this._pendingRender = true;
+        queueMicrotask(() => {
+          this._pendingRender = false;
+          if (!this.isConnected) {
+            this.teardownLayer();
+            return;
+          }
+          this.teardownLayer();
+          this._cleanup = chrome(titleBar(parseTitleBarConfig(this)));
+        });
+      }
+
+      private teardownLayer(): void {
+        if (!this._cleanup) return;
+        const cleanup = this._cleanup;
+        this._cleanup = undefined;
+        cleanup();
+      }
+    },
+  );
+}
+
+export function registerWebComponents(areas?: readonly ChromeWebComponentArea[]): void {
+  if (typeof window === "undefined") return;
+  const customElementsRegistry = (window as Window & { customElements?: CustomElementRegistryLike })
+    .customElements;
+  const BaseHTMLElement = (window as Window & { HTMLElement?: HtmlElementConstructor }).HTMLElement;
+  const MutationObserverCtor = (
+    window as Window & { MutationObserver?: MutationObserverConstructorLike }
+  ).MutationObserver;
+  if (!customElementsRegistry || !BaseHTMLElement || !MutationObserverCtor) return;
+
+  const requestedAreas =
+    areas === undefined ? CHROME_WEB_COMPONENT_AREAS : areas.filter((area) => area === "titleBar");
+  for (const area of requestedAreas) {
+    if (area === "titleBar") {
+      registerTitleBarWebComponents(customElementsRegistry, BaseHTMLElement, MutationObserverCtor);
+    }
+  }
+}
 
 // ─── Chrome Area Factory Functions ───────────────────────────────────────────
 
