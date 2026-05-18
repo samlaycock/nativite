@@ -75,6 +75,7 @@ describe("app integrity plugin", () => {
 
     expect(source).toContain("import CryptoKit");
     expect(source).toContain("private func sha256Data");
+    expect(source).toContain("(Result<Any?, Error>) -> Void");
     expect(source).toContain("let clientDataHash = sha256Data(challenge)");
     expect(source).toContain("completion(.failure(appIntegrityFailure(");
     expect(
