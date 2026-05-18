@@ -143,6 +143,7 @@ export default defineBackgroundTask({
     expect(pbxproj).toContain("NativiteBridge.swift in Sources");
     expect(pbxproj).toContain("NativiteChrome.swift in Sources");
     expect(pbxproj).toContain("NativiteTestHarness.swift in Sources");
+    expect(pbxproj).toContain("OTAUpdater.swift in Sources");
     expect(viewController).toContain("NativiteTestHarness.register(platform:");
     expect(viewController).toContain('"macos"');
     expect(viewController).toContain("NativiteTestHarness.webViewReady(url: webView.url)");

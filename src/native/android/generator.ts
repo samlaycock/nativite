@@ -388,7 +388,7 @@ export async function generateProject(
   execSync("gradle wrapper --gradle-version 8.13 --no-daemon", {
     cwd: projectRoot,
     stdio: "pipe",
-    timeout: 60_000,
+    timeout: 180_000,
   });
 
   // Root build files

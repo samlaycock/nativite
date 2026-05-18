@@ -113,6 +113,12 @@ describe("launchScreenTemplate", () => {
     expect(output).toContain('launchScreen="YES"');
   });
 
+  it("uses the iOS CocoaTouch Interface Builder runtime", () => {
+    const output = launchScreenTemplate(baseConfig);
+    expect(output).toContain('targetRuntime="iOS.CocoaTouch"');
+    expect(output).not.toContain('targetRuntime="AppleCocoa"');
+  });
+
   it("uses white as the default background when no splash config is set", () => {
     const output = launchScreenTemplate(baseConfig);
     // Default is #FFFFFF → r=1, g=1, b=1
