@@ -289,8 +289,11 @@ describe("runTestCommand", () => {
     );
 
     expect(exitCode).toBe(0);
-    const [_cwd, _args, env] = spawnVitest.mock.calls[0]!;
+    const [_cwd, args, env] = spawnVitest.mock.calls[0]!;
     expect(_cwd).toBe(cwd);
+    expect(args).toContain("vitest");
+    expect(args).toContain("--browser.enabled");
+    expect(args).toContain("--run");
     expect(env["NATIVITE_TEST_PLATFORM"]).toBe("macos");
   });
 
