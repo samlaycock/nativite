@@ -1038,33 +1038,36 @@ function parseButtonItem(element: Element): ButtonItem | undefined {
     warnWebComponent("<nv-button> requires a non-empty `id` attribute and will be ignored.");
     return undefined;
   }
-  const style = readAttrTrimmed(element, "style");
+  const buttonStyle = readAttrTrimmed(element, "button-style");
   let parsedStyle: ButtonItem["style"];
-  if (style) {
-    if (style === "plain" || style === "primary" || style === "destructive") {
-      parsedStyle = style;
+  if (buttonStyle) {
+    if (buttonStyle === "plain" || buttonStyle === "primary" || buttonStyle === "destructive") {
+      parsedStyle = buttonStyle;
     } else {
       warnWebComponent(
-        `<nv-button id="${id}"> has unsupported style "${style}" and will fall back to default styling.`,
+        `<nv-button id="${id}"> has unsupported button-style "${buttonStyle}" and will fall back to default styling.`,
       );
     }
   }
   const badge = readAttr(element, "badge");
+  const trimmedBadge = badge?.trim();
   const parsedBadge =
-    badge === undefined
+    trimmedBadge === undefined || trimmedBadge === ""
       ? undefined
-      : badge.trim() !== "" && !Number.isNaN(Number(badge))
-        ? Number(badge)
-        : badge;
+      : !Number.isNaN(Number(trimmedBadge))
+        ? Number(trimmedBadge)
+        : trimmedBadge;
+  const label = readAttrTrimmed(element, "label");
+  const icon = readAttrTrimmed(element, "icon");
+  const disabled = readBooleanAttr(element, "disabled");
+  const tint = readAttrTrimmed(element, "tint");
   return {
     id,
-    ...(readAttrTrimmed(element, "label") ? { label: readAttrTrimmed(element, "label") } : {}),
-    ...(readAttrTrimmed(element, "icon") ? { icon: readAttrTrimmed(element, "icon") } : {}),
+    ...(label ? { label } : {}),
+    ...(icon ? { icon } : {}),
     ...(parsedStyle ? { style: parsedStyle } : {}),
-    ...(readBooleanAttr(element, "disabled") !== undefined
-      ? { disabled: readBooleanAttr(element, "disabled") }
-      : {}),
-    ...(readAttrTrimmed(element, "tint") ? { tint: readAttrTrimmed(element, "tint") } : {}),
+    ...(disabled !== undefined ? { disabled } : {}),
+    ...(tint ? { tint } : {}),
     ...(parsedBadge !== undefined ? { badge: parsedBadge } : {}),
   };
 }
@@ -1125,10 +1128,10 @@ function parseTitleBarConfig(element: HTMLElement): TitleBarConfig {
     const backLabel = readAttr(element, "back-label");
     config.backLabel = backLabel === "" ? null : backLabel;
   }
-  if (readAttrTrimmed(element, "tint")) config.tint = readAttrTrimmed(element, "tint");
-  if (readBooleanAttr(element, "hidden") !== undefined) {
-    config.hidden = readBooleanAttr(element, "hidden");
-  }
+  const tint = readAttrTrimmed(element, "tint");
+  if (tint) config.tint = tint;
+  const hidden = readBooleanAttr(element, "hidden");
+  if (hidden !== undefined) config.hidden = hidden;
 
   const leadingContainers = directChildrenByTag(element, "nv-leadingitems");
   if (leadingContainers.length > 1) {
@@ -1264,7 +1267,9 @@ export function registerWebComponents(areas?: readonly ChromeWebComponentArea[])
   if (!customElementsRegistry || !BaseHTMLElement || !MutationObserverCtor) return;
 
   const requestedAreas =
-    areas === undefined ? CHROME_WEB_COMPONENT_AREAS : areas.filter((area) => area === "titleBar");
+    areas === undefined
+      ? CHROME_WEB_COMPONENT_AREAS
+      : areas.filter((area) => (CHROME_WEB_COMPONENT_AREAS as readonly string[]).includes(area));
   for (const area of requestedAreas) {
     if (area === "titleBar") {
       registerTitleBarWebComponents(customElementsRegistry, BaseHTMLElement, MutationObserverCtor);

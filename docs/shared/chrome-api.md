@@ -79,7 +79,7 @@ Example:
 <nv-titlebar>
   <nv-title title="Inbox"></nv-title>
   <nv-trailingitems>
-    <nv-button id="compose" label="Compose"></nv-button>
+    <nv-button id="compose" label="Compose" button-style="primary"></nv-button>
   </nv-trailingitems>
 </nv-titlebar>
 ```
@@ -94,6 +94,16 @@ chrome(
   }),
 );
 ```
+
+`<nv-button>` supports these attributes:
+
+- `id` — required stable action ID.
+- `label` — button text.
+- `icon` — native icon name.
+- `button-style` — native button appearance: `plain`, `primary`, or `destructive`. Use the standard HTML `style` attribute only for CSS applied to the custom element itself.
+- `disabled` — boolean attribute; `false`, `0`, `no`, and `off` are treated as false.
+- `tint` — native tint color token/value.
+- `badge` — string or number badge value. An empty `badge=""` is ignored.
 
 ### Lifecycle and updates
 
