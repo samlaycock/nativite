@@ -1208,6 +1208,7 @@ function registerTitleBarWebComponents(
             });
             this._observer.observe(this, {
               attributes: true,
+              characterData: true,
               childList: true,
               subtree: true,
             });

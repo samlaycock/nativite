@@ -17,10 +17,11 @@ const postMessage = mock((message: NativeMessage) => {
   nativeMessages.push(message);
 });
 
-type MutationKind = "attributes" | "childList";
+type MutationKind = "attributes" | "characterData" | "childList";
 
 type ObserverOptions = {
   attributes?: boolean;
+  characterData?: boolean;
   childList?: boolean;
   subtree?: boolean;
 };
@@ -59,6 +60,7 @@ class FakeMutationObserver {
     for (const entry of FakeMutationObserver.entries) {
       const observesKind =
         (kind === "attributes" && entry.options.attributes) ||
+        (kind === "characterData" && entry.options.characterData) ||
         (kind === "childList" && entry.options.childList);
       if (!observesKind) continue;
       if (!FakeMutationObserver.matchesTarget(origin, entry.target, entry.options.subtree === true))
@@ -88,11 +90,21 @@ class FakeHTMLElement {
 
   readonly children: FakeHTMLElement[] = [];
   parentElement: FakeHTMLElement | null = null;
-  textContent: string | null = "";
   tagName = "DIV";
   isConnected = false;
 
   private readonly attributes = new Map<string, string>();
+  private _textContent: string | null = "";
+
+  get textContent(): string | null {
+    return this._textContent;
+  }
+
+  set textContent(value: string | null) {
+    if (this._textContent === value) return;
+    this._textContent = value;
+    FakeMutationObserver.notify(this, "characterData");
+  }
 
   setAttribute(name: string, value: string): void {
     const oldValue = this.getAttribute(name);
@@ -491,6 +503,23 @@ describe("title bar web components", () => {
     await flushWebComponents();
 
     title.setAttribute("title", "Sent");
+    await flushWebComponents();
+
+    const nodes = lastSnapshot()["nodes"] as Record<string, { readonly label?: string }>;
+    expect(nodes["titleBar:title"]?.label).toBe("Sent");
+  });
+
+  it("re-renders when title text content changes", async () => {
+    registerWebComponents(["titleBar"]);
+
+    const root = env.document.createElement("nv-titlebar");
+    const title = env.document.createElement("nv-title");
+    title.textContent = "Inbox";
+    root.appendChild(title);
+    env.document.body.appendChild(root);
+    await flushWebComponents();
+
+    title.textContent = "Sent";
     await flushWebComponents();
 
     const nodes = lastSnapshot()["nodes"] as Record<string, { readonly label?: string }>;
