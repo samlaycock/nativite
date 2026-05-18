@@ -98,7 +98,9 @@ The expected lifecycle is:
    active session before accepting the harness.
 6. Browser-side helpers from `nativite/test` send native commands through
    `/commands/<command>` using the session token. Vitest provider lifecycle
-   commands use `/harness`.
+   commands use `/harness`; the coordinator aliases Vitest's per-page session
+   ids to the nativite run session id so provider commands and native harness
+   events share the same session state.
 7. The harness streams readiness, native logs, screenshots, artifacts, protocol
    errors, and runtime state updates back to the coordinator.
 8. Vitest remains responsible for test assertions, reporters, snapshots, watch

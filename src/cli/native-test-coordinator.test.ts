@@ -73,11 +73,15 @@ describe("native test coordinator", () => {
         sessionId: "vitest-session",
         command: "open-page",
         token: config.sessionToken,
-        payload: { url: config.testUrl },
+        payload: { url: config.testUrl, sessionId: config.sessionId },
       });
       expect(openResponse.status).toBe(200);
       expect(await openResponse.json()).toMatchObject({
-        result: { sessionId: "vitest-session", sessionToken: config.sessionToken },
+        result: {
+          sessionId: config.sessionId,
+          sessionToken: config.sessionToken,
+          launch: { sessionId: config.sessionId },
+        },
       });
 
       const rejectedResponse = await post(coordinator.endpoint, {
@@ -89,7 +93,7 @@ describe("native test coordinator", () => {
       expect(rejectedResponse.status).toBe(401);
 
       const registerResponse = await post(coordinator.endpoint, {
-        sessionId: "vitest-session",
+        sessionId: config.sessionId,
         type: "harness.register",
         token: config.sessionToken,
         payload: { platform: "ios" },
@@ -97,6 +101,19 @@ describe("native test coordinator", () => {
       expect(registerResponse.status).toBe(200);
       expect(await registerResponse.json()).toMatchObject({
         result: { accepted: true, state: "registered" },
+      });
+
+      const logsResponse = await post(`${coordinator.endpoint}/../commands/native-logs`, {
+        sessionId: "vitest-session",
+        token: config.sessionToken,
+        payload: null,
+      });
+      expect(logsResponse.status).toBe(200);
+      expect(await logsResponse.json()).toMatchObject({
+        result: [
+          { message: "Native harness launch requested." },
+          { message: "Native harness registered." },
+        ],
       });
     } finally {
       await coordinator.stop();

@@ -67,9 +67,10 @@ export function createNativeTestCoordinator(
 ): NativeTestCoordinator {
   const endpoint = `http://${config.host}:${config.port}/harness`;
   const sessions = new Map<string, NativeTestSession>();
+  const sessionAliases = new Map<string, string>();
   const server = createServer(async (request, response) => {
     try {
-      await handleRequest(config, sessions, request, response);
+      await handleRequest(config, sessions, sessionAliases, request, response);
     } catch (error) {
       writeJson(response, 500, {
         error: error instanceof Error ? error.message : "Native test coordinator failed.",
@@ -106,6 +107,7 @@ export function createNativeTestCoordinator(
 async function handleRequest(
   config: NativeTestCoordinatorConfig,
   sessions: Map<string, NativeTestSession>,
+  sessionAliases: Map<string, string>,
   request: IncomingMessage,
   response: ServerResponse,
 ): Promise<void> {
@@ -119,7 +121,7 @@ async function handleRequest(
 
   if (url.pathname.startsWith("/commands/")) {
     const command = url.pathname.slice("/commands/".length);
-    await handleCommand(config, sessions, response, {
+    await handleCommand(config, sessions, sessionAliases, response, {
       sessionId: body.sessionId,
       command,
       payload: body.payload,
@@ -134,16 +136,17 @@ async function handleRequest(
   }
 
   if (body.command) {
-    await handleCommand(config, sessions, response, body);
+    await handleCommand(config, sessions, sessionAliases, response, body);
     return;
   }
 
-  await handleHarnessEvent(config, sessions, response, body);
+  await handleHarnessEvent(config, sessions, sessionAliases, response, body);
 }
 
 async function handleCommand(
   config: NativeTestCoordinatorConfig,
   sessions: Map<string, NativeTestSession>,
+  sessionAliases: Map<string, string>,
   response: ServerResponse,
   body: CoordinatorEnvelope,
 ): Promise<void> {
@@ -158,21 +161,26 @@ async function handleCommand(
     return;
   }
 
-  const session = resolveSession(config, sessions, body.sessionId);
   switch (command) {
     case "open-page": {
+      const nativeSessionId = readPayloadString(body.payload, "sessionId") ?? config.sessionId;
+      if (body.sessionId && body.sessionId !== nativeSessionId) {
+        sessionAliases.set(body.sessionId, nativeSessionId);
+      }
+      const session = resolveSession(config, sessions, sessionAliases, nativeSessionId);
       session.state = "starting";
       addLog(session, "info", "Native harness launch requested.", "coordinator", "launch");
       writeJson(response, 200, {
         result: {
           sessionId: session.id,
           sessionToken: config.sessionToken,
-          launch: createLaunchInputs(config, session.id),
+          launch: createLaunchInputs(config, nativeSessionId),
         },
       });
       return;
     }
     case "close": {
+      const session = resolveSession(config, sessions, sessionAliases, body.sessionId);
       session.state = "closed";
       addLog(session, "info", "Native test session closed.", "coordinator", "lifecycle");
       writeJson(response, 200, { result: null });
@@ -180,20 +188,24 @@ async function handleCommand(
     }
     case "emit":
     case "chrome-event": {
+      const session = resolveSession(config, sessions, sessionAliases, body.sessionId);
       session.events.push(body.payload ?? null);
       writeJson(response, 200, { result: null });
       return;
     }
     case "latest-snapshot": {
+      const session = resolveSession(config, sessions, sessionAliases, body.sessionId);
       writeJson(response, 200, { result: session.latestSnapshot });
       return;
     }
     case "geometry": {
+      const session = resolveSession(config, sessions, sessionAliases, body.sessionId);
       const target = readPayloadString(body.payload, "target") ?? "default";
       writeJson(response, 200, { result: session.geometry[target] ?? null });
       return;
     }
     case "screenshot": {
+      const session = resolveSession(config, sessions, sessionAliases, body.sessionId);
       const name = sanitizeArtifactName(readPayloadString(body.payload, "name") ?? "screenshot");
       const safeSessionId = sanitizeArtifactName(session.id);
       const artifactPath = join(config.artifactsDir, `${safeSessionId}-${name}.json`);
@@ -211,6 +223,7 @@ async function handleCommand(
       return;
     }
     case "native-logs": {
+      const session = resolveSession(config, sessions, sessionAliases, body.sessionId);
       writeJson(response, 200, { result: session.logs });
       return;
     }
@@ -224,6 +237,7 @@ async function handleCommand(
 async function handleHarnessEvent(
   config: NativeTestCoordinatorConfig,
   sessions: Map<string, NativeTestSession>,
+  sessionAliases: Map<string, string>,
   response: ServerResponse,
   body: CoordinatorEnvelope,
 ): Promise<void> {
@@ -232,7 +246,7 @@ async function handleHarnessEvent(
     return;
   }
 
-  const session = resolveSession(config, sessions, body.sessionId);
+  const session = resolveSession(config, sessions, sessionAliases, body.sessionId);
   if (body.type === "harness.register") {
     session.state = "registered";
     addLog(session, "info", "Native harness registered.", "native", "registration");
@@ -259,9 +273,11 @@ async function handleHarnessEvent(
 function resolveSession(
   config: NativeTestCoordinatorConfig,
   sessions: Map<string, NativeTestSession>,
+  sessionAliases: Map<string, string>,
   requestedId: string | undefined,
 ): NativeTestSession {
-  const id = requestedId && requestedId.length > 0 ? requestedId : config.sessionId;
+  const rawId = requestedId && requestedId.length > 0 ? requestedId : config.sessionId;
+  const id = sessionAliases.get(rawId) ?? rawId;
   const existing = sessions.get(id);
   if (existing) return existing;
 
