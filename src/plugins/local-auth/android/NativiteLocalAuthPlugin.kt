@@ -76,7 +76,6 @@ private fun reasonFor(code: Int): String = when (code) {
 private fun statusFor(errorCode: Int): String = when (errorCode) {
     BiometricPrompt.BIOMETRIC_ERROR_CANCELED,
     BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED,
-    BiometricPrompt.BIOMETRIC_ERROR_NEGATIVE_BUTTON,
     -> "cancelled"
     BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT,
     BiometricPrompt.BIOMETRIC_ERROR_LOCKOUT_PERMANENT,
@@ -139,12 +138,12 @@ fun registerNativiteLocalAuthPlugin(bridge: Any) {
         activeCancellation = cancellation
         val builder = BiometricPrompt.Builder(activity)
             .setTitle(reason)
-        val cancelTitle = options.optString("cancelTitle", "Cancel")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !options.optBoolean("disableDeviceFallback", false)) {
+        val cancelTitle = options?.optString("cancelTitle", "Cancel") ?: "Cancel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && options?.optBoolean("disableDeviceFallback", false) != true) {
             builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
         } else {
             builder.setNegativeButton(cancelTitle.ifBlank { "Cancel" }, activity.mainExecutor) { _, _ ->
-                // onAuthenticationError(BIOMETRIC_ERROR_NEGATIVE_BUTTON) is the terminal path.
+                // onAuthenticationError is the terminal path.
             }
         }
 

@@ -102,7 +102,7 @@ describe("local auth plugin", () => {
 
     expect(negativeButtonSource).not.toContain("completion(");
     expect(negativeButtonSource).not.toContain("activeCancellation = null");
-    expect(negativeButtonSource).toContain("BIOMETRIC_ERROR_NEGATIVE_BUTTON");
+    expect(negativeButtonSource).toContain("onAuthenticationError is the terminal path");
   });
 
   it("aligns iOS enrollment with default authentication availability", () => {
