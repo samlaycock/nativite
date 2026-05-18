@@ -293,6 +293,24 @@ type TestEnvironment = {
   readonly window: FakeWindow;
 };
 
+const originalGlobals = {
+  window: (globalThis as unknown as Record<string, unknown>)["window"],
+  document: (globalThis as unknown as Record<string, unknown>)["document"],
+  customElements: (globalThis as unknown as Record<string, unknown>)["customElements"],
+  HTMLElement: (globalThis as unknown as Record<string, unknown>)["HTMLElement"],
+  MutationObserver: (globalThis as unknown as Record<string, unknown>)["MutationObserver"],
+  CustomEvent: (globalThis as unknown as Record<string, unknown>)["CustomEvent"],
+} as const;
+
+function restoreGlobal(name: keyof typeof originalGlobals): void {
+  const value = originalGlobals[name];
+  if (value === undefined) {
+    delete (globalThis as unknown as Record<string, unknown>)[name];
+    return;
+  }
+  (globalThis as unknown as Record<string, unknown>)[name] = value;
+}
+
 function installEnvironment(): TestEnvironment {
   const customElements = new FakeCustomElementRegistry();
   const document = new FakeDocument(customElements);
@@ -309,12 +327,12 @@ function installEnvironment(): TestEnvironment {
 }
 
 function uninstallEnvironment(): void {
-  delete (globalThis as unknown as Record<string, unknown>).window;
-  delete (globalThis as unknown as Record<string, unknown>).document;
-  delete (globalThis as unknown as Record<string, unknown>).customElements;
-  delete (globalThis as unknown as Record<string, unknown>).HTMLElement;
-  delete (globalThis as unknown as Record<string, unknown>).MutationObserver;
-  delete (globalThis as unknown as Record<string, unknown>).CustomEvent;
+  restoreGlobal("window");
+  restoreGlobal("document");
+  restoreGlobal("customElements");
+  restoreGlobal("HTMLElement");
+  restoreGlobal("MutationObserver");
+  restoreGlobal("CustomEvent");
 }
 
 function lastSnapshot(): NativeMessage {
@@ -416,6 +434,50 @@ describe("title bar web components", () => {
 
     expect(declarativeSnapshot["nodes"]).toEqual(imperativeSnapshot["nodes"]);
     expect(declarativeSnapshot["state"]).toEqual(imperativeSnapshot["state"]);
+  });
+
+  it("uses button-style for native button styling without reading inline CSS", async () => {
+    registerWebComponents(["titleBar"]);
+    const originalWarn = console.warn;
+    const warn = mock(() => {});
+    console.warn = warn;
+
+    try {
+      const root = env.document.createElement("nv-titlebar");
+      const trailing = env.document.createElement("nv-trailingitems");
+      const compose = env.document.createElement("nv-button");
+      compose.setAttribute("id", "compose");
+      compose.setAttribute("label", "Compose");
+      compose.setAttribute("style", "display: none;");
+      compose.setAttribute("button-style", "primary");
+      trailing.appendChild(compose);
+      root.appendChild(trailing);
+      env.document.body.appendChild(root);
+      await flushWebComponents();
+
+      expect(warn).not.toHaveBeenCalled();
+      const nodes = lastSnapshot()["nodes"] as Record<string, { readonly role?: string }>;
+      expect(nodes["titleBar:trailing:compose"]?.role).toBe("primary");
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("omits empty button badges from native state", async () => {
+    registerWebComponents(["titleBar"]);
+
+    const root = env.document.createElement("nv-titlebar");
+    const trailing = env.document.createElement("nv-trailingitems");
+    const compose = env.document.createElement("nv-button");
+    compose.setAttribute("id", "compose");
+    compose.setAttribute("badge", "");
+    trailing.appendChild(compose);
+    root.appendChild(trailing);
+    env.document.body.appendChild(root);
+    await flushWebComponents();
+
+    const state = lastSnapshot()["state"] as { readonly badges: Record<string, unknown> };
+    expect(state.badges["titleBar:trailing:compose"]).toBeUndefined();
   });
 
   it("re-renders when observed attributes change", async () => {
