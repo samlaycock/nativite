@@ -67,6 +67,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Platform Registry](./shared/platform-registry.md) — Platform plugin resolution and config merging
 - [Inter-Webview Messaging](./shared/inter-webview-messaging.md) — Communication between main and child webviews
 - [Plugin System](./shared/plugin-system.md) — Third-party native capability registration
+- [First-Party Plugin Platform Support](./shared/first-party-plugin-support.md) — Supported and stubbed native plugin platforms
 - [Platform Comparison](./shared/platform-comparison.md) — Side-by-side feature comparison across platforms
 - [Package Exports](./shared/package-exports.md) — Published import and require entrypoint contract
 

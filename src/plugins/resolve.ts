@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import type {
   NativiteApplePlatformContribution,
+  NativiteBridgeNamespace,
   NativiteConfig,
   NativitePlugin,
   NativitePluginContribution,
@@ -58,6 +59,7 @@ export type ResolvedNativitePlugin = {
   name: string;
   rootDir: string;
   fingerprint: string;
+  bridgeNamespaces?: NativiteBridgeNamespace[];
   platforms: {
     ios: ResolvedNativitePlatformContribution;
     macos: ResolvedNativitePlatformContribution;
@@ -721,6 +723,7 @@ export async function resolveNativitePlugins(
       name: plugin.name,
       rootDir,
       fingerprint,
+      bridgeNamespaces: mergedContribution.bridge?.namespaces ?? [],
       platforms: normalizedPlatforms,
     });
   }
