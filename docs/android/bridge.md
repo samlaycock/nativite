@@ -103,17 +103,26 @@ Cleans up ports and references when a webview is destroyed.
 
 ### Built-in `__nativite__` Handlers
 
-| Handler                      | Description                                       |
-| ---------------------------- | ------------------------------------------------- |
-| `__nativite__.__ping__`      | Returns `"pong"`                                  |
-| `__nativite__.__ota_check__` | Returns `{ available: false }` placeholder status |
+| Handler                      | Description                               |
+| ---------------------------- | ----------------------------------------- |
+| `__nativite__.__ping__`      | Returns `"pong"`                          |
+| `__nativite__.__ota_check__` | Returns structured unsupported OTA status |
 
-### OTA Placeholder
+### OTA Unsupported Status
 
-Android does not currently stage, apply, or roll back OTA web bundles. The
-placeholder `__ota_check__` handler keeps the shared JavaScript `ota.check()`
-API safe to call on Android while accurately reporting that no Android OTA
-update is available.
+Android does not currently stage, apply, or roll back OTA web bundles. For 1.0,
+OTA is deliberately scoped to iOS and macOS. The Android `__ota_check__` handler
+keeps the shared JavaScript `ota.check()` API safe to call, but returns a
+structured unsupported status instead of a normal no-update response:
+
+```json
+{
+  "available": false,
+  "status": "unsupported",
+  "platform": "android",
+  "reason": "OTA updates are only supported on iOS and macOS for 1.0."
+}
+```
 
 ### Built-in Chrome Handlers
 

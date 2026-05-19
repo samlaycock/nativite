@@ -41,7 +41,7 @@ function removeNativeHandler(): void {
 // module evaluation. Static ESM imports are evaluated before this file's
 // top-level setup runs, which breaks nativiteReceive registration in CI.
 
-const { bridge, createBridge, NativiteBridgeError } = await import("./index.ts");
+const { bridge, createBridge, NativiteBridgeError, ota } = await import("./index.ts");
 
 type TestBridgeContracts = {
   camera: {
@@ -361,6 +361,43 @@ describe("createBridge", () => {
 
     const msg = nativeMessages[0]!;
     expect(msg["args"]).toEqual({});
+  });
+});
+
+describe("ota.check", () => {
+  it("returns unavailable status without calling native outside native environments", async () => {
+    removeNativeHandler();
+
+    const status = await ota.check();
+
+    expect(status).toEqual({ available: false });
+    expect(postMessageWithReply).not.toHaveBeenCalled();
+  });
+
+  it("preserves structured unsupported platform status from native", async () => {
+    replyHandler = () =>
+      Promise.resolve({
+        result: {
+          available: false,
+          status: "unsupported",
+          platform: "android",
+          reason: "OTA updates are only supported on iOS and macOS for 1.0.",
+        },
+      });
+
+    const status = await ota.check();
+
+    expect(status).toEqual({
+      available: false,
+      status: "unsupported",
+      platform: "android",
+      reason: "OTA updates are only supported on iOS and macOS for 1.0.",
+    });
+    expect(nativeMessages[0]).toMatchObject({
+      type: "call",
+      namespace: "__nativite__",
+      method: "__ota_check__",
+    });
   });
 });
 

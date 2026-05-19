@@ -125,4 +125,29 @@ class NativiteBridgeTest {
         assertEquals("hello", completed)
     }
 
+    @Test
+    fun builtinOtaCheckReturnsUnsupportedAndroidStatus() {
+        val bridge = NativiteBridge()
+        val handlerField = bridge.javaClass.getDeclaredField("handlers")
+        handlerField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val handlers = handlerField.get(bridge) as MutableMap<String, NativiteHandler>
+        var completed: Any? = null
+
+        handlers["__nativite__.__ota_check__"]?.invoke(null) { result ->
+            completed = result.getOrNull()
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val status = completed as? Map<String, Any?>
+        assertNotNull(status)
+        assertEquals(false, status?.get("available"))
+        assertEquals("unsupported", status?.get("status"))
+        assertEquals("android", status?.get("platform"))
+        assertEquals(
+            "OTA updates are only supported on iOS and macOS for 1.0.",
+            status?.get("reason"),
+        )
+    }
+
 }

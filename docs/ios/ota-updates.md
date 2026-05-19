@@ -6,8 +6,9 @@
 The OTA (Over-the-Air) update system allows the web bundle to be updated without going through the App Store review process.
 
 This runtime is shared by the generated iOS and macOS targets. Android does not
-currently implement OTA staging or application; its bridge returns
-`{ available: false }` for OTA status checks.
+implement OTA staging, launch application, or rollback for 1.0; its bridge
+returns `{ available: false, status: "unsupported", platform: "android", reason }`
+for OTA status checks.
 
 ## Architecture
 

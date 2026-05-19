@@ -27,7 +27,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Project Generation](./android/project-generation.md) — Gradle project generation and structure
 - [Dev Workflow](./android/dev-workflow.md) — IDE-owned debug runs and dev server integration
 - [Background Tasks](./android/background-tasks.md) — QuickJS runtime adapter for bundled task execution
-- [OTA Updates](./android/bridge.md#ota-placeholder) — Not implemented yet; Android bridge OTA checks currently return `{ available: false }`
+- [OTA Updates](./android/bridge.md#ota-unsupported-status) — Android OTA is explicitly unsupported for 1.0
 
 ## macOS
 

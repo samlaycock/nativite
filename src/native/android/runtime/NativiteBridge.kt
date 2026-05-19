@@ -84,7 +84,16 @@ open class NativiteBridge {
         }
 
         register(namespace = "__nativite__", method = "__ota_check__") { _, completion ->
-            completion(Result.success(mapOf("available" to false)))
+            completion(
+                Result.success(
+                    mapOf(
+                        "available" to false,
+                        "status" to "unsupported",
+                        "platform" to "android",
+                        "reason" to "OTA updates are only supported on iOS and macOS for 1.0.",
+                    ),
+                ),
+            )
         }
 
     }
