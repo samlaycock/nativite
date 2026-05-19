@@ -30,18 +30,21 @@ describe("generateProject", () => {
       throw new Error("gradle: command not found");
     });
 
-    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
-      "Android Gradle wrapper bootstrap failed: gradle: command not found",
-    );
-    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
-      "Install Gradle or make the `gradle` command available on PATH.",
-    );
-    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
-      "Verify Java is installed and JAVA_HOME points to a supported JDK.",
-    );
-    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
-      "Verify the Android SDK is installed via Android Studio",
-    );
+    try {
+      bootstrapAndroidGradleWrapper(cwd, runCommand);
+      throw new Error("Expected Android Gradle bootstrap validation to fail.");
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).toContain(
+        "Android Gradle wrapper bootstrap failed: gradle: command not found",
+      );
+      expect(message).toContain("Install Gradle or make the `gradle` command available on PATH.");
+      expect(message).toContain(
+        "Verify Java is installed and JAVA_HOME points to a supported JDK.",
+      );
+      expect(message).toContain("Verify the Android SDK is installed via Android Studio");
+      expect(runCommand).toHaveBeenCalledTimes(1);
+    }
   });
 
   it("prints actionable diagnostics when Gradle wrapper bootstrap fails", () => {
@@ -54,11 +57,21 @@ describe("generateProject", () => {
     expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
       "Gradle was found, but wrapper generation failed. Could not determine java version",
     );
-    expect(runCommand).toHaveBeenCalledWith("gradle wrapper --gradle-version 8.13 --no-daemon", {
+    expect(runCommand).toHaveBeenNthCalledWith(1, "gradle --version", {
       cwd,
       stdio: "pipe",
-      timeout: 180_000,
+      timeout: 30_000,
     });
+    expect(runCommand).toHaveBeenNthCalledWith(
+      2,
+      "gradle wrapper --gradle-version 8.13 --no-daemon",
+      {
+        cwd,
+        stdio: "pipe",
+        timeout: 180_000,
+      },
+    );
+    expect(runCommand).toHaveBeenCalledTimes(2);
   });
 
   it("copies dev metadata into Android debug assets in dev mode", () => {
