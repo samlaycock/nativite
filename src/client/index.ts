@@ -5,7 +5,8 @@ export type BridgeErrorCode =
   | "NATIVE_ERROR"
   | "TIMEOUT"
   | "ABORTED"
-  | "INVALID_OPTIONS";
+  | "INVALID_OPTIONS"
+  | "unsupported";
 
 export interface BridgeCallOptions {
   readonly timeoutMs?: number;
@@ -255,7 +256,8 @@ function isBridgeErrorCode(code: string): code is BridgeErrorCode {
     code === "NATIVE_ERROR" ||
     code === "TIMEOUT" ||
     code === "ABORTED" ||
-    code === "INVALID_OPTIONS"
+    code === "INVALID_OPTIONS" ||
+    code === "unsupported"
   );
 }
 
