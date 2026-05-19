@@ -98,6 +98,14 @@ no production Android OTA update flow yet.
 | Harness readiness coverage | Runtime + WebView readiness | Runtime + WebView readiness | Runtime + WebView readiness |
 | Bridge/chrome coverage     | Shared Swift runtime        | Kotlin runtime              | Shared Swift runtime        |
 
+## First-Party Plugins
+
+See [First-Party Plugin Platform Support](./first-party-plugin-support.md) for the authoritative
+1.0 support matrix. Secure Store is implemented on iOS, macOS, and Android. Other first-party
+plugins that expose macOS TypeScript APIs but do not yet ship macOS native implementations register
+macOS unsupported stubs so calls fail with stable structured `unsupported` errors instead of
+missing bridge handlers.
+
 ## User-Agent Identification
 
 | Platform | User-Agent Suffix      |

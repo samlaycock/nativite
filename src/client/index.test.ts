@@ -205,6 +205,22 @@ describe("bridge.call", () => {
     }
   });
 
+  it("preserves JSON-encoded structured native errors", async () => {
+    replyHandler = () =>
+      Promise.resolve({
+        error: JSON.stringify({ code: "NATIVE_UNAVAILABLE", message: "Plugin is missing" }),
+      });
+
+    try {
+      await bridge.call("camera", "capture");
+      throw new Error("Expected promise to reject");
+    } catch (err) {
+      expect(err).toBeInstanceOf(NativiteBridgeError);
+      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("NATIVE_UNAVAILABLE");
+      expect((err as Error).message).toBe("Plugin is missing");
+    }
+  });
+
   it("passes null args when params not provided", async () => {
     replyHandler = () => Promise.resolve({ result: null });
     await bridge.call("storage", "clear");

@@ -201,6 +201,7 @@ During project generation, plugins are resolved from the config:
 - Plugins are explicit config entries imported by the app from local files or external packages.
 - Relative plugin native file paths are resolved from the plugin `rootDir`; when `definePlugin(..., import.meta.url)` is used, that root is the plugin module directory.
 - iOS/macOS generation creates the `NativitePluginRegistrant` file with conditional compilation for each Apple platform.
+- macOS generation registers structured unsupported stubs for first-party plugin bridge namespaces that do not contribute macOS native sources or registrars.
 - Android generation copies plugin sources/resources into generated project-owned directories, adds them to Gradle source sets, emits Gradle dependencies, and creates `NativitePluginRegistrant.kt`.
 - Plugin fingerprints are included in the config hash for dirty-check optimization.
 

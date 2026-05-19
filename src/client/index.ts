@@ -225,7 +225,13 @@ function createBridgeError(
 
 function normalizeNativeError(error: unknown): NativiteBridgeError {
   if (error instanceof NativiteBridgeError) return error;
-  if (typeof error === "string") return createBridgeError("NATIVE_ERROR", error);
+  if (typeof error === "string") {
+    try {
+      return normalizeNativeError(JSON.parse(error));
+    } catch {
+      return createBridgeError("NATIVE_ERROR", error);
+    }
+  }
   if (error instanceof Error) {
     return createBridgeError("NATIVE_ERROR", error.message, error);
   }
