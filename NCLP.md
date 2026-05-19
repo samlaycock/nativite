@@ -8,6 +8,10 @@ NCLP v2 is part of Nativite's public host-implementation contract. The Nativite 
 
 The protocol version is the integer `nativite` field carried by every NCLP message. Version `2` is the stable protocol version for Nativite 1.0.
 
+The broader package semver policy is documented in
+[Public API Contract](docs/shared/public-api-contract.md); this file is the
+normative NCLP v2 protocol reference.
+
 ### Stability and compatibility
 
 Nativite follows these compatibility rules for NCLP v2:

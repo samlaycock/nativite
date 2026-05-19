@@ -29,6 +29,9 @@ bun run test:native:android
 - Keep [`docs/`](./docs/README.md) aligned with implementation changes.
 - Include a changeset for user-facing changes.
 - Use Conventional Commit style for commit messages.
+- For public API changes, update
+  [`Public API Contract`](./docs/shared/public-api-contract.md) and call out the
+  patch, minor, or major compatibility impact in the PR description.
 
 ## Bug Reports
 

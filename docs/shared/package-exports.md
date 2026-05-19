@@ -2,7 +2,8 @@
 
 Nativite 1.0 treats `package.json#exports` as the complete public package
 boundary. Deep imports outside the listed exports are unsupported implementation
-details.
+details. The package export semver policy is defined in
+[Public API Contract](./public-api-contract.md).
 
 ## Public Entrypoints
 
