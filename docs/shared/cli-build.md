@@ -30,6 +30,18 @@ After each successful platform build, the command prints the native project path
 and web bundle path. Xcode-based platforms point at their generated
 `.xcodeproj`; Android points at the generated Gradle project directory.
 
+`nativite build` verifies that the Nativite Vite plugin completed before it
+prints success. For each requested platform it requires:
+
+- `.nativite/build/<platform>.json`, written by the plugin after its
+  `closeBundle` work completes.
+- `dist-<bundle-platform>/manifest.json`, the generated web bundle manifest.
+- The generated native project output: `.nativite/<platform>/<App>.xcodeproj`
+  for iOS/macOS, or `.nativite/android` for Android.
+
+The CLI removes the previous platform marker before each build, so a stale
+successful build cannot hide a missing plugin or failed generation step.
+
 After all requested platform builds succeed, the command prints a concise
 copy-pasteable next-steps block:
 
@@ -42,6 +54,33 @@ Next steps:
 The block includes only platforms that were requested and successfully built. If
 a build fails, the command exits immediately and does not print final next
 steps.
+
+## Troubleshooting Missing Outputs
+
+If the command fails with:
+
+```text
+The Nativite Vite plugin did not complete for ios.
+```
+
+then Vite finished without running Nativite's `closeBundle` hook for that
+platform. The usual cause is a project with `nativite.config.ts` but no
+`nativite()` plugin in `vite.config.*`.
+
+Add the plugin to the Vite config:
+
+```ts
+import { defineConfig } from "vite";
+import { nativite } from "nativite/vite";
+
+export default defineConfig({
+  plugins: [nativite()],
+});
+```
+
+If the plugin marker exists but the manifest or native project output is
+missing, inspect the Vite output and native generator diagnostics for the
+platform that failed. `nativite build` reports the exact missing path.
 
 ## Store Artifact Flow
 

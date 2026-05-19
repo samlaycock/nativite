@@ -130,6 +130,10 @@ function platformOutDir(baseOutDir: string, platform: BundlePlatform): string {
   return `${normalizedBase}-${platform}`;
 }
 
+function pluginBuildMarkerPath(projectRoot: string, platform: string): string {
+  return join(projectRoot, ".nativite", "build", `${platform}.json`);
+}
+
 function normalizeNativeBuildHtmlOutput(distDir: string, targetPlatform: string): void {
   const indexHtmlPath = join(distDir, "index.html");
   if (existsSync(indexHtmlPath)) return;
@@ -872,6 +876,28 @@ function nativiteCorePlugin(): Plugin {
           outDir: distDir,
           manifest,
         });
+      }
+
+      if (targetRuntime) {
+        const markerPath = pluginBuildMarkerPath(viteConfig.root, targetRuntime.id);
+        mkdirSync(join(viteConfig.root, ".nativite", "build"), { recursive: true });
+        writeFileSync(
+          markerPath,
+          JSON.stringify(
+            {
+              platform: targetRuntime.id,
+              outDir: distDir,
+              manifestPath: join(distDir, "manifest.json"),
+              nativeProjectPath:
+                targetRuntime.id === "ios" || targetRuntime.id === "macos"
+                  ? join(".nativite", targetRuntime.id, `${config.app.name}.xcodeproj`)
+                  : join(".nativite", targetRuntime.id),
+              builtAt: manifest.builtAt,
+            },
+            null,
+            2,
+          ),
+        );
       }
     },
   } satisfies Plugin;
