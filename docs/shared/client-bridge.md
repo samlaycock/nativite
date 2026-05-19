@@ -190,7 +190,10 @@ unsub();
 ### `ota.check()`
 
 ```typescript
-ota.check(): Promise<{ available: boolean; version?: string }>
+ota.check(): Promise<
+  | { available: true; version?: string }
+  | { available: false; status?: "unsupported"; platform?: string; reason?: string }
+>
 ```
 
 Queries the native OTA handler for available updates.
@@ -209,7 +212,9 @@ When not in a native environment, returns `{ available: false }`.
 Platform notes:
 
 - iOS/macOS: Returns live status from the native OTA updater.
-- Android: Returns `{ available: false }` placeholder status (no Android OTA runtime yet).
+- Android: Returns `{ available: false, status: "unsupported", platform: "android", reason }`
+  because Android OTA staging, launch application, and rollback are not supported
+  for 1.0.
 
 ## Event Delivery Chain
 

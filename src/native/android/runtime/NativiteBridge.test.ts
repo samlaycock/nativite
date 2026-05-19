@@ -11,7 +11,10 @@ describe("NativiteBridge.kt", () => {
     expect(kt).toContain('register(namespace = "__nativite__", method = "__ota_check__")');
     expect(kt).not.toContain('register(namespace: "__nativite__", method: "__ping__")');
     expect(kt).not.toContain('register(namespace: "__nativite__", method: "__ota_check__")');
-    expect(kt).toContain('completion(Result.success(mapOf("available" to false)))');
+    expect(kt).toContain('"available" to false');
+    expect(kt).toContain('"status" to "unsupported"');
+    expect(kt).toContain('"platform" to "android"');
+    expect(kt).toContain('"reason" to "OTA updates are only supported on iOS and macOS for 1.0."');
   });
 
   it("uses WebMessagePort for bridge communication", () => {

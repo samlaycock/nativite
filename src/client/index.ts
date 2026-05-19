@@ -606,10 +606,24 @@ export function createBridge<
 
 // ─── ota ─────────────────────────────────────────────────────────────────────
 
+export interface OtaUnavailableStatus {
+  readonly available: false;
+  readonly status?: "unsupported";
+  readonly platform?: string;
+  readonly reason?: string;
+}
+
+export interface OtaAvailableStatus {
+  readonly available: true;
+  readonly version?: string;
+}
+
+export type OtaCheckStatus = OtaUnavailableStatus | OtaAvailableStatus;
+
 export const ota = {
-  async check(): Promise<{ available: boolean; version?: string }> {
+  async check(): Promise<OtaCheckStatus> {
     if (!bridge.isNative) return { available: false };
     const result = await bridge.call("__nativite__", "__ota_check__");
-    return result as { available: boolean; version?: string };
+    return result as OtaCheckStatus;
   },
 } as const;
