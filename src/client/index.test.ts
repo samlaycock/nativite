@@ -208,16 +208,23 @@ describe("bridge.call", () => {
   it("preserves JSON-encoded structured native errors", async () => {
     replyHandler = () =>
       Promise.resolve({
-        error: JSON.stringify({ code: "NATIVE_UNAVAILABLE", message: "Plugin is missing" }),
+        error: JSON.stringify({
+          code: "unsupported",
+          message: "contacts.queryContacts is not supported on macOS by this Nativite plugin.",
+          platform: "macos",
+          operation: "queryContacts",
+        }),
       });
 
     try {
-      await bridge.call("camera", "capture");
+      await bridge.call("contacts", "queryContacts");
       throw new Error("Expected promise to reject");
     } catch (err) {
       expect(err).toBeInstanceOf(NativiteBridgeError);
-      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("NATIVE_UNAVAILABLE");
-      expect((err as Error).message).toBe("Plugin is missing");
+      expect((err as InstanceType<typeof NativiteBridgeError>).code).toBe("unsupported");
+      expect((err as Error).message).toBe(
+        "contacts.queryContacts is not supported on macOS by this Nativite plugin.",
+      );
     }
   });
 
