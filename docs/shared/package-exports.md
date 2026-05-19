@@ -51,10 +51,9 @@ ESM is the primary package contract. JavaScript public entrypoints use the
 conditions are not advertised unless a future subpath is covered by a
 built-package CommonJS smoke test.
 
-The package metadata advertises Bun as the required package and CLI runtime.
-Public ESM entrypoints remain importable JavaScript modules, but invoking the
-`nativite` binary with Node.js is not part of the supported runtime contract
-because the CLI loads `nativite.config.ts` directly.
+Bun and Node.js are supported CLI runtimes. The package metadata advertises
+`bun >=1.0.0` and `node >=18.0.0`; Node CLI invocations load
+`nativite.config.ts` through Vite's TypeScript config loader.
 
 The package export smoke test builds `dist`, installs the repository into a
 temporary `node_modules/nativite` directory, then verifies every advertised

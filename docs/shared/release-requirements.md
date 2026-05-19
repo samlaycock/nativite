@@ -8,10 +8,9 @@ artifacts are still produced by the platform toolchain, so release requirements
 come from Apple, Google Play, Xcode, Android Studio, Gradle, and the CI image
 used by the app.
 
-The Nativite CLI requires Bun 1.x. `package.json#engines` intentionally does not
-advertise Node.js CLI support because the CLI loads `nativite.config.ts`
-directly. Use Bun in local release workflows and CI jobs that run `nativite`
-commands.
+The Nativite CLI supports Bun 1.x and Node 18+. `package.json#engines`
+advertises both runtimes, and CI verifies that the built CLI can load
+`nativite.config.ts` and run `nativite build` under Node 18.
 
 ## 1.0 Support Statement
 

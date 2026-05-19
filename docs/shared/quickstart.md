@@ -14,9 +14,9 @@ Install Nativite with Bun:
 bun add nativite
 ```
 
-The CLI is supported on Bun 1.x. Use `bunx nativite ...` or `bun run nativite
-...` for Nativite commands; Node.js CLI invocation is not supported because the
-CLI loads `nativite.config.ts` directly.
+The CLI is supported on Bun 1.x and Node 18+. Examples use Bun because this
+repository uses Bun as its package manager, but installed `nativite` binaries
+also run under Node.
 
 Run init from the Vite project root:
 
@@ -149,8 +149,8 @@ cannot prove the edit is safe.
 
 The CLI fails to load `nativite.config.ts` when run through Node.js or `npx`.
 
-Rerun the command with Bun, for example `bunx nativite build`. Bun is the
-required CLI runtime.
+Ensure `vite` is installed in the app project. Node CLI config loading uses
+Vite's TypeScript config loader so Node 18+ can run `nativite.config.ts`.
 
 Native debug builds are not loading the dev server.
 
