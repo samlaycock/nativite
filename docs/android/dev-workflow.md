@@ -35,11 +35,14 @@ The Vite plugin writes the Android web bundle to `dist-android/` and emits
 The Android platform build hook calls `generateAndroidProject(config, cwd, false, "build")`
 to create or update the Gradle project in `.nativite/android/`.
 
-Project generation invokes `gradle wrapper --gradle-version 8.13 --no-daemon`
-inside `.nativite/android/`. This is intentional: Nativite relies on an
-already-configured Gradle installation instead of managing executable Gradle
-artifacts itself. If `gradle` is unavailable, install/configure Gradle and rerun
-the Nativite build command.
+Project generation first runs `gradle --version`, then invokes
+`gradle wrapper --gradle-version 8.13 --no-daemon` inside `.nativite/android/`.
+This is intentional for 1.0: Nativite relies on an already-configured Gradle
+installation instead of managing executable Gradle artifacts itself. If the
+preflight or wrapper bootstrap fails, install/configure Gradle, verify Java and
+`JAVA_HOME`, verify the Android SDK from Android Studio, set `ANDROID_HOME` or
+`ANDROID_SDK_ROOT` if your environment requires it, then rerun the Nativite build
+command.
 
 Build and generate modes remove any stale debug `assets/dev.json` so release
 runtime code does not read a dev server URL.

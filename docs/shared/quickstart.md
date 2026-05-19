@@ -131,8 +131,11 @@ launching and signing.
 
 Android generation fails with `gradle: command not found`.
 
-Install Android Studio, Android SDK, Java, and expose a `gradle` command on
-`PATH`, then rerun the build.
+Install Android Studio, the Android SDK, Java, and Gradle. Expose `gradle` on
+`PATH`, verify `JAVA_HOME`, set `ANDROID_HOME` or `ANDROID_SDK_ROOT` if your
+shell or CI environment requires it, then rerun the build. Nativite runs
+`gradle --version` before generating the wrapper so missing or misconfigured
+tooling fails before Android project generation proceeds.
 
 The Vite config was not updated.
 
