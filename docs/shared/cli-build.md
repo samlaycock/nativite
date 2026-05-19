@@ -12,6 +12,13 @@ native toolchain after the project has been generated: Xcode, Android Studio,
 Gradle, `xcodebuild`, or CI own signing, packaging, archiving, notarization, and
 store submission.
 
+Release uploads must also satisfy the current store toolchain policies for the
+submission date. As of April 28, 2026, App Store Connect uploads require Xcode
+26 or later and an iOS/iPadOS 26 SDK or later for iOS/iPadOS apps. For Android,
+the generated project defaults to `targetSdk` `36`, and Google Play requires new
+apps and updates to target an API level within one year of the latest major
+Android release.
+
 ## Platform Selection
 
 Without `--platform`, the command builds every platform configured in

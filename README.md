@@ -9,7 +9,10 @@ Nativite gives you:
 - A declarative native chrome API (`title bar`, `navigation`, `toolbars`, sheets, drawers, etc.)
 - Live device CSS variables (`--nv-*`) for safe areas, keyboard, appearance, and more
 
-> Status: early development. APIs are usable but may change between releases.
+> Status: Nativite 1.0 defines a stable public configuration, package export,
+> JavaScript bridge, and native chrome contract. Future releases may add
+> capabilities, but documented 1.0 APIs are treated as supported public
+> surface.
 
 The `nativite/chrome` JavaScript API is the app-facing interface for native chrome. Native shells receive compiled Native Chrome Layout Protocol v2 (`chrome.snapshot`) messages; NCLP v2 is the stable host wire protocol for Nativite 1.0 and is documented in [NCLP.md](./NCLP.md).
 
@@ -43,6 +46,13 @@ dependencies. Xcode, Xcode command line tools, simulators, Android Studio, the
 Android SDK, Java, and Gradle are machine prerequisites that should be installed
 and managed by the developer or their CI image. Nativite generates native project
 files and prints clear errors when required tooling is unavailable.
+
+For store uploads, use the native platform requirements current for your
+submission date. As of April 28, 2026, Apple requires apps uploaded to App Store
+Connect to be built with Xcode 26 or later and an iOS/iPadOS 26 SDK or later.
+For Google Play, Nativite's Android default `targetSdk` is `36`; Google Play
+requires new apps and updates to target an API level within one year of the
+latest major Android release, with policy deadlines published by Google Play.
 
 ## Quick Start: Vite App to Native Shell
 
@@ -216,7 +226,7 @@ Android Studio, Gradle, `xcodebuild`, or CI using your signing configuration.
 
 Notes:
 
-- `ios()`, `macos()`, and `android()` can be called with no arguments. Defaults are iOS `17.0`, macOS `14.0`, Android `minSdk` `26`, and Android `targetSdk` `35`.
+- `ios()`, `macos()`, and `android()` can be called with no arguments. Defaults are iOS `17.0`, macOS `14.0`, Android `minSdk` `26`, and Android `targetSdk` `36`.
 - `ios.errorOverlay` controls the default Vite HMR overlay behaviour in dev. `NATIVITE_DEV_ERROR_OVERLAY` still takes precedence when set.
 - `android.targetSdk` must be an integer when provided.
 

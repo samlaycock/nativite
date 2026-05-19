@@ -59,6 +59,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Capture Protection Plugin](./shared/capture-protection-plugin.md) — First-party screen capture prevention and capture detection bridge
 - [Native Test Scripts](./shared/native-test-scripts.md) — Bun commands for running Swift and Kotlin runtime tests
 - [Release Gate](./shared/release-gate.md) — Required quality, unit, native runtime, and generated-app checks before publishing
+- [Release Requirements](./shared/release-requirements.md) — 1.0 support statement and current Apple/Android upload requirements
 - [CLI Init Command](./shared/cli-init.md) — One-command setup for existing Vite projects
 - [CLI Dev Command](./shared/cli-dev.md) — Optional native development status dashboard
 - [CLI Test Command](./shared/cli-test.md) — Vitest Browser Mode orchestration for native-aware app tests

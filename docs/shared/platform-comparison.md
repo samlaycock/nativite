@@ -1,6 +1,8 @@
 # Platform Comparison
 
 A side-by-side comparison of how nativite features are implemented across iOS, Android, and macOS.
+This matrix is the 1.0 platform support contract for built-in targets and
+first-party runtime capabilities.
 
 ## Architecture
 
