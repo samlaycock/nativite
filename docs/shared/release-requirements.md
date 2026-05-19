@@ -17,6 +17,9 @@ minor releases may add capabilities, platforms, plugin hooks, or generated
 files, but documented 1.0 contracts should remain compatible unless a future
 major release explicitly changes them.
 
+See [Public API Contract](./public-api-contract.md) for the full stable surface,
+experimental surface, and semver policy used for release decisions.
+
 ## Apple Upload Requirements
 
 Apple owns App Store Connect upload requirements. Starting April 28, 2026,

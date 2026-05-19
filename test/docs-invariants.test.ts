@@ -41,16 +41,27 @@ describe("documentation invariants", () => {
     const cliBuild = readRepositoryFile("docs/shared/cli-build.md");
     const quickstart = readRepositoryFile("docs/shared/quickstart.md");
     const releaseRequirements = readRepositoryFile("docs/shared/release-requirements.md");
+    const releaseGate = readRepositoryFile("docs/shared/release-gate.md");
+    const publicApiContract = readRepositoryFile("docs/shared/public-api-contract.md");
     const packageExports = readRepositoryFile("docs/shared/package-exports.md");
     const pluginSystem = readRepositoryFile("docs/shared/plugin-system.md");
     const platformComparison = readRepositoryFile("docs/shared/platform-comparison.md");
+    const contributing = readRepositoryFile("CONTRIBUTING.md");
 
     expect(readme).not.toContain("Status: early development");
     expect(readme).toContain("Nativite 1.0 defines a stable public configuration");
+    expect(readme).toContain("Public API Contract");
+    expect(publicApiContract).toContain("Package subpaths listed in `package.json#exports`");
+    expect(publicApiContract).toContain("CLI commands `nativite init`, `nativite build`");
+    expect(publicApiContract).toMatch(/CommonJS `require` conditions\s+are not part of the 1\.0/);
     expect(packageExports).toContain("supported 1.0 package");
+    expect(packageExports).toContain("Public API Contract");
     expect(pluginSystem).toContain("supported 1.0 extension-authoring contract");
     expect(platformComparison).toContain("1.0 platform support contract");
+    expect(contributing).toContain("patch, minor, or major compatibility impact");
+    expect(releaseGate).toContain("states whether the change is patch, minor, or major");
     expect(releaseRequirements).toContain("Starting April 28, 2026");
+    expect(releaseRequirements).toContain("Public API Contract");
     expect(releaseRequirements).toMatch(/Xcode 26 or\s+later/);
     expect(releaseRequirements).toContain("targetSdk` `36");
     expect(releaseRequirements).toContain("src/native/ios/pbxproj.ts");

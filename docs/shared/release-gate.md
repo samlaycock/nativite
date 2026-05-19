@@ -46,3 +46,8 @@ contains version or changelog updates.
 After every gate passes, `changesets/action` runs `bun run ci:publish`. The
 package keeps `"publishConfig": { "provenance": true }`, so npm publishing still
 uses trusted publishing provenance from the GitHub Actions release workflow.
+
+Release PRs that alter public exports, config, CLI behavior, generated native
+project contracts, NCLP, native bridge payloads, or first-party plugin APIs must
+update [Public API Contract](./public-api-contract.md) and include a changeset
+that states whether the change is patch, minor, or major under that policy.

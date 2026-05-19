@@ -16,6 +16,9 @@ Nativite gives you:
 
 The `nativite/chrome` JavaScript API is the app-facing interface for native chrome. Native shells receive compiled Native Chrome Layout Protocol v2 (`chrome.snapshot`) messages; NCLP v2 is the stable host wire protocol for Nativite 1.0 and is documented in [NCLP.md](./NCLP.md).
 
+The complete 1.0 stable surface, experimental surface, and semver policy are
+documented in [Public API Contract](docs/shared/public-api-contract.md).
+
 ## Who This Is For
 
 Nativite is for teams that already have a Vite web app and want:
@@ -413,6 +416,10 @@ to `true`.
 `package.json#exports` is the complete public module list. Deep imports are
 unsupported, and the CLI is exposed as the `nativite` binary rather than as an
 importable `nativite/cli` runtime module.
+
+See [Public API Contract](docs/shared/public-api-contract.md) for the semver
+rules that apply to package exports, `nativite.config.ts`, generated native
+projects, NCLP/native bridge payloads, first-party plugins, and CLI commands.
 
 ## Troubleshooting
 
