@@ -127,7 +127,7 @@
     "fmt:check": "oxfmt . --check",
     "typecheck": "tsc --noEmit",
     "build": "tsdown",
-    "ci:publish": "bun run build && changeset publish"
+    "ci:publish": "bun run build && bun run typecheck && bun run lint && bun run fmt:check && bun run test && changeset publish"
   },
   "dependencies": {
     "commander": "14.0.3",
