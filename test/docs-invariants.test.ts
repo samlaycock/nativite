@@ -55,6 +55,8 @@ describe("documentation invariants", () => {
     expect(publicApiContract).toContain("CLI commands `nativite init`, `nativite build`");
     expect(publicApiContract).toMatch(/CommonJS `require` conditions\s+are not part of the 1\.0/);
     expect(packageExports).toContain("supported 1.0 package");
+    expect(packageExports).toContain("Bun and Node.js are supported CLI runtimes");
+    expect(cliBuild).toContain("Node 22");
     expect(packageExports).toContain("Public API Contract");
     expect(pluginSystem).toContain("supported 1.0 extension-authoring contract");
     expect(platformComparison).toContain("1.0 platform support contract");

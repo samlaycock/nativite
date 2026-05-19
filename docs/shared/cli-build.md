@@ -25,6 +25,10 @@ Without `--platform`, the command builds every platform configured in
 `nativite.config.ts`. Passing `--platform <id>` builds only that configured
 platform. Unknown platform ids fail before Vite is loaded.
 
+The built CLI supports Bun 1.x and Node 22+. Under Node, `nativite.config.ts`
+is loaded through Vite's TypeScript config loader so the same config file works
+across both supported runtimes.
+
 For each target platform, the command sets:
 
 - `NATIVITE_PLATFORM` to the platform currently being built.

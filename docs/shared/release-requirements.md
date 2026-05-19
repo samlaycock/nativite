@@ -8,6 +8,10 @@ artifacts are still produced by the platform toolchain, so release requirements
 come from Apple, Google Play, Xcode, Android Studio, Gradle, and the CI image
 used by the app.
 
+The Nativite CLI supports Bun 1.x and Node 22+. `package.json#engines`
+advertises both runtimes, and CI verifies that the built CLI can load
+`nativite.config.ts` and run `nativite build` under Node 22.
+
 ## 1.0 Support Statement
 
 Nativite 1.0 treats the documented configuration helpers, public package

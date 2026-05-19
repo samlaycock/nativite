@@ -42,7 +42,7 @@ Peer dependencies:
 
 - macOS, Xcode, Xcode command line tools, and available simulators/devices (for iOS/macOS)
 - Android Studio, Android SDK, a JDK, and a `gradle` command on `PATH` (for Android)
-- Bun 1.x or Node 18+
+- Bun 1.x or Node 22+
 
 Nativite does not install, download, vendor, or bootstrap native toolchain
 dependencies. Xcode, Xcode command line tools, simulators, Android Studio, the
@@ -144,6 +144,9 @@ URL so native debug builds can discover it.
   `gradle` command on `PATH`.
 - If init cannot edit your Vite config safely, apply the import and plugin
   changes it prints.
+- If `nativite.config.ts` does not load under Node, ensure `vite` is installed
+  in the app project. Node CLI config loading uses Vite's TypeScript config
+  loader.
 
 For a fuller walkthrough, see the [drop-in quickstart](docs/shared/quickstart.md).
 Use the advanced chrome and plugin APIs after the generated native shell is
@@ -432,6 +435,11 @@ projects, NCLP/native bridge payloads, first-party plugins, and CLI commands.
 - Android project generation fails with `gradle: command not found`
   - Install Gradle or expose Android Studio's Gradle-compatible tooling on
     `PATH`, then rerun `bunx nativite build --platform android`.
+
+- `nativite.config.ts` fails to load when invoking the CLI with Node
+  - Ensure `vite` is installed in the app project. Node CLI config loading uses
+    Vite's TypeScript config loader so Node 22+ can run the same TypeScript
+    config files as Bun.
 
 ## Documentation Map
 
