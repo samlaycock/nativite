@@ -18,7 +18,7 @@ import {
   watchFile,
   writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 import {
   NativiteConfigSchema,
@@ -887,7 +887,7 @@ function nativiteCorePlugin(): Plugin {
             {
               platform: targetRuntime.id,
               outDir: distDir,
-              manifestPath: join(distDir, "manifest.json"),
+              manifestPath: join(relative(viteConfig.root, distDir), "manifest.json"),
               nativeProjectPath:
                 targetRuntime.id === "ios" || targetRuntime.id === "macos"
                   ? join(".nativite", targetRuntime.id, `${config.app.name}.xcodeproj`)

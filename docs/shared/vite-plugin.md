@@ -274,6 +274,10 @@ after the platform native generator/build hook completes. The CLI removes the
 old marker before starting each platform build and requires the marker to exist
 after Vite returns.
 
+The marker stores project-relative output paths, including the manifest path and
+native project path, so CLI validation remains stable when Vite resolves
+`build.outDir` internally.
+
 This marker is an internal handoff between the CLI and Vite plugin. It lets the
 CLI distinguish a real Nativite native build from a plain Vite build that
 succeeded because `nativite()` was missing from `vite.config.*`.

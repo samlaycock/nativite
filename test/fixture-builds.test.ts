@@ -203,6 +203,10 @@ describe("fixture app native builds", () => {
         version: string;
         assets: { path: string }[];
       }>(join(projectRoot, "dist-ios", "manifest.json"));
+      const iosBuildMarker = readJson<{
+        manifestPath: string;
+        nativeProjectPath: string;
+      }>(join(projectRoot, ".nativite", "build", "ios.json"));
       const html = readFileSync(join(projectRoot, "dist-ios", "index.html"), "utf-8");
       const jsAsset = iosManifest.assets.find((asset) => asset.path.endsWith(".js"));
       const js = readFileSync(join(projectRoot, "dist-ios", jsAsset?.path ?? ""), "utf-8");
@@ -210,6 +214,8 @@ describe("fixture app native builds", () => {
       expect(iosManifest.platform).toBe("ios");
       expect(iosManifest.version).toBe("2.3.4");
       expect(iosManifest.assets.map((asset) => asset.path)).toContain("index.html");
+      expect(iosBuildMarker.manifestPath).toBe("dist-ios/manifest.json");
+      expect(iosBuildMarker.nativeProjectPath).toBe(".nativite/ios/FixtureApp.xcodeproj");
       expect(html).toContain("ios-entry");
       expect(js).toContain("ios");
       expect(js).toMatch(/String\(!0\)|String\(true\)/);
