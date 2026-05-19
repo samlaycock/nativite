@@ -24,7 +24,7 @@ jobs:
       - name: Run test suite
         run: bun test
 
-  node-18-cli:
+  node-22-cli:
     runs-on: ubuntu-latest
 
     steps:
