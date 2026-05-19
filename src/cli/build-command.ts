@@ -174,7 +174,7 @@ function validatePlatformBuildOutputs(
     return `Expected web bundle manifest was not generated for ${runtime.id}: ${manifestPath}`;
   }
 
-  const projectPath = marker.nativeProjectPath || nativeProjectPath(config, runtime);
+  const projectPath = marker.nativeProjectPath ?? nativeProjectPath(config, runtime);
   if (!deps.exists(resolveProjectPath(projectRoot, projectPath))) {
     return `Expected native project output was not generated for ${runtime.id}: ${projectPath}`;
   }
