@@ -75,10 +75,18 @@ intentionally does not download, vendor, or bootstrap Gradle binaries or wrapper
 JARs. Gradle, Java, Android Studio, and the Android SDK are machine-level
 toolchain prerequisites that should be installed by the developer or CI image.
 
-If project generation fails because `gradle` is missing, install/configure Gradle
-and rerun `bunx nativite build --platform android`. The generated wrapper then
-uses the pinned Gradle distribution URL in `gradle-wrapper.properties` for normal
-Gradle wrapper operation.
+For 1.0 this global Gradle prerequisite is intentional. Before wrapper
+generation, Nativite runs `gradle --version` as a preflight check. If that check
+or the wrapper command fails, the error includes remediation steps to:
+
+- Install Gradle or expose `gradle` on `PATH`.
+- Verify Java is installed and `JAVA_HOME` points to a supported JDK.
+- Verify the Android SDK is installed through Android Studio and
+  `ANDROID_HOME` or `ANDROID_SDK_ROOT` is set when the environment requires it.
+- Rerun `bunx nativite build --platform android` after fixing the toolchain.
+
+Once bootstrapped, the generated wrapper uses the pinned Gradle distribution URL
+in `gradle-wrapper.properties` for normal Gradle wrapper operation.
 
 ## Smoke Coverage
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import { androidConfig } from "../../../test/fixtures.ts";
 import { normalizeAndroidDevServerUrl, syncAndroidDevMetadata } from "./dev-metadata.ts";
-import { generateProject } from "./generator.ts";
+import { bootstrapAndroidGradleWrapper, generateProject } from "./generator.ts";
 
 describe("generateProject", () => {
   const tempDirs: string[] = [];
@@ -22,6 +22,43 @@ describe("generateProject", () => {
       rmSync(dir, { recursive: true, force: true });
     }
     tempDirs.length = 0;
+  });
+
+  it("prints actionable diagnostics when global Gradle is missing", () => {
+    const cwd = makeTempDir();
+    const runCommand = mock(() => {
+      throw new Error("gradle: command not found");
+    });
+
+    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
+      "Android Gradle wrapper bootstrap failed: gradle: command not found",
+    );
+    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
+      "Install Gradle or make the `gradle` command available on PATH.",
+    );
+    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
+      "Verify Java is installed and JAVA_HOME points to a supported JDK.",
+    );
+    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
+      "Verify the Android SDK is installed via Android Studio",
+    );
+  });
+
+  it("prints actionable diagnostics when Gradle wrapper bootstrap fails", () => {
+    const cwd = makeTempDir();
+    const runCommand = mock((command: string) => {
+      if (command === "gradle --version") return "Gradle 8.13";
+      throw new Error("Could not determine java version");
+    });
+
+    expect(() => bootstrapAndroidGradleWrapper(cwd, runCommand)).toThrow(
+      "Gradle was found, but wrapper generation failed. Could not determine java version",
+    );
+    expect(runCommand).toHaveBeenCalledWith("gradle wrapper --gradle-version 8.13 --no-daemon", {
+      cwd,
+      stdio: "pipe",
+      timeout: 180_000,
+    });
   });
 
   it("copies dev metadata into Android debug assets in dev mode", () => {

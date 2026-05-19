@@ -223,6 +223,74 @@ export interface GenerateResult {
   readonly hash: string;
 }
 
+interface GradleBootstrapCommandOptions {
+  readonly cwd: string;
+  readonly stdio: "pipe";
+  readonly timeout?: number;
+}
+
+type GradleBootstrapCommand = (
+  command: string,
+  options: GradleBootstrapCommandOptions,
+) => string | Buffer;
+
+const androidGradleBootstrapRemediation = [
+  "Install Gradle or make the `gradle` command available on PATH.",
+  "Verify Java is installed and JAVA_HOME points to a supported JDK.",
+  "Verify the Android SDK is installed via Android Studio and ANDROID_HOME or ANDROID_SDK_ROOT is set when your environment requires it.",
+  "After fixing the environment, rerun `bunx nativite build --platform android`.",
+].join("\n- ");
+
+export function formatAndroidGradleBootstrapDiagnostics(reason: string): string {
+  return `Android Gradle wrapper bootstrap failed: ${reason}
+
+Nativite requires a global \`gradle\` command for the initial Android wrapper bootstrap in 1.0. Remediation:
+- ${androidGradleBootstrapRemediation}`;
+}
+
+function commandFailureOutput(err: unknown): string {
+  if (err instanceof Error) {
+    const errorWithOutput = err as Error & {
+      readonly stderr?: Buffer | string;
+      readonly stdout?: Buffer | string;
+    };
+    const stderr = errorWithOutput.stderr ? String(errorWithOutput.stderr).trim() : "";
+    const stdout = errorWithOutput.stdout ? String(errorWithOutput.stdout).trim() : "";
+    return stderr || stdout || err.message;
+  }
+
+  return String(err);
+}
+
+export function bootstrapAndroidGradleWrapper(
+  projectRoot: string,
+  runCommand: GradleBootstrapCommand = execSync,
+): void {
+  try {
+    runCommand("gradle --version", {
+      cwd: projectRoot,
+      stdio: "pipe",
+      timeout: 30_000,
+    });
+  } catch (err) {
+    throw new Error(formatAndroidGradleBootstrapDiagnostics(commandFailureOutput(err)));
+  }
+
+  try {
+    runCommand("gradle wrapper --gradle-version 8.13 --no-daemon", {
+      cwd: projectRoot,
+      stdio: "pipe",
+      timeout: 180_000,
+    });
+  } catch (err) {
+    throw new Error(
+      formatAndroidGradleBootstrapDiagnostics(
+        `Gradle was found, but wrapper generation failed. ${commandFailureOutput(err)}`,
+      ),
+    );
+  }
+}
+
 function assertBooleanOption(taskId: string, key: string, value: unknown): void {
   if (value !== undefined && typeof value !== "boolean") {
     throw new Error(
@@ -385,11 +453,7 @@ export async function generateProject(
     join(projectRoot, "settings.gradle.kts"),
     settingsGradleTemplate(androidConfig.app.name),
   );
-  execSync("gradle wrapper --gradle-version 8.13 --no-daemon", {
-    cwd: projectRoot,
-    stdio: "pipe",
-    timeout: 180_000,
-  });
+  bootstrapAndroidGradleWrapper(projectRoot);
 
   // Root build files
   writeFileSync(join(projectRoot, "build.gradle.kts"), buildGradleRootTemplate());

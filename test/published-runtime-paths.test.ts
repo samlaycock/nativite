@@ -66,6 +66,10 @@ describe("published runtime template paths", () => {
 
       void mock.module("node:child_process", () => ({
         execSync(command: string, options?: { cwd?: string }) {
+          if (command === "gradle --version") {
+            return "Gradle 8.13";
+          }
+
           if (!command.startsWith("gradle wrapper ")) {
             throw new Error(`Unexpected command: ${command}`);
           }
