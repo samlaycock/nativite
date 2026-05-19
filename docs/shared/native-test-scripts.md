@@ -34,8 +34,9 @@ require different host environments:
   and Gradle because they compile a generated Gradle app project.
 
 The publish workflow also gates release creation and package publishing on the
-native runtime and generated-app smoke jobs. A native compile or packaging
-failure therefore blocks publish.
+native runtime and generated-app smoke jobs. These jobs run on every release
+commit without relying on pull request path filters, so a native compile or
+packaging failure blocks publish.
 
 ## iOS Runtime Tests
 
