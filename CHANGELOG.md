@@ -1,5 +1,58 @@
 # nativite
 
+## 0.2.0
+
+### Minor Changes
+
+- 2c9dcb9: Add the initial Android QuickJS background task runtime adapter, generate the runtime dependency when background tasks are configured, and update generated Android projects to target SDK 36 with AGP 8.13.2/Kotlin 2.3.20.
+- 9f0531b: Add Android WorkManager background task execution for generated background task manifests, including generated scheduling helpers, a CoroutineWorker runtime path, Android option validation, and WorkManager dependency generation.
+- d180139: Add the first-party `nativite/plugins/app-integrity` plugin with iOS App Attest and Android Play Integrity bridge APIs, native generation contributions, package exports, and documentation.
+- fd80496: Implement the first stable background task host context contract with result semantics, task-scoped storage, logging hooks, cancellation placeholders, and versioned native persisted task-state models that use the public `BackgroundTaskStatus` keys.
+- 4f909f6: Generate native background task manifest resources for configured JavaScript background tasks.
+- d81e7ee: Add the `nativite/background` public API for defining JavaScript background tasks, registering task entrypoints in Nativite config, and creating metadata manifests without serializing task runners.
+- fdf6448: Add the public `background` WebView API for scheduling, cancelling, and querying registered background tasks through native bridge handlers.
+- a83446d: Add the first-party `nativite/plugins/calendar` plugin with typed calendar, event, and reminder APIs, native iOS/Android source contributions, generated platform permissions, public package exports, and documentation.
+- 5b502b4: Add the first-party `nativite/plugins/capture-protection` plugin with typed helpers, Android `FLAG_SECURE` capture prevention, iOS screenshot and capture-status detection, package exports, tests, and docs.
+- c8f0ef3: Add the first-party `nativite/plugins/contacts` plugin with typed JavaScript helpers, native source contributions, permission manifest generation, docs, and public package exports.
+- 4112727: Add declarative title bar web component support to `nativite/chrome` via `registerWebComponents()`.
+
+  This introduces v1 custom elements for title bar authoring (`nv-titlebar`, `nv-title`, `nv-leadingitems`, `nv-trailingitems`, and `nv-button`) with automatic lifecycle setup/cleanup and DOM-driven updates while preserving the existing imperative chrome APIs.
+
+- f837ecf: Add desktop web engine selection with macOS Chromium generation support, while keeping the system web engine as the default and rejecting mobile Chromium configuration.
+- ee6c10d: Define the first-party plugin platform support matrix and register generated macOS unsupported stubs for first-party plugin namespaces without macOS native implementations.
+- 2ac7f25: Implement the initial iOS background task runtime with BGTaskScheduler registration, Info.plist task identifiers, JavaScriptCore bundle execution, iOS task kind validation, native tests, and iOS documentation.
+- fedea0e: Add the first-party `nativite/plugins/local-auth` plugin with typed local authentication helpers, native iOS and Android bridge contributions, generated Face ID/biometric manifest configuration, and documentation.
+- db27737: Add macOS as a first-class `nativite test` platform with Apple tooling preflight, Vitest provider support, generated project smoke coverage, and updated platform testing docs.
+- d8eed6e: Add `nativite test` to orchestrate native-aware app tests through Vitest Browser Mode with generated Nativite provider configuration.
+- 7fca901: Add the local native test coordinator used by `nativite test`, including per-run session tokens, harness registration validation, command routing, artifact/log handling, and launch fallback guidance.
+- 24847d2: Add generated native test harness support for iOS, macOS, and Android debug/test builds. Harness builds can load a test URL, register with a local coordinator using a per-run session token, and report native and WebView readiness without changing release bundle behavior.
+- 5682d78: Add a first-party `nativite/plugins/notifications` plugin with typed local notification APIs, native iOS and Android bridge contributions, generation permissions, package exports, and documentation.
+- bbba412: Add plugin contribution hooks for generated assets, platform metadata, app lifecycle startup, extra build entries, and Android version-catalog dependencies, then move background scheduler bridge registration behind an internal plugin contribution.
+- 8160d9f: Add the first-party `nativite/plugins/secure-store` plugin with typed bridge helpers, Apple Keychain storage, Android Keystore-backed encrypted preferences, package exports, and documentation.
+- 1d71166: Add the first-party `nativite/plugins/system-controls` plugin with typed helpers for keep-awake, orientation, app-scoped brightness, power status, native iOS/Android bridge implementations, package exports, and docs.
+- 990be97: Add the `nativite/test` entrypoint with JavaScript stub-host helpers for app tests, chrome snapshot inspection, native event emission, bridge call mocking, and a separate coordinator-backed native harness command surface.
+- 0337e3a: Add the public `nativite/vitest-browser-provider` entrypoint and wire `nativite test` generated configs to use the Vitest Browser Mode provider object.
+
+### Patch Changes
+
+- e7b9da0: Improve Android Gradle wrapper bootstrap diagnostics with an explicit Gradle preflight and actionable Java, Gradle, and Android SDK remediation steps.
+- 5d5878b: Return structured unsupported status for Android OTA checks and document OTA as iOS/macOS-only for 1.0.
+- dbc7791: Bundle registered background task entrypoints into native assets and reference the emitted files from generated background task manifests.
+- 5510dc3: Add end-to-end background task examples, workflow documentation, troubleshooting notes, and generated-artifact smoke coverage.
+- 16c5799: Make `nativite build` fail when the Nativite Vite plugin does not run or when expected web/native outputs are missing after a platform build.
+- d1c6165: Add generated native app smoke test scripts and CI release gates for iOS, macOS, and Android projects.
+  The smoke runner now also supports opt-in launch checks for macOS, booted iOS simulators, and connected Android devices or emulators, including a macOS startup observation window for immediate launch failures.
+- e47dc75: Add a first-party `nativite/plugins/haptics` plugin with typed semantic haptic feedback helpers and iOS/Android native registrar contributions.
+- 93ebdc4: Document the completed native-aware app testing roadmap across stub-host tests, Browser Mode support, native harness protocol, provider orchestration, CLI usage, and repository examples.
+- 99cbbdb: Document the debug-only native test protocol for coordinator-backed `nativite/test` harness commands, including lifecycle, message envelopes, capabilities, transport, versioning, timeout, cancellation, and security requirements.
+- 0837c9e: Document the Nativite 1.0 public API, semver, and support contract, including
+  stable package exports, config, generated native project structure, NCLP/native
+  bridge wire contracts, first-party plugin APIs, and CLI guarantees.
+- 1aa8114: Run the full quality gate before release publishing and document the release gate.
+- a842534: Align 1.0 documentation with Android SDK defaults and current Apple/Google Play release requirements.
+- 535fc6d: Add fast fixture and CI guard coverage for the Nativite app testing stack, including stub-host examples, native provider examples, generated Android harness configuration, and the default-vs-native CI split.
+- 5ebcb50: Document the recommended Nativite app testing strategy, add examples for regular Vitest, stub-host Browser Mode tests, and native provider execution, and expose authenticated native harness helpers for geometry, screenshots, and native logs.
+
 ## 0.1.0
 
 ### Minor Changes
