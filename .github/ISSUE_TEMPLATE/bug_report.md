@@ -18,7 +18,7 @@ Provide a minimal repository or the smallest config/code sample that reproduces 
 
 - Nativite version or commit:
 - Bun version:
-- Node version:
+- Node version, if relevant to app tooling outside the Nativite CLI:
 - Vite version:
 - OS:
 - Target platform: iOS / macOS / Android / custom

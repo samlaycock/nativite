@@ -60,6 +60,7 @@ Technical reference for how nativite features are implemented on each native pla
 - [Native Test Scripts](./shared/native-test-scripts.md) — Bun commands for running Swift and Kotlin runtime tests
 - [Release Gate](./shared/release-gate.md) — Required quality, unit, native runtime, and generated-app checks before publishing
 - [Release Requirements](./shared/release-requirements.md) — 1.0 support statement and current Apple/Android upload requirements
+- [Runtime Requirements](./shared/runtime-requirements.md) — Bun CLI/runtime requirement and unsupported Node CLI invocation
 - [Public API Contract](./shared/public-api-contract.md) — 1.0 stable surface, experimental surface, and semver policy
 - [CLI Init Command](./shared/cli-init.md) — One-command setup for existing Vite projects
 - [CLI Dev Command](./shared/cli-dev.md) — Optional native development status dashboard

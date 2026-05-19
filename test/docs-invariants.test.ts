@@ -44,6 +44,7 @@ describe("documentation invariants", () => {
     const releaseGate = readRepositoryFile("docs/shared/release-gate.md");
     const publicApiContract = readRepositoryFile("docs/shared/public-api-contract.md");
     const packageExports = readRepositoryFile("docs/shared/package-exports.md");
+    const runtimeRequirements = readRepositoryFile("docs/shared/runtime-requirements.md");
     const pluginSystem = readRepositoryFile("docs/shared/plugin-system.md");
     const platformComparison = readRepositoryFile("docs/shared/platform-comparison.md");
     const contributing = readRepositoryFile("CONTRIBUTING.md");
@@ -55,6 +56,9 @@ describe("documentation invariants", () => {
     expect(publicApiContract).toContain("CLI commands `nativite init`, `nativite build`");
     expect(publicApiContract).toMatch(/CommonJS `require` conditions\s+are not part of the 1\.0/);
     expect(packageExports).toContain("supported 1.0 package");
+    expect(packageExports).toContain("Bun as the required package and CLI runtime");
+    expect(runtimeRequirements).toContain("Bun is the required CLI runtime");
+    expect(runtimeRequirements).toContain("Node.js is not advertised as a supported CLI runtime");
     expect(packageExports).toContain("Public API Contract");
     expect(pluginSystem).toContain("supported 1.0 extension-authoring contract");
     expect(platformComparison).toContain("1.0 platform support contract");
