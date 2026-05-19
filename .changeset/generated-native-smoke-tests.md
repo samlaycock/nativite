@@ -3,4 +3,4 @@
 ---
 
 Add generated native app smoke test scripts and CI release gates for iOS, macOS, and Android projects.
-The smoke runner now also supports opt-in launch checks for macOS, booted iOS simulators, and connected Android devices or emulators.
+The smoke runner now also supports opt-in launch checks for macOS, booted iOS simulators, and connected Android devices or emulators, including a macOS startup observation window for immediate launch failures.

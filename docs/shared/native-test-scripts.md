@@ -82,12 +82,13 @@ release web-bundle packaging. The release smoke build passes
 enabled by default while the smoke fixture focuses on native packaging coverage.
 
 Set `NATIVITE_GENERATED_SMOKE_LAUNCH=1` to add launch smoke coverage after the
-required compile/package steps. The runner launches the generated macOS app,
-installs and launches the iOS app when a simulator is already booted, and runs
-`installDebug` plus an Android launcher intent when `adb devices` reports an
-available emulator or device. Missing launch targets are reported as skipped so
-CI can keep compile/package failures required without depending on simulator or
-emulator availability in every job.
+required compile/package steps. The runner launches the generated macOS app and
+keeps it under `open --wait-apps` observation long enough to catch immediate
+startup exits, installs and launches the iOS app when a simulator is already
+booted, and runs `installDebug` plus an Android launcher intent when
+`adb devices` reports an available emulator or device. Missing launch targets
+are reported as skipped so CI can keep compile/package failures required without
+depending on simulator or emulator availability in every job.
 
 The fixture is deleted after the run. Set
 `NATIVITE_KEEP_GENERATED_SMOKE_FIXTURE=1` to keep it for local debugging.
