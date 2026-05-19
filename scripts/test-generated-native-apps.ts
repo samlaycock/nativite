@@ -18,10 +18,13 @@ import { systemControls } from "../src/plugins/system-controls/index.ts";
 
 type SmokePlatform = "ios" | "macos" | "android";
 
+const MACOS_LAUNCH_SMOKE_SECONDS = 10;
+
 interface Command {
   readonly command: string;
   readonly args: readonly string[];
   readonly cwd: string;
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 interface SmokeContext {
@@ -63,7 +66,7 @@ function run(command: Command): void {
   const result = spawnSync(command.command, command.args as string[], {
     cwd: command.cwd,
     stdio: "inherit",
-    env: process.env,
+    env: command.env ?? process.env,
   });
 
   if (result.error) throw result.error;
@@ -72,29 +75,11 @@ function run(command: Command): void {
   }
 }
 
-function tryRun(command: Command): boolean {
-  const display = [command.command, ...command.args].join(" ");
-  console.log(`$ ${display}`);
-
-  const result = spawnSync(command.command, command.args as string[], {
-    cwd: command.cwd,
-    stdio: "inherit",
-    env: process.env,
-  });
-
-  if (result.error) {
-    console.log(`Skipping launch smoke command: ${result.error.message}`);
-    return false;
-  }
-
-  return result.status === 0;
-}
-
 function commandOutput(command: Command): string | undefined {
   const result = spawnSync(command.command, command.args as string[], {
     cwd: command.cwd,
     encoding: "utf-8",
-    env: process.env,
+    env: command.env ?? process.env,
   });
 
   if (result.error || result.status !== 0) return undefined;
@@ -196,6 +181,40 @@ function androidBuildCommands(projectPath: string): readonly Command[] {
   ];
 }
 
+function runMacOSLaunchSmoke(cwd: string, appPath: string): void {
+  const script = `
+set -euo pipefail
+open --wait-apps --new "$NATIVITE_MACOS_SMOKE_APP_PATH" &
+open_pid=$!
+sleep "$NATIVITE_MACOS_SMOKE_SECONDS"
+if kill -0 "$open_pid" 2>/dev/null; then
+  osascript -e 'tell application id "dev.nativite.smoke" to quit' >/dev/null 2>&1 || true
+  sleep 1
+  kill "$open_pid" >/dev/null 2>&1 || true
+  wait "$open_pid" >/dev/null 2>&1 || true
+  exit 0
+fi
+if wait "$open_pid"; then
+  status=1
+else
+  status=$?
+fi
+echo "Generated macOS app exited during the launch smoke window."
+exit "$status"
+`;
+
+  run({
+    command: "bash",
+    args: ["-lc", script],
+    cwd,
+    env: {
+      ...process.env,
+      NATIVITE_MACOS_SMOKE_APP_PATH: appPath,
+      NATIVITE_MACOS_SMOKE_SECONDS: String(MACOS_LAUNCH_SMOKE_SECONDS),
+    },
+  });
+}
+
 function launchSmoke(context: SmokeContext): void {
   if (process.env["NATIVITE_GENERATED_SMOKE_LAUNCH"] !== "1") {
     console.log("Skipping launch smoke; set NATIVITE_GENERATED_SMOKE_LAUNCH=1 to enable it.");
@@ -213,7 +232,7 @@ function launchSmoke(context: SmokeContext): void {
       "Debug",
       "SmokeApp.app",
     );
-    run({ command: "open", args: ["-n", appPath], cwd: context.cwd });
+    runMacOSLaunchSmoke(context.cwd, appPath);
     return;
   }
 
@@ -267,23 +286,19 @@ function launchSmoke(context: SmokeContext): void {
     args: ["installDebug", "--no-daemon"],
     cwd: context.projectPath,
   });
-  if (
-    !tryRun({
-      command: "adb",
-      args: [
-        "shell",
-        "monkey",
-        "-p",
-        "dev.nativite.smoke",
-        "-c",
-        "android.intent.category.LAUNCHER",
-        "1",
-      ],
-      cwd: context.projectPath,
-    })
-  ) {
-    throw new Error("Android launch smoke failed.");
-  }
+  run({
+    command: "adb",
+    args: [
+      "shell",
+      "monkey",
+      "-p",
+      "dev.nativite.smoke",
+      "-c",
+      "android.intent.category.LAUNCHER",
+      "1",
+    ],
+    cwd: context.projectPath,
+  });
 }
 
 async function main(): Promise<void> {
