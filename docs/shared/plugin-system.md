@@ -1,6 +1,8 @@
 # Plugin System
 
 The plugin system allows third-party native capabilities to be registered on the bridge and called from JavaScript.
+The documented `definePlugin` shape and `platforms.<platform>` contribution
+hooks are part of the supported 1.0 extension-authoring contract.
 
 ## Registering Plugins (Native)
 

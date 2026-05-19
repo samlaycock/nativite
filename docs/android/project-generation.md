@@ -143,7 +143,12 @@ Validation notes:
 - `android()` uses the default `minSdk` of `26` when omitted.
 - `minSdk` must be an integer when provided.
 - `minSdk` must be at least `26`, matching the generated runtime's Android API requirements.
+- `android()` uses the default `targetSdk` of `36` when omitted.
 - `targetSdk` is optional, but must be an integer when provided.
+- Google Play requires new apps and app updates to target an Android API level
+  within one year of the latest major Android release. Apps can override
+  `targetSdk` when they need to move ahead of Nativite's default for a newer
+  policy deadline.
 
 ## Gradle Configuration
 

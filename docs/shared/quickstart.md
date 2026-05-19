@@ -44,7 +44,8 @@ Supported built-in targets are:
 
 The generated config uses built-in defaults for platform versions. Adjust
 `nativite.config.ts` later when your app needs a different minimum iOS, macOS,
-Android min SDK, or Android target SDK value.
+Android min SDK, or Android target SDK value. The 1.0 defaults are iOS `17.0`,
+macOS `14.0`, Android `minSdk` `26`, and Android `targetSdk` `36`.
 
 ## 3. Build the native shell
 
@@ -79,6 +80,10 @@ Use Xcode or Android Studio for simulator/device selection, signing, native
 build settings, and launch. Nativite intentionally stops at generated native
 projects and embedded web bundles; signed `.ipa`, `.aab`, `.apk`, `.app`, and
 `.dmg` artifacts come from the native toolchain or CI.
+
+Before uploading to a store, check the current platform requirements for your
+submission date. See [Release Requirements](./release-requirements.md) for the
+1.0 support statement and current Apple and Android policy notes.
 
 For native-aware app tests, macOS is supported as a first-class platform:
 

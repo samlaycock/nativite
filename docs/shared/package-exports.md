@@ -1,7 +1,8 @@
 # Package Exports
 
-Nativite treats `package.json#exports` as the complete public package boundary.
-Deep imports outside the listed exports are unsupported implementation details.
+Nativite 1.0 treats `package.json#exports` as the complete public package
+boundary. Deep imports outside the listed exports are unsupported implementation
+details.
 
 ## Public Entrypoints
 
@@ -56,8 +57,10 @@ effects before publish.
 
 ## Private Surface
 
-Native generators, runtime source files, platform registry internals, and test
-helpers are not public API unless intentionally exported from `package.json`.
+Native generators, runtime source files, platform registry internals, and
+unlisted test helpers are not public API unless intentionally exported from
+`package.json`. The documented exports above are the supported 1.0 package
+surface.
 
 The CLI is exposed as the `nativite` binary from `package.json#bin`.
 `nativite/cli` is not a public runtime import.
