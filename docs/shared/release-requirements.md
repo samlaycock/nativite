@@ -1,7 +1,7 @@
 # Release Requirements
 
 > Maps to: `README.md`, `src/index.ts`, `src/native/android/generator.ts`,
-> `src/native/ios/project.ts`
+> `src/native/ios/pbxproj.ts`
 
 Nativite generates native projects and production web bundles. Store-ready
 artifacts are still produced by the platform toolchain, so release requirements

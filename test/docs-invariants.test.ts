@@ -38,6 +38,8 @@ describe("documentation invariants", () => {
 
   it("documents the 1.0 stability statement and current store upload requirements", () => {
     const readme = readRepositoryFile("README.md");
+    const cliBuild = readRepositoryFile("docs/shared/cli-build.md");
+    const quickstart = readRepositoryFile("docs/shared/quickstart.md");
     const releaseRequirements = readRepositoryFile("docs/shared/release-requirements.md");
     const packageExports = readRepositoryFile("docs/shared/package-exports.md");
     const pluginSystem = readRepositoryFile("docs/shared/plugin-system.md");
@@ -51,5 +53,11 @@ describe("documentation invariants", () => {
     expect(releaseRequirements).toContain("Starting April 28, 2026");
     expect(releaseRequirements).toMatch(/Xcode 26 or\s+later/);
     expect(releaseRequirements).toContain("targetSdk` `36");
+    expect(releaseRequirements).toContain("src/native/ios/pbxproj.ts");
+    expect(cliBuild).toContain("As of April 28, 2026");
+    expect(cliBuild).toMatch(/Xcode\s+26 or later/);
+    expect(cliBuild).toContain("`targetSdk` `36`");
+    expect(quickstart).toContain("[Release Requirements](./release-requirements.md)");
+    expect(quickstart).toContain("Android `targetSdk` `36`");
   });
 });
