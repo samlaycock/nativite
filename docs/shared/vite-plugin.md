@@ -266,6 +266,18 @@ This manifest is used by:
 - The OTA update system for version comparison and downloaded asset integrity
   validation.
 
+### Build Completion Marker
+
+For native production builds launched by `nativite build`, the core plugin
+writes `.nativite/build/<platform>.json` after `manifest.json` is written and
+after the platform native generator/build hook completes. The CLI removes the
+old marker before starting each platform build and requires the marker to exist
+after Vite returns.
+
+This marker is an internal handoff between the CLI and Vite plugin. It lets the
+CLI distinguish a real Nativite native build from a plain Vite build that
+succeeded because `nativite()` was missing from `vite.config.*`.
+
 ### Platform Plugin Build Hook
 
 After manifest generation, the Vite plugin invokes the platform plugin's `build()` hook (if defined) for any platform-specific post-processing.

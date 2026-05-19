@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { NativiteConfig } from "../index.ts";
 import type { ResolvedNativitePlatformRuntime } from "../platforms/registry.ts";
@@ -71,10 +74,13 @@ function createMockLogger(): NativiteLogger {
 }
 
 function createDependencies(options?: {
+  cwd?: string;
   runtimes?: ResolvedNativitePlatformRuntime[];
   build?: ViteApi["build"];
   loadViteApi?: BuildCommandDependencies["loadViteApi"];
   logger?: NativiteLogger;
+  exists?: BuildCommandDependencies["exists"];
+  remove?: BuildCommandDependencies["remove"];
 }): BuildCommandDependencies {
   const runtimes = options?.runtimes ?? [
     createRuntime("ios"),
@@ -89,7 +95,7 @@ function createDependencies(options?: {
     });
 
   return {
-    cwd: () => "/fake/project",
+    cwd: () => options?.cwd ?? "/fake/project",
     loadConfig: async () => createMockConfig(),
     resolveConfiguredPlatformRuntimes: () => runtimes,
     serializePlatformRuntimeMetadata: () => "mock-metadata",
@@ -99,7 +105,34 @@ function createDependencies(options?: {
         build: viteBuild,
       })),
     createLogger: () => options?.logger ?? createMockLogger(),
+    exists: options?.exists ?? (() => true),
+    readFile: (path) => {
+      if (existsSync(path)) return readFileSync(path, "utf-8");
+      return JSON.stringify({
+        manifestPath: "dist-ios/manifest.json",
+        nativeProjectPath: ".nativite/ios/TestApp.xcodeproj",
+      });
+    },
+    remove: options?.remove ?? (() => {}),
   };
+}
+
+function createTempProject(): string {
+  return mkdtempSync(join(tmpdir(), "nativite-build-command-"));
+}
+
+function writeSuccessfulIosOutputs(projectRoot: string): void {
+  mkdirSync(join(projectRoot, "dist-ios"), { recursive: true });
+  mkdirSync(join(projectRoot, ".nativite", "ios", "TestApp.xcodeproj"), { recursive: true });
+  mkdirSync(join(projectRoot, ".nativite", "build"), { recursive: true });
+  writeFileSync(join(projectRoot, "dist-ios", "manifest.json"), "{}\n");
+  writeFileSync(
+    join(projectRoot, ".nativite", "build", "ios.json"),
+    JSON.stringify({
+      manifestPath: "dist-ios/manifest.json",
+      nativeProjectPath: ".nativite/ios/TestApp.xcodeproj",
+    }),
+  );
 }
 
 afterEach(() => {
@@ -242,5 +275,138 @@ describe("runBuildCommand", () => {
     const exitCode = await runBuildCommand({}, deps);
 
     expect(exitCode).toBe(1);
+  });
+
+  it("fails when the Nativite Vite plugin did not run for the platform build", async () => {
+    const projectRoot = createTempProject();
+    try {
+      mkdirSync(join(projectRoot, "dist-ios"), { recursive: true });
+      mkdirSync(join(projectRoot, ".nativite", "ios", "TestApp.xcodeproj"), { recursive: true });
+      writeFileSync(join(projectRoot, "dist-ios", "manifest.json"), "{}\n");
+
+      const error = mock(() => {});
+      const logger: NativiteLogger = {
+        ...createMockLogger(),
+        error,
+      };
+      const deps = createDependencies({
+        cwd: projectRoot,
+        runtimes: [createRuntime("ios")],
+        logger,
+        exists: existsSync,
+        remove: (path) => rmSync(path, { force: true }),
+      });
+
+      const exitCode = await runBuildCommand({ platform: "ios" }, deps);
+
+      expect(exitCode).toBe(1);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('Add `nativite()` to your Vite config "plugins" array.'),
+      );
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails when the platform web manifest is missing after the build", async () => {
+    const projectRoot = createTempProject();
+    try {
+      mkdirSync(join(projectRoot, ".nativite", "ios", "TestApp.xcodeproj"), { recursive: true });
+
+      const error = mock(() => {});
+      const logger: NativiteLogger = {
+        ...createMockLogger(),
+        error,
+      };
+      const deps = createDependencies({
+        cwd: projectRoot,
+        runtimes: [createRuntime("ios")],
+        logger,
+        exists: existsSync,
+        remove: (path) => rmSync(path, { force: true }),
+        build: async () => {
+          mkdirSync(join(projectRoot, ".nativite", "build"), { recursive: true });
+          writeFileSync(
+            join(projectRoot, ".nativite", "build", "ios.json"),
+            JSON.stringify({
+              manifestPath: "dist-ios/manifest.json",
+              nativeProjectPath: ".nativite/ios/TestApp.xcodeproj",
+            }),
+          );
+        },
+      });
+
+      const exitCode = await runBuildCommand({ platform: "ios" }, deps);
+
+      expect(exitCode).toBe(1);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining("Expected web bundle manifest was not generated"),
+      );
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails when the native project output is missing after the build", async () => {
+    const projectRoot = createTempProject();
+    try {
+      mkdirSync(join(projectRoot, "dist-ios"), { recursive: true });
+      writeFileSync(join(projectRoot, "dist-ios", "manifest.json"), "{}\n");
+
+      const error = mock(() => {});
+      const logger: NativiteLogger = {
+        ...createMockLogger(),
+        error,
+      };
+      const deps = createDependencies({
+        cwd: projectRoot,
+        runtimes: [createRuntime("ios")],
+        logger,
+        exists: existsSync,
+        remove: (path) => rmSync(path, { force: true }),
+        build: async () => {
+          mkdirSync(join(projectRoot, ".nativite", "build"), { recursive: true });
+          writeFileSync(
+            join(projectRoot, ".nativite", "build", "ios.json"),
+            JSON.stringify({
+              manifestPath: "dist-ios/manifest.json",
+              nativeProjectPath: ".nativite/ios/TestApp.xcodeproj",
+            }),
+          );
+        },
+      });
+
+      const exitCode = await runBuildCommand({ platform: "ios" }, deps);
+
+      expect(exitCode).toBe(1);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining("Expected native project output was not generated"),
+      );
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("reports success only after plugin marker, manifest, and native project exist", async () => {
+    const projectRoot = createTempProject();
+    try {
+      const build = mock(async () => {
+        writeSuccessfulIosOutputs(projectRoot);
+      });
+      const deps = createDependencies({
+        cwd: projectRoot,
+        runtimes: [createRuntime("ios")],
+        build,
+        exists: existsSync,
+        remove: (path) => rmSync(path, { force: true }),
+      });
+
+      const exitCode = await runBuildCommand({ platform: "ios" }, deps);
+
+      expect(exitCode).toBe(0);
+      expect(existsSync(join(projectRoot, ".nativite", "build", "ios.json"))).toBe(true);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 });
